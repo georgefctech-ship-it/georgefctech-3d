@@ -57,6 +57,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isFirstAccess, setIsFirstAccess] = useState(false);
+  const [hasMasterPassword, setHasMasterPassword] = useState(!!localStorage.getItem('g3d_master_password'));
   const [showPassword, setShowPassword] = useState(false);
   
   // Recovery/Forgot Password states
@@ -72,6 +73,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     const supabaseConfigured = hasSupabaseConfigured();
     // Check if master password exists in localStorage
     const savedPassword = localStorage.getItem('g3d_master_password');
+    setHasMasterPassword(!!savedPassword);
     
     if (supabaseConfigured) {
       setSupabaseActive(true);
@@ -116,6 +118,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
 
     // Save master password configuration
     localStorage.setItem('g3d_master_password', password);
+    setHasMasterPassword(true);
     sessionStorage.setItem('g3d_authenticated', 'true');
     sessionStorage.setItem('g3d_user_role', 'admin');
     
@@ -633,7 +636,12 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
                 <div className="flex border border-slate-200 dark:border-slate-800 p-1 rounded-xl bg-slate-100 dark:bg-slate-950">
                   <button
                     type="button"
-                    onClick={() => { setActiveTab('supabase'); setError(null); }}
+                    onClick={() => { 
+                      setActiveTab('supabase'); 
+                      setError(null); 
+                      setPassword('');
+                      setConfirmPassword('');
+                    }}
                     className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${
                       activeTab === 'supabase'
                         ? 'bg-indigo-600 text-white shadow-md'
@@ -645,11 +653,16 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setActiveTab('master'); setError(null); }}
+                    onClick={() => { 
+                      setActiveTab('master'); 
+                      setError(null); 
+                      setPassword('');
+                      setConfirmPassword('');
+                    }}
                     className={`flex-1 flex-row flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${
                       activeTab === 'master'
                         ? 'bg-indigo-600 text-white shadow-md'
-                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-202'
                     }`}
                   >
                     <Lock className="w-4 h-4" />
@@ -822,6 +835,66 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
                       Cadastrar uma conta de Colaborador
                     </button>
                   </div>
+                </form>
+              ) : !hasMasterPassword ? (
+                // LOCAL MASTER PASSWORD SIGN UP (IF NOT SET YET)
+                <form onSubmit={handleSetupPassword} className="space-y-4">
+                  <div className="space-y-1">
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-bold uppercase tracking-wider">
+                      Definir Senha Mestra
+                    </span>
+                    <h3 className="text-slate-900 dark:text-white font-bold text-sm">Cadastre sua Senha</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Não há nenhuma senha mestra definida localmente neste navegador. Defina uma para atuar como redundância administrativa e acesso offline.
+                    </p>
+                  </div>
+
+                  <div className="space-y-3.5">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Nova Senha Mestra</label>
+                      <div className="relative">
+                        <KeyRound className="absolute left-3 top-3.5 w-4 h-4 text-slate-400 dark:text-slate-500 font-sans" />
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          required
+                          placeholder="Mínimo de 4 caracteres"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          className="w-full pl-10 pr-10 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 rounded-lg text-sm text-slate-900 dark:text-white font-mono"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-3 w-4 h-4 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-350"
+                        >
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Confirme a Senha</label>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-3.5 w-4 h-4 text-slate-400 dark:text-slate-500 font-sans" />
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          required
+                          placeholder="Repita a senha escrita"
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          className="w-full pl-10 pr-10 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 rounded-lg text-sm text-slate-900 dark:text-white font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full flex items-center justify-center gap-2 mt-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs uppercase tracking-wider rounded-lg shadow-lg cursor-pointer"
+                  >
+                    Gravar Senha e Entrar
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
                 </form>
               ) : (
                 // LOCAL MASTER PASSWORD SIGN IN
