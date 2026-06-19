@@ -49,6 +49,10 @@ export default function App() {
   });
 
   useEffect(() => {
+    document.title = 'georgefctech-3D';
+  }, []);
+
+  useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark');
       localStorage.setItem('g3d_dark_mode', 'true');

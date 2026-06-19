@@ -1,5 +1,5 @@
 {
-  "name": "GeorgeFctech-3D Manager",
+  "name": "georgefctech-3D",
   "description": "Sistema Profissional de Gestão Comercial, Orçamentos e Relatórios para Impressão 3D, Modelagem e Escultura.",
   "requestFramePermissions": ["camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
