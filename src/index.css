@@ -55,12 +55,56 @@
   }
 }
 
-/* System-wide Elegant Dark Mode Overrides */
+/* System-wide Elegant Dark/Light Mode Overrides */
 html, body {
   margin: 0;
   padding: 0;
   overflow-x: hidden;
   width: 100%;
+}
+
+/* Global Light Mode Readability & Contrast Enhancements */
+html:not(.dark),
+html:not(.dark) body,
+html:not(.dark) #root,
+html:not(.dark) main {
+  background-color: #f8fafc !important; /* Soft, consistent, premium off-white background */
+  color: #0f172a !important; /* Deep charcoal for sharp reading */
+}
+
+/* Make sure elements and text classes are beautifully visible in light mode */
+html:not(.dark) .text-slate-400 {
+  color: #475569 !important; /* Proper Slate-650 style */
+}
+html:not(.dark) .text-slate-500 {
+  color: #334155 !important; /* Slate-750 style */
+}
+html:not(.dark) .text-slate-650,
+html:not(.dark) .text-slate-600 {
+  color: #1e293b !important;
+}
+html:not(.dark) .text-slate-700 {
+  color: #0f172a !important;
+}
+html:not(.dark) .text-slate-800,
+html:not(.dark) .text-slate-850 {
+  color: #0c111d !important;
+}
+html:not(.dark) .text-slate-900,
+html:not(.dark) .text-slate-950 {
+  color: #030712 !important;
+}
+
+/* Ensure cards and blocks inside the page contrast beautifully in light mode */
+html:not(.dark) .bg-white {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+}
+html:not(.dark) header, 
+html:not(.dark) aside,
+html:not(.dark) #sidebar-nav {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
 }
 
 .dark,
@@ -100,13 +144,18 @@ html.dark main {
   color: #f8fafc !important;
 }
 
-.dark .text-slate-500,
-.dark .text-slate-600 {
-  color: #94a3b8 !important;
+.dark .text-slate-500 {
+  color: #cbd5e1 !important;
 }
 
+.dark .text-slate-650,
+.dark .text-slate-600 {
+  color: #e2e8f0 !important;
+}
+
+.dark .text-slate-450,
 .dark .text-slate-400 {
-  color: #64748b !important;
+  color: #cbd5e1 !important;
 }
 
 .dark select, 
