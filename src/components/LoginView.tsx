@@ -17,7 +17,9 @@ import {
   Mail,
   UserPlus,
   LogIn,
-  Users
+  Users,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { getSupabaseClient, hasSupabaseConfigured } from '../lib/supabase';
 
@@ -29,6 +31,26 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
   const [activeTab, setActiveTab] = useState<'master' | 'supabase'>('master');
   const [isRegistering, setIsRegistering] = useState(false);
   const [supabaseActive, setSupabaseActive] = useState(false);
+  
+  // Theme state
+  const [localDarkMode, setLocalDarkMode] = useState(() => {
+    return localStorage.getItem('g3d_dark_mode') === 'true';
+  });
+
+  // Sync theme
+  useEffect(() => {
+    if (localDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [localDarkMode]);
+
+  const toggleLocalDarkMode = () => {
+    const nextVal = !localDarkMode;
+    setLocalDarkMode(nextVal);
+    localStorage.setItem('g3d_dark_mode', nextVal ? 'true' : 'false');
+  };
 
   // Form states
   const [email, setEmail] = useState('');
@@ -55,10 +77,15 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       setSupabaseActive(true);
       setActiveTab('supabase');
       setIsFirstAccess(false);
+    } else if (!savedPassword) {
+      // Se a nuvem não está configurada e não temos senha mestra, precisamos cadastrar a senha mestra
+      setSupabaseActive(false);
+      setActiveTab('master');
+      setIsFirstAccess(true);
     } else {
-      // Sempre inicie em modo Nuvem/Supabase por padrão e NUNCA force o cadastro da Senha Mestra
-      setSupabaseActive(true);
-      setActiveTab('supabase');
+      // Se a nuvem não está configurada mas já temos senha mestra cadastrada, carregamos o formulário de login local direto
+      setSupabaseActive(false);
+      setActiveTab('master');
       setIsFirstAccess(false);
     }
     
@@ -339,6 +366,18 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
 
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col items-center justify-center p-4 font-sans antialiased text-slate-800 dark:text-slate-100 selection:bg-indigo-500 selection:text-white relative">
+      {/* Floating Theme Toggle */}
+      <div className="absolute top-4 right-4 z-20">
+        <button
+          type="button"
+          onClick={toggleLocalDarkMode}
+          className="p-2.5 rounded-full bg-slate-100/50 dark:bg-slate-900/60 hover:bg-slate-200/60 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800 transition shadow-sm cursor-pointer"
+          title={localDarkMode ? "Ativar Modo Claro" : "Ativar Modo Escuro"}
+        >
+          {localDarkMode ? <Sun className="w-4.5 h-4.5 text-amber-500 animate-[spin_10s_linear_infinite]" /> : <Moon className="w-4.5 h-4.5" />}
+        </button>
+      </div>
+
       {/* Background radial soft light gradient */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(55,48,163,0.08)_0%,transparent_65%)] pointer-events-none" />
 
