@@ -1,11 +1,16 @@
 services:
   gestor-suprimentos:
-    # Opção A: Compilar localmente no TrueNAS (Ideal se você usar o Terminal)
-    build: .
+    # Opção A: Compilar localmente no Servidor (Ideal se você usar Docker Build / Dockge)
+    build:
+      context: .
+      args:
+        - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+        - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
     
-    # Opção B: Baixar a imagem pronta do GitHub Actions (Ideal para usar no Dockge)
-    # Se usar esta opção, comente a linha "build: ." acima e descomente a linha abaixo.
-    # Lembre-se de tornar o pacote público no GitHub (veja as instruções no chat)!
+    # Opção B: Baixar a imagem pronta do GitHub Actions (Ideal para usar no Dockge/Portainer)
+    # Se usar esta opção, comente o bloco "build" acima e descomente a linha abaixo.
+    # Lembre-se que caso puxe a imagem compilada, você pode colocar as credenciais do Supabase 
+    # diretamente através da tela de Configurações no painel do administrador do aplicativo!
     # image: ghcr.io/georgefctech-ship-it/georgefctech-3d-manager:latest
 
     container_name: gestor_suprimentos_app
