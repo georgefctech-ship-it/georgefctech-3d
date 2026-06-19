@@ -79,6 +79,31 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       setSupabaseActive(true);
       setActiveTab('supabase');
       setIsFirstAccess(false);
+
+      // Centralized Check: If not in localStorage, check if it's already registered on Supabase query!
+      if (!savedPassword) {
+        const checkMasterGlobal = async () => {
+          const supabase = getSupabaseClient();
+          if (supabase) {
+            try {
+              const { data } = await supabase
+                .from('g3d_user_roles')
+                .select('role')
+                .eq('email', 'system_master_password')
+                .maybeSingle();
+              if (data?.role) {
+                setHasMasterPassword(true);
+                setIsFirstAccess(false);
+              } else {
+                setIsFirstAccess(true);
+              }
+            } catch (err) {
+              console.error("Erro ao checar senha mestra global:", err);
+            }
+          }
+        };
+        checkMasterGlobal();
+      }
     } else if (!savedPassword) {
       // Se a nuvem não está configurada e não temos senha mestra, precisamos cadastrar a senha mestra
       setSupabaseActive(false);
@@ -102,49 +127,95 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     }
   }, []);
 
-  const handleSetupPassword = (e: React.FormEvent) => {
+  const handleSetupPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setLoading(true);
 
     if (password.length < 4) {
       setError('A senha deve conter pelo menos 4 caracteres.');
+      setLoading(false);
       return;
     }
 
     if (password !== confirmPassword) {
       setError('As senhas digitadas não coincidem.');
+      setLoading(false);
       return;
     }
 
-    // Save master password configuration
+    // Save master password configuration locally
     localStorage.setItem('g3d_master_password', password);
     setHasMasterPassword(true);
+    
+    // Save to Supabase globally if active
+    const supabase = getSupabaseClient();
+    if (supabase && hasSupabaseConfigured()) {
+      try {
+        await supabase.from('g3d_user_roles').upsert({
+          email: 'system_master_password',
+          role: password
+        });
+      } catch (upsertErr) {
+        console.error("Erro ao salvar senha mestra global no Supabase:", upsertErr);
+      }
+    }
+
     sessionStorage.setItem('g3d_authenticated', 'true');
     sessionStorage.setItem('g3d_user_role', 'admin');
     
+    setLoading(false);
     setSuccessMsg('Senha Mestra configurada com sucesso!');
     setTimeout(() => {
       onLoginSuccess();
     }, 1500);
   };
 
-  const handleMasterLogin = (e: React.FormEvent) => {
+  const handleMasterLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setLoading(true);
 
     const savedPassword = localStorage.getItem('g3d_master_password');
-    if (!savedPassword) {
-      setError('Nenhuma senha mestra configurada no sistema.');
+    
+    // Check local storage first
+    if (savedPassword && password === savedPassword) {
+      sessionStorage.setItem('g3d_authenticated', 'true');
+      sessionStorage.setItem('g3d_user_role', 'admin'); // Master password is always Admin
+      setLoading(false);
+      onLoginSuccess();
       return;
     }
 
-    if (password === savedPassword) {
-      sessionStorage.setItem('g3d_authenticated', 'true');
-      sessionStorage.setItem('g3d_user_role', 'admin'); // Master password is always Admin
-      onLoginSuccess();
-    } else {
-      setError('Senha incorreta. Por favor, tente novamente.');
+    // Fallback: Check Supabase global master password
+    const supabase = getSupabaseClient();
+    if (supabase && hasSupabaseConfigured()) {
+      try {
+        const { data, error: queryErr } = await supabase
+          .from('g3d_user_roles')
+          .select('role')
+          .eq('email', 'system_master_password')
+          .maybeSingle();
+
+        if (queryErr) throw queryErr;
+
+        if (data && data.role === password) {
+          // Synchronize locally for offline speed/redundancy
+          localStorage.setItem('g3d_master_password', password);
+          setHasMasterPassword(true);
+          sessionStorage.setItem('g3d_authenticated', 'true');
+          sessionStorage.setItem('g3d_user_role', 'admin');
+          setLoading(false);
+          onLoginSuccess();
+          return;
+        }
+      } catch (err: any) {
+        console.error("Erro de rede ao validar senha mestra:", err);
+      }
     }
+
+    setLoading(false);
+    setError('Senha incorreta. Por favor, tente novamente.');
   };
 
   const handleSupabaseLogin = async (e: React.FormEvent) => {

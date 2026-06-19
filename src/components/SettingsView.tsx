@@ -257,17 +257,32 @@ export default function SettingsView({
     window.location.reload();
   };
 
-  const handleChangePassword = (e: React.FormEvent) => {
+  const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setPwError('');
     setPwSuccess(false);
 
-    if (newPassword.trim().length < 4) {
+    const cleanPass = newPassword.trim();
+    if (cleanPass.length < 4) {
       setPwError('A nova senha deve ter no mínimo 4 caracteres.');
       return;
     }
 
-    localStorage.setItem('g3d_master_password', newPassword.trim());
+    localStorage.setItem('g3d_master_password', cleanPass);
+    
+    // Sync to Supabase in background if active
+    const supabase = getSupabaseClient();
+    if (supabase && hasSupabaseConfigured()) {
+      try {
+        await supabase.from('g3d_user_roles').upsert({
+          email: 'system_master_password',
+          role: cleanPass
+        });
+      } catch (err) {
+        console.error("Erro ao sincronizar nova senha mestra no Supabase:", err);
+      }
+    }
+
     setNewPassword('');
     setPwSuccess(true);
     setTimeout(() => setPwSuccess(false), 3500);
