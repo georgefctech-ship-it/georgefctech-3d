@@ -26,7 +26,7 @@
   html, body, .dark, .dark body, .dark main, .dark #print-area, .dark #print-area * {
     background-color: #ffffff !important;
     background: #ffffff !important;
-    color: #000000 !important;
+    color: hsl(0, 0%, 6%) !important;
   }
   .no-print {
     display: none !important;
@@ -174,8 +174,8 @@ html.dark main {
 
 /* Inputs specifically */
 .dark input {
-  background-color: #141b2d !important;
-  border-color: #1e293b !important;
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
   color: #f8fafc !important;
 }
 
