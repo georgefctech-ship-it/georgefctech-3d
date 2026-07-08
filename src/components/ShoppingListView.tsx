@@ -156,21 +156,35 @@ export default function ShoppingListView({
 <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
 <head>
 <meta charset="utf-8" />
+<!--[if gte mso 9]>
+<xml>
+  <x:ExcelWorkbook>
+    <x:ExcelWorksheets>
+      <x:ExcelWorksheet>
+        <x:Name>Cronograma de Compras</x:Name>
+        <x:WorksheetOptions>
+          <x:DisplayGridlines/>
+        </x:WorksheetOptions>
+      </x:ExcelWorksheet>
+    </x:ExcelWorksheets>
+  </x:ExcelWorkbook>
+</xml>
+<![endif]-->
 <style>
   table { border-collapse: collapse; width: 100%; margin: 10px 0; }
-  th { background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #94a3b8; text-align: left; }
+  th { background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; text-align: left; }
   td { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; padding: 10px; border: 1px solid #cbd5e1; vertical-align: middle; }
   .title-cell { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 18px; font-weight: bold; color: #0f172a; background-color: #f1f5f9; padding: 16px; border: 1px solid #94a3b8; text-align: center; }
   .info-cell { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 12px; color: #475569; background-color: #f8fafc; padding: 8px; border: 1px solid #cbd5e1; text-align: center; }
   .number-col { text-align: right; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; }
   .center-col { text-align: center; }
-  .status-bought { background-color: #d1fae5; color: #065f46; font-weight: bold; text-align: center; font-size: 13px; border: 1px solid #cbd5e1; }
-  .status-pending { background-color: #fef3c7; color: #92400e; font-weight: bold; text-align: center; font-size: 13px; border: 1px solid #cbd5e1; }
+  .status-bought { background-color: #d1fae5; color: #065f46; font-weight: bold; text-align: center; font-size: 13px; border: 1px solid #94a3b8; }
+  .status-pending { background-color: #fef3c7; color: #92400e; font-weight: bold; text-align: center; font-size: 13px; border: 1px solid #94a3b8; }
   .link-btn { font-family: 'Segoe UI', Tahoma, Arial, sans-serif !important; font-size: 13px !important; color: #2563eb !important; font-weight: normal !important; text-decoration: underline !important; }
 </style>
 </head>
 <body>
-  <table>
+  <table border="1" style="border-collapse: collapse; width: 100%; border: 1px solid #cbd5e1;">
     <tr>
       <td colspan="9" class="title-cell" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 18px; font-weight: bold; color: #0f172a; background-color: #f1f5f9; text-align: center; border: 1px solid #94a3b8; padding: 16px;">GEORGEFCTECH 3D - TABELA COMERCIAL DE PEDIDOS</td>
     </tr>
@@ -179,15 +193,15 @@ export default function ShoppingListView({
     </tr>
     <thead>
       <tr>
-        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #94a3b8; width: 110px;">ID Único</th>
-        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #94a3b8; width: 280px;">Material / Item Planejado</th>
-        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #94a3b8; width: 140px;">Categoria</th>
-        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #94a3b8; width: 70px; text-align: center;">Qtd.</th>
-        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #94a3b8; width: 130px; text-align: right;">Custo Unitário</th>
-        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #94a3b8; width: 130px; text-align: right;">Custo Total</th>
-        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #94a3b8; width: 130px; text-align: center;">Status</th>
-        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #94a3b8; width: 150px; text-align: center;">Link de Compra</th>
-        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #94a3b8; width: 220px;">Observações</th>
+        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; width: 110px; text-align: left;">ID Único</th>
+        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; width: 280px; text-align: left;">Material / Item Planejado</th>
+        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; width: 140px; text-align: left;">Categoria</th>
+        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; width: 70px; text-align: center;">Qtd.</th>
+        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; width: 130px; text-align: right;">Custo Unitário</th>
+        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; width: 130px; text-align: right;">Custo Total</th>
+        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; width: 130px; text-align: center;">Status</th>
+        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; width: 150px; text-align: center;">Link de Compra</th>
+        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; width: 220px; text-align: left;">Observações</th>
       </tr>
     </thead>
     <tbody>
@@ -199,7 +213,7 @@ export default function ShoppingListView({
           <td class="center-col" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; text-align: center; border: 1px solid #cbd5e1; color: #334155; padding: 10px;">${item.qtyNeeded}</td>
           <td class="number-col" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; text-align: right; border: 1px solid #cbd5e1; color: #334155; padding: 10px;">R$ ${item.estUnitCost.toFixed(2)}</td>
           <td class="number-col" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; color: #1e40af; text-align: right; border: 1px solid #cbd5e1; padding: 10px;">R$ ${(item.qtyNeeded * item.estUnitCost).toFixed(2)}</td>
-          <td class="${item.checked ? 'status-bought' : 'status-pending'}">
+          <td class="${item.checked ? 'status-bought' : 'status-pending'}" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; text-align: center; padding: 10px; border: 1px solid #cbd5e1; ${item.checked ? 'background-color: #d1fae5; color: #065f46;' : 'background-color: #fef3c7; color: #92400e;'}">
             ${item.checked ? 'Comprado' : 'Pendente'}
           </td>
           <td style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; text-align: center; border: 1px solid #cbd5e1; padding: 10px;">
@@ -648,7 +662,7 @@ export default function ShoppingListView({
         <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
           
           {/* DESKTOP TABLE */}
-          <div className="hidden md:block overflow-x-auto">
+          <div className="hidden md:block print:block overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 select-none">
@@ -743,10 +757,15 @@ export default function ShoppingListView({
                                 target="_blank"
                                 referrerPolicy="no-referrer"
                                 rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-650 hover:text-indigo-800 mt-1"
+                                className="inline-block text-[11px] font-bold text-indigo-650 hover:text-indigo-800 mt-1 hover:underline"
                               >
-                                <ExternalLink className="w-3 h-3" />
-                                Link de Fornecimentos Externos
+                                <span className="no-print inline-flex items-center gap-1">
+                                  <ExternalLink className="w-3 h-3" />
+                                  Link de Fornecimentos Externos
+                                </span>
+                                <span className="hidden print:inline text-blue-600 underline">
+                                  Acessar Link de Compra
+                                </span>
                               </a>
                             )}
                           </div>
@@ -869,7 +888,7 @@ export default function ShoppingListView({
           </div>
 
           {/* MOBILE LIST */}
-          <div className="md:hidden divide-y divide-slate-200">
+          <div className="md:hidden print:hidden divide-y divide-slate-200">
             {filteredShopping.map((item) => {
               const itemTotal = item.qtyNeeded * item.estUnitCost;
               const isEditing = editingId === item.id;
@@ -971,9 +990,14 @@ export default function ShoppingListView({
                                   target="_blank"
                                   referrerPolicy="no-referrer"
                                   rel="noreferrer"
-                                  className="inline-flex items-center gap-0.5 text-[10px] font-bold text-indigo-600"
+                                  className="inline-block text-[10px] font-bold text-indigo-600 hover:underline"
                                 >
-                                  <ExternalLink className="w-2.5 h-2.5" /> Ver Link
+                                  <span className="no-print inline-flex items-center gap-0.5">
+                                    <ExternalLink className="w-2.5 h-2.5" /> Ver Link
+                                  </span>
+                                  <span className="hidden print:inline text-blue-600 underline">
+                                    Acessar Link de Compra
+                                  </span>
                                 </a>
                               )}
                             </div>

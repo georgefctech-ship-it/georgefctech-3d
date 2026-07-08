@@ -55,6 +55,14 @@
     color: #0f172a !important;
     border-color: #cbd5e1 !important;
   }
+
+  /* Force links to remain blue, underlined, and clickable in printed/PDF outputs */
+  a, a *, .link-btn, .link-btn * {
+    color: #1d4ed8 !important; /* Premium corporate blue for professional printing */
+    text-decoration: underline !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
 }
 
 /* System-wide Elegant Dark/Light Mode Overrides */
