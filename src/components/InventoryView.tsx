@@ -37,6 +37,7 @@ interface InventoryViewProps {
   onDeleteInventoryItem: (id: string) => void;
   onUpdateQty: (id: string, newQty: number) => void;
   onEditInventoryItem?: (id: string, updatedFields: Partial<InventoryItem>) => void;
+  userRole?: string;
 }
 
 export default function InventoryView({
@@ -44,7 +45,8 @@ export default function InventoryView({
   onAddInventoryItem,
   onDeleteInventoryItem,
   onUpdateQty,
-  onEditInventoryItem
+  onEditInventoryItem,
+  userRole
 }: InventoryViewProps) {
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   
@@ -344,181 +346,201 @@ export default function InventoryView({
         
         {/* LEFT COMPONENT: ADD FORM */}
         <div className="p-6 rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-2 mb-6 pb-3 border-b border-slate-100">
-              <Package className="w-4 h-4 text-indigo-500" />
-              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800">
-                Cadastrar Novo Filamento
-              </h3>
+          {userRole === 'colaborador' ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-4 py-8 space-y-4">
+              <div className="p-4 bg-amber-50 rounded-full text-amber-500 border border-amber-100 shadow-inner">
+                <AlertCircle className="w-8 h-8 animate-pulse" />
+              </div>
+              <h3 className="font-bold text-slate-800 text-sm uppercase tracking-wider">Acesso Restrito</h3>
+              <p className="text-xs text-slate-500 leading-relaxed max-w-[240px]">
+                Como <strong>Colaborador</strong>, você possui permissão apenas de visualização no estoque de insumos.
+              </p>
+              <p className="text-[11px] text-slate-400 leading-relaxed max-w-[240px]">
+                O cadastro e alteração de novos materiais e quantidades físicas são reservados exclusivamente para administradores.
+              </p>
+              <div className="pt-4 w-full border-t border-slate-100 text-[10px] font-mono text-slate-400">
+                GeorgeFctech-3D • Nível: Colaborador
+              </div>
             </div>
-
-            <form onSubmit={handleAdditem} className="space-y-4">
-              {/* ID / Barcode Field */}
-              <div className="flex flex-col gap-1.5 p-3 rounded-lg bg-slate-50 border border-slate-200/60">
-                <label className="text-xs font-semibold text-slate-500 flex items-center justify-between">
-                  <span>Código de Barras / SKU (Opcional)</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsScanning(true);
-                      setScannedCode('');
-                      setManualCode('');
-                    }}
-                    className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 cursor-pointer"
-                  >
-                    <Scan className="w-3 h-3 text-indigo-600 animate-pulse" />
-                    Escanear Câmera
-                  </button>
-                </label>
-                <input
-                  type="text"
-                  placeholder="Código de barra ou gera automático"
-                  value={customBarcodeId}
-                  onChange={(e) => setCustomBarcodeId(e.target.value)}
-                  className="px-3 py-1.5 w-full border border-slate-200 rounded-md bg-white text-slate-800 text-sm focus:outline-none focus:border-indigo-500 transition-all font-mono"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-500">
-                  Nome do Insumo / Fabricante / Tipo *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={materialName}
-                  onChange={(e) => setMaterialName(e.target.value)}
-                  placeholder="Ex: PETG Creality Preto 1kg"
-                  className="px-4 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-800 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white placeholder-slate-400 transition-all font-sans"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-500">
-                    Rolos em Estoque
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={qty}
-                    onChange={(e) => setQty(e.target.value)}
-                    className="px-4 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-800 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition-all font-mono"
-                  />
+          ) : (
+            <>
+              <div>
+                <div className="flex items-center gap-2 mb-6 pb-3 border-b border-slate-100">
+                  <Package className="w-4 h-4 text-indigo-500" />
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800">
+                    Cadastrar Novo Filamento
+                  </h3>
                 </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-500">
-                    Preço por Rolo (R$)
-                  </label>
-                  <input
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    value={unitCost}
-                    onChange={(e) => setUnitCost(e.target.value)}
-                    className="px-4 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-800 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition-all font-mono"
-                  />
-                </div>
-              </div>
-
-              {/* PURCHASE LINK INPUT */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-500">
-                  Link de Compra Direta
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-slate-400">
-                    <Link className="w-3.5 h-3.5" />
-                  </span>
-                  <input
-                    type="url"
-                    value={purchaseLink}
-                    onChange={(e) => setPurchaseLink(e.target.value)}
-                    placeholder="Ex: https://www.mercadolivre.com.br/..."
-                    className="px-4 pl-9 py-2 w-full border border-slate-200 rounded-lg bg-slate-50 text-slate-800 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white placeholder-slate-400 transition-all font-sans"
-                  />
-                </div>
-              </div>
-
-              {/* FILAMENT PHOTO UPLOADER */}
-              <div className="flex flex-col gap-2.5 pt-1.5">
-                <label className="text-xs font-semibold text-slate-500">
-                  Foto do Filamento
-                </label>
-                
-                {/* PRESETS SLIDER */}
-                <div>
-                  <div className="text-[10px] uppercase font-mono text-slate-400 mb-1.5">Escolher Presets de Cores:</div>
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {presetColors.map((preset, idx) => (
+                <form onSubmit={handleAdditem} className="space-y-4">
+                  {/* ID / Barcode Field */}
+                  <div className="flex flex-col gap-1.5 p-3 rounded-lg bg-slate-50 border border-slate-200/60">
+                    <label className="text-xs font-semibold text-slate-500 flex items-center justify-between">
+                      <span>Código de Barras / SKU (Opcional)</span>
                       <button
-                        key={idx}
                         type="button"
-                        onClick={() => handlePresetSelect(preset.url)}
-                        title={preset.name}
-                        className={`h-7 px-2.5 rounded text-[11px] font-semibold border flex items-center gap-1.5 transition ${
-                          imgUrl === preset.url 
-                            ? 'border-indigo-600 bg-indigo-50 text-indigo-700' 
-                            : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700'
-                        }`}
+                        onClick={() => {
+                          setIsScanning(true);
+                          setScannedCode('');
+                          setManualCode('');
+                        }}
+                        className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 cursor-pointer"
                       >
-                        <span className="w-2.5 h-2.5 rounded-full inline-block shadow-inner" style={{ backgroundColor: preset.color }}></span>
-                        {preset.name.split(' ')[0]}
+                        <Scan className="w-3 h-3 text-indigo-600 animate-pulse" />
+                        Escanear Câmera
                       </button>
-                    ))}
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Código de barra ou gera automático"
+                      value={customBarcodeId}
+                      onChange={(e) => setCustomBarcodeId(e.target.value)}
+                      className="px-3 py-1.5 w-full border border-slate-200 rounded-md bg-white text-slate-800 text-sm focus:outline-none focus:border-indigo-500 transition-all font-mono"
+                    />
                   </div>
-                </div>
 
-                <div className="text-center py-1">
-                  <span className="text-[10px] font-mono text-slate-400">OU SUBIR FOTO REAL DO CELULAR ou ARQUIVO</span>
-                </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-slate-500">
+                      Nome do Insumo / Fabricante / Tipo *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={materialName}
+                      onChange={(e) => setMaterialName(e.target.value)}
+                      placeholder="Ex: PETG Creality Preto 1kg"
+                      className="px-4 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-800 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white placeholder-slate-400 transition-all font-sans"
+                    />
+                  </div>
 
-                {/* FILE UPLOAD DRAG/CLICK */}
-                <label className="border-2 border-dashed border-slate-200 hover:border-indigo-400 min-h-[70px] rounded-lg p-3 bg-slate-50 hover:bg-slate-100 flex flex-col items-center justify-center cursor-pointer transition select-none">
-                  {uploadedBase64 ? (
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={uploadedBase64}
-                        alt="Preview"
-                        className="w-10 h-10 object-cover rounded border border-slate-200"
-                        referrerPolicy="no-referrer"
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-slate-500">
+                        Rolos em Estoque
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={qty}
+                        onChange={(e) => setQty(e.target.value)}
+                        className="px-4 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-800 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition-all font-mono"
                       />
-                      <span className="text-xs text-indigo-600 font-semibold truncate max-w-[120px]">Imagem Real Pronta</span>
                     </div>
-                  ) : (
-                    <>
-                      <Upload className="w-5 h-5 text-slate-400 mb-1" />
-                      <span className="text-[11px] font-semibold text-slate-600">Procurar ou arrastar imagem</span>
-                    </>
-                  )}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleImageFileChange(e)}
-                    className="hidden"
-                  />
-                </label>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-slate-500">
+                        Preço por Rolo (R$)
+                      </label>
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={unitCost}
+                        onChange={(e) => setUnitCost(e.target.value)}
+                        className="px-4 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-800 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition-all font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {/* PURCHASE LINK INPUT */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-slate-500">
+                      Link de Compra Direta
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-slate-400">
+                        <Link className="w-3.5 h-3.5" />
+                      </span>
+                      <input
+                        type="url"
+                        value={purchaseLink}
+                        onChange={(e) => setPurchaseLink(e.target.value)}
+                        placeholder="Ex: https://www.mercadolivre.com.br/..."
+                        className="px-4 pl-9 py-2 w-full border border-slate-200 rounded-lg bg-slate-50 text-slate-800 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white placeholder-slate-400 transition-all font-sans"
+                      />
+                    </div>
+                  </div>
+
+                  {/* FILAMENT PHOTO UPLOADER */}
+                  <div className="flex flex-col gap-2.5 pt-1.5">
+                    <label className="text-xs font-semibold text-slate-500">
+                      Foto do Filamento
+                    </label>
+                    
+                    {/* PRESETS SLIDER */}
+                    <div>
+                      <div className="text-[10px] uppercase font-mono text-slate-400 mb-1.5">Escolher Presets de Cores:</div>
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {presetColors.map((preset, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => handlePresetSelect(preset.url)}
+                            title={preset.name}
+                            className={`h-7 px-2.5 rounded text-[11px] font-semibold border flex items-center gap-1.5 transition ${
+                              imgUrl === preset.url 
+                                ? 'border-indigo-600 bg-indigo-50 text-indigo-700' 
+                                : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700'
+                            }`}
+                          >
+                            <span className="w-2.5 h-2.5 rounded-full inline-block shadow-inner" style={{ backgroundColor: preset.color }}></span>
+                            {preset.name.split(' ')[0]}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="text-center py-1">
+                      <span className="text-[10px] font-mono text-slate-400">OU SUBIR FOTO REAL DO CELULAR ou ARQUIVO</span>
+                    </div>
+
+                    {/* FILE UPLOAD DRAG/CLICK */}
+                    <label className="border-2 border-dashed border-slate-200 hover:border-indigo-400 min-h-[70px] rounded-lg p-3 bg-slate-50 hover:bg-slate-100 flex flex-col items-center justify-center cursor-pointer transition select-none">
+                      {uploadedBase64 ? (
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={uploadedBase64}
+                            alt="Preview"
+                            className="w-10 h-10 object-cover rounded border border-slate-200"
+                            referrerPolicy="no-referrer"
+                          />
+                          <span className="text-xs text-indigo-600 font-semibold truncate max-w-[120px]">Imagem Real Pronta</span>
+                        </div>
+                      ) : (
+                        <>
+                          <Upload className="w-5 h-5 text-slate-400 mb-1" />
+                          <span className="text-[11px] font-semibold text-slate-600">Procurar ou arrastar imagem</span>
+                        </>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleImageFileChange(e)}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full mt-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold uppercase tracking-wider rounded-lg shadow-sm hover:shadow-md transition-all duration-200"
+                  >
+                    Injetar ao Inventário
+                  </button>
+                </form>
               </div>
 
-              <button
-                type="submit"
-                className="w-full mt-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold uppercase tracking-wider rounded-lg shadow-sm hover:shadow-md transition-all duration-200"
-              >
-                Injetar ao Inventário
-              </button>
-            </form>
-          </div>
-
-          {/* REALTIME TRIVIA */}
-          <div className="mt-8 p-4 rounded-lg bg-slate-50 border border-slate-100 space-y-3">
-            <h4 className="text-[10px] font-bold text-indigo-650 tracking-widest uppercase mb-1">
-              ESTRUTURA DE COMPRA 3D
-            </h4>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              O software de precificação GeorgeFctech usará o valor por rolo de 1kg para encontrar de forma precisa a taxa por grama de cada material.
-            </p>
-          </div>
+              {/* REALTIME TRIVIA */}
+              <div className="mt-8 p-4 rounded-lg bg-slate-50 border border-slate-100 space-y-3">
+                <h4 className="text-[10px] font-bold text-indigo-650 tracking-widest uppercase mb-1">
+                  ESTRUTURA DE COMPRA 3D
+                </h4>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  O software de precificação GeorgeFctech usará o valor por rolo de 1kg para encontrar de forma precisa a taxa por grama de cada material.
+                </p>
+              </div>
+            </>
+          )}
         </div>
 
         {/* RIGHT COMPONENT: GALLERIES AND DETAILS */}
@@ -615,27 +637,29 @@ export default function InventoryView({
                           <span className="flex-1 text-[11px] text-slate-400 italic text-center py-2">Sem Link Cadastrado</span>
                         )}
 
-                        <div className="flex gap-1">
-                          <button
-                            onClick={() => setEditingItem(item)}
-                            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg border border-slate-100"
-                            title="Editar Insumo"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          
-                          <button
-                            onClick={() => {
-                              if (confirm(`Deseja realmente apagar o insumo "${item.material}"?`)) {
-                                onDeleteInventoryItem(item.id);
-                              }
-                            }}
-                            className="p-2 text-slate-400 hover:text-rose-605 hover:bg-rose-50 rounded-lg border border-slate-100"
-                            title="Remover"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                        {userRole !== 'colaborador' && (
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => setEditingItem(item)}
+                              className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg border border-slate-100"
+                              title="Editar Insumo"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            
+                            <button
+                              onClick={() => {
+                                if (confirm(`Deseja realmente apagar o insumo "${item.material}"?`)) {
+                                  onDeleteInventoryItem(item.id);
+                                }
+                              }}
+                              className="p-2 text-slate-400 hover:text-rose-605 hover:bg-rose-50 rounded-lg border border-slate-100"
+                              title="Remover"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -660,7 +684,7 @@ export default function InventoryView({
                       <th className="py-3 px-4 text-right">Custo por Grama</th>
                       <th className="py-3 px-4 text-center">Status</th>
                       <th className="py-3 px-4 text-center">Mercado Livre</th>
-                      <th className="py-3 px-4 text-center">Ações</th>
+                      {userRole !== 'colaborador' && <th className="py-3 px-4 text-center">Ações</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-sm">
@@ -686,23 +710,29 @@ export default function InventoryView({
                           </div>
                         </td>
                         <td className="py-3 px-4 whitespace-nowrap text-center">
-                          <div className="flex items-center justify-center gap-2">
-                            <button
-                              onClick={() => onUpdateQty(item.id, Math.max(0, item.qty - 1))}
-                              className="w-6 h-6 rounded bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200 transition-colors"
-                            >
-                              -
-                            </button>
+                          {userRole === 'colaborador' ? (
                             <span className="font-mono font-semibold text-slate-700 px-2 min-w-[50px] inline-block text-center">
                               {item.qty} Rolos
                             </span>
-                            <button
-                              onClick={() => onUpdateQty(item.id, item.qty + 1)}
-                              className="w-6 h-6 rounded bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200 transition-colors"
-                            >
-                              +
-                            </button>
-                          </div>
+                          ) : (
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                onClick={() => onUpdateQty(item.id, Math.max(0, item.qty - 1))}
+                                className="w-6 h-6 rounded bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200 transition-colors"
+                              >
+                                -
+                              </button>
+                              <span className="font-mono font-semibold text-slate-700 px-2 min-w-[50px] inline-block text-center">
+                                {item.qty} Rolos
+                              </span>
+                              <button
+                                onClick={() => onUpdateQty(item.id, item.qty + 1)}
+                                className="w-6 h-6 rounded bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200 transition-colors"
+                              >
+                                +
+                              </button>
+                            </div>
+                          )}
                         </td>
                         <td className="py-3 px-4 whitespace-nowrap text-right font-mono text-slate-600">
                           {formatBRL(item.unitCost)}
@@ -730,28 +760,30 @@ export default function InventoryView({
                             <span className="text-slate-400 text-xs">-</span>
                           )}
                         </td>
-                        <td className="py-3 px-4 whitespace-nowrap text-center">
-                          <div className="flex items-center justify-center gap-1.5">
-                            <button
-                              onClick={() => setEditingItem(item)}
-                              className="p-1.5 text-slate-400 hover:text-indigo-600 rounded hover:bg-indigo-50"
-                              title="Editar Insumo"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => {
-                                if (confirm(`Deseja realmente remover o material "${item.material}" do inventário?`)) {
-                                  onDeleteInventoryItem(item.id);
-                                }
-                              }}
-                              className="p-1.5 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 transition"
-                              title="Remover Material"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
+                        {userRole !== 'colaborador' && (
+                          <td className="py-3 px-4 whitespace-nowrap text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                onClick={() => setEditingItem(item)}
+                                className="p-1.5 text-slate-400 hover:text-indigo-600 rounded hover:bg-indigo-50"
+                                title="Editar Insumo"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (confirm(`Deseja realmente remover o material "${item.material}" do inventário?`)) {
+                                    onDeleteInventoryItem(item.id);
+                                  }
+                                }}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 transition"
+                                title="Remover Material"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>

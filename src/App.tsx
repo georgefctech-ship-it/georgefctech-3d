@@ -148,6 +148,7 @@ export default function App() {
             onDeleteInventoryItem={deleteInventoryItem}
             onUpdateQty={updateInventoryQty}
             onEditInventoryItem={editInventoryItem}
+            userRole={userRole}
           />
         );
       case 'compras':
@@ -160,6 +161,7 @@ export default function App() {
             onUpdateShoppingItem={updateShoppingItem}
             onToggleShoppingItemChecked={toggleShoppingItemChecked}
             onAddInventoryItem={addInventoryItem}
+            userRole={userRole}
           />
         );
       case 'relatorio':
