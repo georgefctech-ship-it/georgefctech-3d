@@ -301,8 +301,13 @@ export default function ShoppingListView({
       <div className="hidden print:block border-b-2 border-indigo-600 pb-5 mb-8">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600 font-bold font-display text-lg">
-              GF
+            <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 bg-transparent border border-slate-200 flex items-center justify-center p-0">
+              <img 
+                referrerPolicy="no-referrer"
+                src="https://vyvompcoiaizoluuxnzx.supabase.co/storage/v1/object/sign/img/meu_logo.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9lYTFhZWQwNC03M2Y5LTQwODQtOWNiOS04ODBkMTA3MzAwY2UiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJpbWcvbWV1X2xvZ28ucG5nIiwic2NvcGUiOiJkb3dubG9hZCIsImlhdCI6MTc4MTc5NTUxOCwiZXhwIjoxODc2NDAzNTE4fQ.JgHY5piKmwxjB0nfW08joAWsNE-JYRA5kUUkVra9hFI"
+                alt="GeorgeFctech 3D Logo"
+                className="w-full h-full object-cover"
+              />
             </div>
             <div>
               <h2 className="text-xl font-bold text-slate-900">GeorgeFctech-3D</h2>
@@ -757,15 +762,10 @@ export default function ShoppingListView({
                                 target="_blank"
                                 referrerPolicy="no-referrer"
                                 rel="noreferrer"
-                                className="inline-block text-[11px] font-bold text-indigo-650 hover:text-indigo-800 mt-1 hover:underline"
+                                className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-650 hover:text-indigo-800 mt-1 hover:underline print:text-blue-600 print:underline"
                               >
-                                <span className="no-print inline-flex items-center gap-1">
-                                  <ExternalLink className="w-3 h-3" />
-                                  Link de Fornecimentos Externos
-                                </span>
-                                <span className="hidden print:inline text-blue-600 underline">
-                                  Acessar Link de Compra
-                                </span>
+                                <ExternalLink className="w-3.5 h-3.5 no-print" />
+                                <span>Acessar Link de Compra</span>
                               </a>
                             )}
                           </div>
@@ -990,14 +990,10 @@ export default function ShoppingListView({
                                   target="_blank"
                                   referrerPolicy="no-referrer"
                                   rel="noreferrer"
-                                  className="inline-block text-[10px] font-bold text-indigo-600 hover:underline"
+                                  className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:underline print:text-blue-600 print:underline"
                                 >
-                                  <span className="no-print inline-flex items-center gap-0.5">
-                                    <ExternalLink className="w-2.5 h-2.5" /> Ver Link
-                                  </span>
-                                  <span className="hidden print:inline text-blue-600 underline">
-                                    Acessar Link de Compra
-                                  </span>
+                                  <ExternalLink className="w-2.5 h-2.5 no-print" />
+                                  <span>Acessar Link de Compra</span>
                                 </a>
                               )}
                             </div>

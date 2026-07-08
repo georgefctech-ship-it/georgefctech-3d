@@ -57,9 +57,13 @@
   }
 
   /* Force links to remain blue, underlined, and clickable in printed/PDF outputs */
-  a, a *, .link-btn, .link-btn * {
+  a, a *, .link-btn, .link-btn *, 
+  html a, body a, .dark a, .dark * a, 
+  #print-area a, #print-area a * {
     color: #1d4ed8 !important; /* Premium corporate blue for professional printing */
     text-decoration: underline !important;
+    cursor: pointer !important;
+    pointer-events: auto !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
