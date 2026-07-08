@@ -154,6 +154,7 @@ export default function ShoppingListView({
   });
   const [department, setDepartment] = useState('');
   const [company, setCompany] = useState('');
+  const [barcode, setBarcode] = useState('');
 
   // Filtering states
   const [searchQuery, setSearchQuery] = useState('');
@@ -172,6 +173,7 @@ export default function ShoppingListView({
   const [editRequestedBy, setEditRequestedBy] = useState('');
   const [editDepartment, setEditDepartment] = useState('');
   const [editCompany, setEditCompany] = useState('');
+  const [editBarcode, setEditBarcode] = useState('');
 
   // General Independent Report customizer fields (stored in local state for print visualization)
   const [reportCompany, setReportCompany] = useState('');
@@ -192,6 +194,7 @@ export default function ShoppingListView({
         setCategory(matchedProduct.category);
         setNotes(`[Escaneado: ${code}] ${matchedProduct.notes}`);
         setCompany(matchedProduct.company || 'GeorgeFctech Comercial');
+        setBarcode(code);
         
         // Auto-open form if closed
         setFormOpen(true);
@@ -201,6 +204,7 @@ export default function ShoppingListView({
         setMaterialName(`Produto [Código: ${code}]`);
         setNotes(`[Código de barras/QR: ${code}]`);
         setCompany('GeorgeFctech Comercial');
+        setBarcode(code);
         setFormOpen(true); // Ensure open
         setToastMessage(`Código desconhecido (${code}). Preparamos o campo com o código do produto.`);
       }
@@ -222,7 +226,8 @@ export default function ShoppingListView({
       notes: notes.trim(),
       requestedBy: requestedBy.trim() || undefined,
       department: department.trim() || undefined,
-      company: company.trim() || undefined
+      company: company.trim() || undefined,
+      barcode: barcode.trim() || undefined
     });
 
     // Reset Form
@@ -235,6 +240,7 @@ export default function ShoppingListView({
     setRequestedBy(sessionStorage.getItem('g3d_username') || sessionStorage.getItem('g3d_user_email') || '');
     setDepartment('');
     setCompany('');
+    setBarcode('');
     setFormOpen(false);
   };
 
@@ -249,6 +255,7 @@ export default function ShoppingListView({
     setEditRequestedBy(item.requestedBy || '');
     setEditDepartment(item.department || '');
     setEditCompany(item.company || '');
+    setEditBarcode(item.barcode || '');
   };
 
   const handleSaveEdit = (id: string) => {
@@ -261,7 +268,8 @@ export default function ShoppingListView({
       notes: editNotes.trim(),
       requestedBy: editRequestedBy.trim() || undefined,
       department: editDepartment.trim() || undefined,
-      company: editCompany.trim() || undefined
+      company: editCompany.trim() || undefined,
+      barcode: editBarcode.trim() || undefined
     });
     setEditingId(null);
   };
@@ -281,99 +289,466 @@ export default function ShoppingListView({
     });
   };
 
-  // Excel Link-Friendly Format HTML Spreadsheet Generation
-  const generateExcel = () => {
+  // Standalone HTML Commercial Report Generation with Product Photos & Active Links
+  const generateReport = () => {
     if (shopping.length === 0) return;
 
     const selectedCompany = filterCompany !== 'Todos' ? filterCompany : 'GERAL / GeorgeFctech-3D';
-    const reportTitle = `${selectedCompany.toUpperCase()} - TABELA COMERCIAL DE PEDIDOS`;
+    const reportTitle = `${selectedCompany.toUpperCase()} - RELATÓRIO COMERCIAL DE PEDIDOS`;
+    const dateFormatted = new Date().toLocaleDateString('pt-BR');
+    const timeFormatted = new Date().toLocaleTimeString('pt-BR');
 
-    const htmlContent = `
-<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+    const htmlContent = `<!DOCTYPE html>
+<html lang="pt-BR">
 <head>
-<meta charset="utf-8" />
-<!--[if gte mso 9]>
-<xml>
-  <x:ExcelWorkbook>
-    <x:ExcelWorksheets>
-      <x:ExcelWorksheet>
-        <x:Name>Cronograma de Compras</x:Name>
-        <x:WorksheetOptions>
-          <x:DisplayGridlines/>
-        </x:WorksheetOptions>
-      </x:ExcelWorksheet>
-    </x:ExcelWorksheets>
-  </x:ExcelWorkbook>
-</xml>
-<![endif]-->
-<style>
-  table { border-collapse: collapse; width: 100%; margin: 10px 0; }
-  th { background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; text-align: left; }
-  td { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; padding: 10px; border: 1px solid #cbd5e1; vertical-align: middle; }
-  .title-cell { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 18px; font-weight: bold; color: #0f172a; background-color: #f1f5f9; padding: 16px; border: 1px solid #94a3b8; text-align: center; }
-  .info-cell { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 12px; color: #475569; background-color: #f8fafc; padding: 8px; border: 1px solid #cbd5e1; text-align: center; }
-  .number-col { text-align: right; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; }
-  .center-col { text-align: center; }
-  .status-bought { background-color: #d1fae5; color: #065f46; font-weight: bold; text-align: center; font-size: 13px; border: 1px solid #94a3b8; }
-  .status-pending { background-color: #fef3c7; color: #92400e; font-weight: bold; text-align: center; font-size: 13px; border: 1px solid #94a3b8; }
-  .link-btn { font-family: 'Segoe UI', Tahoma, Arial, sans-serif !important; font-size: 13px !important; color: #2563eb !important; font-weight: normal !important; text-decoration: underline !important; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${reportTitle}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --secondary: #0f172a;
+      --success: #059669;
+      --warning: #d97706;
+      --slate-50: #f8fafc;
+      --slate-100: #f1f5f9;
+      --slate-200: #e2e8f0;
+      --slate-300: #cbd5e1;
+      --slate-700: #334155;
+      --slate-800: #1e293b;
+      --slate-900: #0f172a;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background-color: #f8fafc;
+      color: var(--slate-900);
+      line-height: 1.5;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 20px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+      border: 1px solid var(--slate-200);
+      overflow: hidden;
+    }
+
+    .header {
+      background: linear-gradient(135deg, var(--slate-900) 0%, #1e1b4b 100%);
+      color: #ffffff;
+      padding: 40px;
+      position: relative;
+    }
+
+    .header-logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      font-size: 14px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #a5b4fc;
+      margin-bottom: 15px;
+    }
+
+    .header-title {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      margin-bottom: 10px;
+      line-height: 1.2;
+    }
+
+    .header-meta {
+      font-size: 13px;
+      color: #cbd5e1;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      margin-top: 20px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .header-meta span {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-cols: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 20px;
+      padding: 30px 40px;
+      background-color: var(--slate-50);
+      border-bottom: 1px solid var(--slate-200);
+    }
+
+    .stat-card {
+      background: #ffffff;
+      padding: 20px;
+      border-radius: 12px;
+      border: 1px solid var(--slate-200);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--slate-700);
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--slate-900);
+    }
+
+    .stat-value.highlight {
+      color: var(--primary);
+    }
+
+    .table-container {
+      padding: 40px;
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+
+    th {
+      font-size: 11px;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--slate-700);
+      letter-spacing: 0.05em;
+      padding: 16px 20px;
+      border-bottom: 2px solid var(--slate-200);
+      background-color: var(--slate-50);
+    }
+
+    td {
+      padding: 20px;
+      border-bottom: 1px solid var(--slate-100);
+      font-size: 14px;
+      vertical-align: middle;
+    }
+
+    tr:hover td {
+      background-color: rgba(79, 70, 229, 0.01);
+    }
+
+    .product-cell {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .product-img {
+      width: 56px;
+      height: 56px;
+      border-radius: 10px;
+      object-fit: cover;
+      background-color: var(--slate-100);
+      border: 1px solid var(--slate-200);
+      flex-shrink: 0;
+    }
+
+    .product-info {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .product-name {
+      font-weight: 700;
+      color: var(--slate-900);
+    }
+
+    .product-notes {
+      font-size: 12px;
+      color: var(--slate-700);
+    }
+
+    .product-barcode {
+      display: inline-block;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      background-color: #eef2ff;
+      color: #4338ca;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: bold;
+      width: fit-content;
+      margin-top: 2px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .badge-filamento { background-color: #eef2ff; color: #4338ca; }
+    .badge-reparacao { background-color: #fff1f2; color: #be123c; }
+    .badge-insumos { background-color: #f0fdfa; color: #0f766e; }
+    .badge-outros { background-color: #f1f5f9; color: #334155; }
+
+    .badge-pending { background-color: #fef3c7; color: #d97706; }
+    .badge-bought { background-color: #d1fae5; color: #059669; }
+
+    .price-col {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+    }
+
+    .total-price {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    .action-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background-color: var(--primary);
+      color: #ffffff;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      text-decoration: none;
+      transition: background-color 0.15s ease;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+
+    .action-btn:hover {
+      background-color: var(--primary-hover);
+    }
+
+    .action-btn.secondary {
+      background-color: var(--slate-100);
+      color: var(--slate-700);
+      border: 1px solid var(--slate-200);
+    }
+
+    .action-btn.secondary:hover {
+      background-color: var(--slate-200);
+    }
+
+    .footer {
+      background-color: var(--slate-50);
+      padding: 30px 40px;
+      border-top: 1px solid var(--slate-200);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: var(--slate-700);
+    }
+
+    .print-btn {
+      background-color: var(--slate-800);
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-weight: 700;
+      cursor: pointer;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      transition: opacity 0.15s;
+    }
+
+    .print-btn:hover {
+      opacity: 0.9;
+    }
+
+    @media print {
+      body {
+        background-color: #ffffff;
+        padding: 0;
+      }
+      .container {
+        box-shadow: none;
+        border: none;
+      }
+      .print-btn {
+        display: none;
+      }
+      .action-btn {
+        border: 1px solid var(--slate-300);
+        background: transparent !important;
+        color: var(--slate-900) !important;
+        font-weight: normal;
+        text-decoration: underline;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .stats-grid {
+        grid-template-cols: 1fr;
+        padding: 20px;
+      }
+      .table-container {
+        padding: 10px;
+      }
+      td, th {
+        padding: 12px 10px;
+      }
+      .header {
+        padding: 24px;
+      }
+      .header-title {
+        font-size: 20px;
+      }
+    }
+  </style>
 </head>
 <body>
-  <table border="1" style="border-collapse: collapse; width: 100%; border: 1px solid #cbd5e1;">
-    <tr>
-      <td colspan="12" class="title-cell" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 18px; font-weight: bold; color: #0f172a; background-color: #f1f5f9; text-align: center; border: 1px solid #94a3b8; padding: 16px;">${reportTitle}</td>
-    </tr>
-    <tr>
-      <td colspan="12" class="info-cell" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 12px; text-align: center; color: #475569; border: 1px solid #cbd5e1; padding: 8px;">Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')} | Total Planejado: R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-    </tr>
-    <thead>
-      <tr>
-        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; width: 110px; text-align: left;">ID Único</th>
-        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; width: 280px; text-align: left;">Material / Item Planejado</th>
-        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; width: 140px; text-align: left;">Categoria</th>
-        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; width: 140px; text-align: left;">Empresa</th>
-        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; width: 150px; text-align: left;">Solicitante (Responsável)</th>
-        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; width: 120px; text-align: left;">Setor</th>
-        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; width: 70px; text-align: center;">Qtd.</th>
-        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; width: 130px; text-align: right;">Custo Unitário</th>
-        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; width: 130px; text-align: right;">Custo Total</th>
-        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; width: 130px; text-align: center;">Status</th>
-        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; width: 150px; text-align: center;">Link de Compra</th>
-        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; width: 220px; text-align: left;">Observações</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${shopping.map(item => `
-        <tr>
-          <td style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; border: 1px solid #cbd5e1; color: #334155; padding: 10px;">${item.id}</td>
-          <td style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; color: #0f172a; border: 1px solid #cbd5e1; padding: 10px;">${item.materialName}</td>
-          <td style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; border: 1px solid #cbd5e1; color: #334155; padding: 10px;">${item.category}</td>
-          <td style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; border: 1px solid #cbd5e1; color: #334155; padding: 10px;">${item.company || 'GeorgeFctech-3D'}</td>
-          <td style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; border: 1px solid #cbd5e1; color: #334155; padding: 10px;">${item.requestedBy || 'Administração'}</td>
-          <td style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; border: 1px solid #cbd5e1; color: #334155; padding: 10px;">${item.department || 'Geral'}</td>
-          <td class="center-col" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; text-align: center; border: 1px solid #cbd5e1; color: #334155; padding: 10px;">${item.qtyNeeded}</td>
-          <td class="number-col" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; text-align: right; border: 1px solid #cbd5e1; color: #334155; padding: 10px;">R$ ${item.estUnitCost.toFixed(2)}</td>
-          <td class="number-col" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; color: #1e40af; text-align: right; border: 1px solid #cbd5e1; padding: 10px;">R$ ${(item.qtyNeeded * item.estUnitCost).toFixed(2)}</td>
-          <td class="${item.checked ? 'status-bought' : 'status-pending'}" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; text-align: center; padding: 10px; border: 1px solid #cbd5e1; ${item.checked ? 'background-color: #d1fae5; color: #065f46;' : 'background-color: #fef3c7; color: #92400e;'}">
-            ${item.checked ? 'Comprado' : 'Pendente'}
-          </td>
-          <td style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; text-align: center; border: 1px solid #cbd5e1; padding: 10px;">
-            ${item.purchaseLink ? `<a href="${ensureAbsoluteUrl(item.purchaseLink)}" target="_blank" class="link-btn" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; color: #2563eb; font-weight: normal; text-decoration: underline; display: inline; outline: none;">Acessar Link</a>` : '<span style="color: #64748b; font-style: italic;">Sem Link</span>'}
-          </td>
-          <td style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; border: 1px solid #cbd5e1; color: #475569; padding: 10px;">${item.notes || '-'}</td>
-        </tr>
-      `).join('')}
-    </tbody>
-  </table>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-logo">
+        <svg style="width:16px;height:16px" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4"></path>
+        </svg>
+        GeorgeFctech 3D - Gestor de Suprimentos
+      </div>
+      <h1 class="header-title">${reportTitle}</h1>
+      <div class="header-meta">
+        <span>🕒 Gerado em: ${dateFormatted} às ${timeFormatted}</span>
+        <span>🏢 Empresa: ${selectedCompany}</span>
+        <span>📦 Total de Itens: ${shopping.length}</span>
+      </div>
+    </div>
+
+    <!-- Stats summary cards -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <span class="stat-label">Custo Estimado Geral</span>
+        <span class="stat-value highlight">R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Itens Pendentes</span>
+        <span class="stat-value">${shopping.filter(i => !i.checked).length} de ${shopping.length}</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Itens Adquiridos</span>
+        <span class="stat-value" style="color: var(--success);">${shopping.filter(i => i.checked).length}</span>
+      </div>
+    </div>
+
+    <!-- Table content -->
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 45%;">Produto / Material</th>
+            <th style="width: 15%;">Categoria</th>
+            <th style="width: 10%; text-align: center;">Qtd</th>
+            <th style="width: 15%; text-align: right;">Unitário</th>
+            <th style="width: 15%; text-align: right;">Custo Total</th>
+            <th style="width: 15%; text-align: center;">Status</th>
+            <th style="width: 15%; text-align: right;">Link de Compra</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${shopping.map(item => {
+            const itemTotal = item.qtyNeeded * item.estUnitCost;
+            const absoluteUrl = ensureAbsoluteUrl(item.purchaseLink, item.materialName);
+            const isCustomLink = !!item.purchaseLink;
+            const itemCategoryClass = 
+              item.category === 'Filamento' ? 'badge-filamento' :
+              item.category === 'Peças de Reposição' ? 'badge-reparacao' :
+              item.category === 'Acessórios/Insumos' ? 'badge-insumos' : 'badge-outros';
+
+            return `
+              <tr>
+                <td>
+                  <div class="product-cell">
+                    <img class="product-img" src="${getProductImage(item)}" alt="${item.materialName}" loading="lazy" />
+                    <div class="product-info">
+                      <span class="product-name">${item.materialName}</span>
+                      ${item.notes ? `<span class="product-notes">${item.notes}</span>` : ''}
+                      ${item.barcode ? `<span class="product-barcode">Cód/Modelo: ${item.barcode}</span>` : ''}
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <span class="badge ${itemCategoryClass}">${item.category}</span>
+                </td>
+                <td style="text-align: center; font-weight: 600;">
+                  ${item.qtyNeeded}
+                </td>
+                <td style="text-align: right;" class="price-col">
+                  R$ ${item.estUnitCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </td>
+                <td style="text-align: right;" class="total-price">
+                  R$ ${itemTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </td>
+                <td style="text-align: center;">
+                  <span class="badge ${item.checked ? 'badge-bought' : 'badge-pending'}">
+                    ${item.checked ? 'Comprado' : 'Pendente'}
+                  </span>
+                </td>
+                <td style="text-align: right;">
+                  <a href="${absoluteUrl}" target="_blank" class="action-btn ${isCustomLink ? '' : 'secondary'}">
+                    ${isCustomLink ? 'Comprar Link' : 'Pesquisar'}
+                  </a>
+                </td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div>
+        <strong>GeorgeFctech 3D</strong> - Impressões 3D & Organização Comercial de Insumos
+      </div>
+      <div>
+        <button class="print-btn" onclick="window.print()">Imprimir / Salvar PDF</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>`;
 
-    const blob = new Blob([htmlContent], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute('href', url);
-    downloadAnchor.setAttribute('download', `Pedido_de_Compras_Independentes_${new Date().toISOString().split('T')[0]}.xls`);
+    downloadAnchor.setAttribute('download', `Relatorio_Compras_${new Date().toISOString().split('T')[0]}.html`);
     downloadAnchor.click();
   };
 
@@ -416,6 +791,7 @@ export default function ShoppingListView({
   const filteredShopping = shopping.filter(item => {
     const matchesSearch = item.materialName.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           (item.notes && item.notes.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                          (item.barcode && item.barcode.toLowerCase().includes(searchQuery.toLowerCase())) ||
                           (item.requestedBy && item.requestedBy.toLowerCase().includes(searchQuery.toLowerCase())) ||
                           (item.department && item.department.toLowerCase().includes(searchQuery.toLowerCase())) ||
                           (item.company && item.company.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -693,7 +1069,7 @@ export default function ShoppingListView({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              <div className="md:col-span-2">
+              <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">Hiperlink / Link do Fornecedor ou Anúncio</label>
                 <div className="relative">
                   <span className="absolute left-3.5 top-2.5 text-slate-400">
@@ -717,6 +1093,17 @@ export default function ShoppingListView({
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   className="w-full text-sm px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 text-slate-800 bg-white shadow-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">Código de Barras / Modelo do Produto</label>
+                <input
+                  type="text"
+                  placeholder="Ex: 7891000311500 ou QR_ORGANIZER_PRO"
+                  value={barcode}
+                  onChange={(e) => setBarcode(e.target.value)}
+                  className="w-full text-sm px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 text-slate-800 bg-white shadow-xs font-mono"
                 />
               </div>
             </div>
@@ -988,6 +1375,13 @@ export default function ShoppingListView({
                               className="w-full text-[11px] px-3 py-1 border border-slate-300 rounded-md text-slate-600 bg-white"
                               rows={2}
                             />
+                            <input
+                              type="text"
+                              value={editBarcode}
+                              onChange={(e) => setEditBarcode(e.target.value)}
+                              placeholder="Código de Barras ou Modelo do Produto..."
+                              className="w-full text-[11px] px-3 py-1.5 border border-slate-300 rounded-md focus:border-indigo-500 text-slate-850 bg-white font-mono"
+                            />
                             <div className="flex items-center gap-2">
                               {/* Inline Category Change */}
                               <select
@@ -1026,6 +1420,13 @@ export default function ShoppingListView({
                               }`}>
                                 {item.materialName}
                               </span>
+                              {item.barcode && (
+                                <div className="mt-0.5">
+                                  <span className="inline-block font-mono text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded px-1.5 py-0.5 select-all dark:bg-indigo-950/40 dark:border-indigo-900">
+                                    Cód/Modelo: {item.barcode}
+                                  </span>
+                                </div>
+                              )}
                               {item.notes && (
                                 <p className={`text-xs mt-0.5 max-w-md truncate ${item.checked ? 'text-slate-400 line-through' : 'text-slate-500'}`}>
                                   {item.notes}
@@ -1260,6 +1661,15 @@ export default function ShoppingListView({
                                 className="w-full text-xs font-semibold px-2.5 py-1.5 border border-slate-300 rounded-md focus:border-indigo-500 text-slate-800 bg-white"
                               />
                             </div>
+                            <div>
+                              <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Código de Barras / Modelo</label>
+                              <input
+                                type="text"
+                                value={editBarcode}
+                                onChange={(e) => setEditBarcode(e.target.value)}
+                                className="w-full text-xs font-mono px-2.5 py-1.5 border border-slate-300 rounded-md focus:border-indigo-500 text-slate-800 bg-white"
+                              />
+                            </div>
                             <div className="grid grid-cols-2 gap-2">
                               <div>
                                 <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Quantidade</label>
@@ -1336,6 +1746,13 @@ export default function ShoppingListView({
                             }`}>
                               {item.materialName}
                             </span>
+                            {item.barcode && (
+                              <div className="mt-1">
+                                <span className="inline-block font-mono text-[10px] font-bold text-indigo-650 bg-indigo-50 border border-indigo-100 rounded px-1.5 py-0.5 select-all dark:bg-indigo-950/40 dark:border-indigo-900">
+                                  Cód/Modelo: {item.barcode}
+                                </span>
+                              </div>
+                            )}
                             {item.notes && (
                               <p className={`text-xs mt-1 ${item.checked ? 'text-slate-400 line-through' : 'text-slate-500'}`}>
                                 {item.notes}

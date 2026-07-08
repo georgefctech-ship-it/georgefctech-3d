@@ -42,6 +42,7 @@ export interface ShoppingItem {
   requestedBy?: string; // Nome do funcionário responsável pelo pedido
   department?: string; // Setor do funcionário
   company?: string; // Empresa do pedido
+  barcode?: string; // Código de barras ou modelo do produto
 }
 
 export interface SettingsConfig {
