@@ -31,6 +31,15 @@ import {
 } from 'lucide-react';
 import { ShoppingItem, InventoryItem } from '../types';
 
+const ensureAbsoluteUrl = (url: string | undefined): string => {
+  if (!url) return '';
+  const trimmed = url.trim();
+  if (/^(f|ht)tps?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  return `https://${trimmed}`;
+};
+
 interface ShoppingListViewProps {
   shopping: ShoppingItem[];
   inventory: InventoryItem[];
@@ -149,54 +158,54 @@ export default function ShoppingListView({
 <meta charset="utf-8" />
 <style>
   table { border-collapse: collapse; width: 100%; margin: 10px 0; }
-  th { background-color: #4f46e5; color: #ffffff; font-family: 'Segoe UI', Tahoma, sans-serif; font-size: 11px; font-weight: bold; padding: 10px; border: 1px solid #cbd5e1; text-align: left; }
-  td { font-family: 'Segoe UI', Tahoma, sans-serif; font-size: 11px; padding: 8px; border: 1px solid #e2e8f0; vertical-align: middle; }
-  .title-cell { font-family: 'Segoe UI', Tahoma, sans-serif; font-size: 16px; font-weight: bold; color: #4f46e5; background-color: #f8fafc; padding: 15px; border-bottom: 2px solid #cbd5e1; }
-  .info-cell { font-family: 'Segoe UI', Tahoma, sans-serif; font-size: 11px; color: #64748b; background-color: #f8fafc; padding: 5px 15px 15px 15px; border-bottom: 1px solid #e2e8f0; }
-  .number-col { text-align: right; font-family: 'Consolas', monospace; font-size: 11px; }
+  th { background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #94a3b8; text-align: left; }
+  td { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; padding: 10px; border: 1px solid #cbd5e1; vertical-align: middle; }
+  .title-cell { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 18px; font-weight: bold; color: #0f172a; background-color: #f1f5f9; padding: 16px; border: 1px solid #94a3b8; text-align: center; }
+  .info-cell { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 12px; color: #475569; background-color: #f8fafc; padding: 8px; border: 1px solid #cbd5e1; text-align: center; }
+  .number-col { text-align: right; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; }
   .center-col { text-align: center; }
-  .status-bought { background-color: #d1fae5; color: #065f46; font-weight: bold; text-align: center; }
-  .status-pending { background-color: #fef3c7; color: #92400e; font-weight: bold; text-align: center; }
-  .link-btn { color: #2563eb; font-weight: bold; text-decoration: underline; }
+  .status-bought { background-color: #d1fae5; color: #065f46; font-weight: bold; text-align: center; font-size: 13px; border: 1px solid #cbd5e1; }
+  .status-pending { background-color: #fef3c7; color: #92400e; font-weight: bold; text-align: center; font-size: 13px; border: 1px solid #cbd5e1; }
+  .link-btn { font-family: 'Segoe UI', Tahoma, Arial, sans-serif !important; font-size: 13px !important; color: #2563eb !important; font-weight: normal !important; text-decoration: underline !important; }
 </style>
 </head>
 <body>
   <table>
     <tr>
-      <td colspan="9" class="title-cell" style="font-size: 16px; font-weight: bold; color: #4f46e5; text-align: center;">GEORGEFCTECH 3D - TABELA COMERCIAL DE PEDIDOS</td>
+      <td colspan="9" class="title-cell" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 18px; font-weight: bold; color: #0f172a; background-color: #f1f5f9; text-align: center; border: 1px solid #94a3b8; padding: 16px;">GEORGEFCTECH 3D - TABELA COMERCIAL DE PEDIDOS</td>
     </tr>
     <tr>
-      <td colspan="9" class="info-cell" style="text-align: center; color: #475569;">Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')} | Total Planejado: R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+      <td colspan="9" class="info-cell" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 12px; text-align: center; color: #475569; border: 1px solid #cbd5e1; padding: 8px;">Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')} | Total Planejado: R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
     </tr>
     <thead>
       <tr>
-        <th style="width: 110px;">ID Único</th>
-        <th style="width: 280px;">Material / Item Planejado</th>
-        <th style="width: 140px;">Categoria</th>
-        <th style="width: 70px; text-align: center;">Qtd.</th>
-        <th style="width: 130px; text-align: right;">Custo Unitário</th>
-        <th style="width: 130px; text-align: right;">Custo Total</th>
-        <th style="width: 130px; text-align: center;">Status</th>
-        <th style="width: 150px; text-align: center;">Link de Compra</th>
-        <th style="width: 220px;">Observações</th>
+        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #94a3b8; width: 110px;">ID Único</th>
+        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #94a3b8; width: 280px;">Material / Item Planejado</th>
+        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #94a3b8; width: 140px;">Categoria</th>
+        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #94a3b8; width: 70px; text-align: center;">Qtd.</th>
+        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #94a3b8; width: 130px; text-align: right;">Custo Unitário</th>
+        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #94a3b8; width: 130px; text-align: right;">Custo Total</th>
+        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #94a3b8; width: 130px; text-align: center;">Status</th>
+        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #94a3b8; width: 150px; text-align: center;">Link de Compra</th>
+        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #94a3b8; width: 220px;">Observações</th>
       </tr>
     </thead>
     <tbody>
       ${shopping.map(item => `
         <tr>
-          <td>${item.id}</td>
-          <td style="font-weight: bold; color: #0f172a;">${item.materialName}</td>
-          <td>${item.category}</td>
-          <td class="center-col">${item.qtyNeeded}</td>
-          <td class="number-col">R$ ${item.estUnitCost.toFixed(2)}</td>
-          <td class="number-col" style="font-weight: bold; color: #4f46e5;">R$ ${(item.qtyNeeded * item.estUnitCost).toFixed(2)}</td>
+          <td style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; border: 1px solid #cbd5e1; color: #334155; padding: 10px;">${item.id}</td>
+          <td style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; color: #0f172a; border: 1px solid #cbd5e1; padding: 10px;">${item.materialName}</td>
+          <td style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; border: 1px solid #cbd5e1; color: #334155; padding: 10px;">${item.category}</td>
+          <td class="center-col" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; text-align: center; border: 1px solid #cbd5e1; color: #334155; padding: 10px;">${item.qtyNeeded}</td>
+          <td class="number-col" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; text-align: right; border: 1px solid #cbd5e1; color: #334155; padding: 10px;">R$ ${item.estUnitCost.toFixed(2)}</td>
+          <td class="number-col" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; color: #1e40af; text-align: right; border: 1px solid #cbd5e1; padding: 10px;">R$ ${(item.qtyNeeded * item.estUnitCost).toFixed(2)}</td>
           <td class="${item.checked ? 'status-bought' : 'status-pending'}">
             ${item.checked ? 'Comprado' : 'Pendente'}
           </td>
-          <td class="center-col">
-            ${item.purchaseLink ? `=HYPERLINK("${item.purchaseLink}"; "Acessar Produto")` : '<i>Sem Link</i>'}
+          <td style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; text-align: center; border: 1px solid #cbd5e1; padding: 10px;">
+            ${item.purchaseLink ? `<a href="${ensureAbsoluteUrl(item.purchaseLink)}" target="_blank" class="link-btn" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; color: #2563eb; font-weight: normal; text-decoration: underline; display: inline; outline: none;">Acessar Link</a>` : '<span style="color: #64748b; font-style: italic;">Sem Link</span>'}
           </td>
-          <td style="color: #475569;">${item.notes || '-'}</td>
+          <td style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; border: 1px solid #cbd5e1; color: #475569; padding: 10px;">${item.notes || '-'}</td>
         </tr>
       `).join('')}
     </tbody>
@@ -730,7 +739,7 @@ export default function ShoppingListView({
                             )}
                             {item.purchaseLink && (
                               <a
-                                href={item.purchaseLink}
+                                href={ensureAbsoluteUrl(item.purchaseLink)}
                                 target="_blank"
                                 referrerPolicy="no-referrer"
                                 rel="noreferrer"
@@ -958,7 +967,7 @@ export default function ShoppingListView({
                               </span>
                               {item.purchaseLink && (
                                 <a
-                                  href={item.purchaseLink}
+                                  href={ensureAbsoluteUrl(item.purchaseLink)}
                                   target="_blank"
                                   referrerPolicy="no-referrer"
                                   rel="noreferrer"

@@ -31,6 +31,15 @@ import {
 import { InventoryItem } from '../types';
 import { Html5Qrcode } from 'html5-qrcode';
 
+const ensureAbsoluteUrl = (url: string | undefined): string => {
+  if (!url) return '';
+  const trimmed = url.trim();
+  if (/^(f|ht)tps?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  return `https://${trimmed}`;
+};
+
 interface InventoryViewProps {
   inventory: InventoryItem[];
   onAddInventoryItem: (item: Omit<InventoryItem, 'id' | 'gramCost' | 'status'> & { id?: string; image?: string; purchaseLink?: string }) => void;
@@ -624,7 +633,7 @@ export default function InventoryView({
                       <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
                         {item.purchaseLink ? (
                           <a
-                            href={item.purchaseLink}
+                            href={ensureAbsoluteUrl(item.purchaseLink)}
                             target="_blank"
                             referrerPolicy="no-referrer"
                             rel="noreferrer"
@@ -748,7 +757,7 @@ export default function InventoryView({
                         <td className="py-3 px-4 whitespace-nowrap text-center">
                           {item.purchaseLink ? (
                             <a
-                              href={item.purchaseLink}
+                              href={ensureAbsoluteUrl(item.purchaseLink)}
                               target="_blank"
                               referrerPolicy="no-referrer"
                               rel="noreferrer"
