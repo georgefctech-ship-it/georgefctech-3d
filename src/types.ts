@@ -39,6 +39,9 @@ export interface ShoppingItem {
   category: 'Filamento' | 'Peças de Reposição' | 'Acessórios/Insumos' | 'Outros';
   notes?: string; // Observações customizadas
   checked?: boolean; // Se já foi comprado ou checado
+  requestedBy?: string; // Nome do funcionário responsável pelo pedido
+  department?: string; // Setor do funcionário
+  company?: string; // Empresa do pedido
 }
 
 export interface SettingsConfig {

@@ -67,7 +67,7 @@ export default function App() {
       const role = sessionStorage.getItem('g3d_user_role') || 'colaborador';
       setUserRole(role);
       if (role === 'colaborador') {
-        setCurrentView('suprimentos');
+        setCurrentView('compras');
       }
     }
   }, [isAuthenticated]);
@@ -224,12 +224,16 @@ export default function App() {
           <div className="w-9 h-9 rounded-full bg-transparent flex items-center justify-center p-0 overflow-hidden">
             <img 
               referrerPolicy="no-referrer"
-              src="https://vyvompcoiaizoluuxnzx.supabase.co/storage/v1/object/sign/img/meu_logo.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9lYTFhZWQwNC03M2Y5LTQwODQtOWNiOS04ODBkMTA3MzAwY2UiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJpbWcvbWV1X2xvZ28ucG5nIiwic2NvcGUiOiJkb3dubG9hZCIsImlhdCI6MTc4MTc5NTUxOCwiZXhwIjoxODc2NDAzNTE4fQ.JgHY5piKmwxjB0nfW08joAWsNE-JYRA5kUUkVra9hFI"
-              alt="GeorgeFctech 3D Logo"
+              src={userRole === 'colaborador'
+                ? "https://lh3.googleusercontent.com/gps-cs-s/APNQkAForRZzi0p_dHcu4q-uB5_6Hmh_ZWM1hwqil-EcrY-fKLUJWx-Z1RHuhgUQTtqJXsV29-B0tbj3CuhgI93tL_ygBJPL6nmLWh2TGr4Imchb-7y8ozTXVOdxt5UFk-PmJqQndhUJLw=w229-h164-n-k-no-nu"
+                : "https://vyvompcoiaizoluuxnzx.supabase.co/storage/v1/object/sign/img/meu_logo.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9lYTFhZWQwNC03M2Y5LTQwODQtOWNiOS04ODBkMTA3MzAwY2UiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJpbWcvbWV1X2xvZ28ucG5nIiwic2NvcGUiOiJkb3dubG9hZCIsImlhdCI6MTc4MTc5NTUxOCwiZXhwIjoxODc2NDAzNTE4fQ.JgHY5piKmwxjB0nfW08joAWsNE-JYRA5kUUkVra9hFI"}
+              alt="Logo"
               className="w-full h-full object-cover"
             />
           </div>
-          <span className="font-bold text-sm tracking-wide text-slate-800 dark:text-slate-100">GeorgeFctech-3D</span>
+          <span className="font-bold text-sm tracking-wide text-slate-800 dark:text-slate-100">
+            {userRole === 'colaborador' ? 'GeorgeFctech Comercial' : 'GeorgeFctech-3D'}
+          </span>
         </div>
         <div className="flex items-center gap-1.5">
           {/* Mobile Dark Mode Toggle */}

@@ -34,7 +34,7 @@ export default function Sidebar({ currentView, onViewChange, onLogout, userRole 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard Comercial', icon: BarChart3, adminOnly: true },
     { id: 'pecas', label: 'Registrar Ordem 3D', icon: Layers, adminOnly: true },
-    { id: 'suprimentos', label: 'Insumos & Custos', icon: Database },
+    { id: 'suprimentos', label: 'Insumos & Custos', icon: Database, adminOnly: true },
     { id: 'compras', label: 'Lista de Compras', icon: ShoppingCart },
     { id: 'relatorio', label: 'Fechamento Mensal', icon: FileText, adminOnly: true },
     { id: 'configuracoes', label: 'Configurações', icon: Settings, adminOnly: true },
@@ -48,6 +48,10 @@ export default function Sidebar({ currentView, onViewChange, onLogout, userRole 
     return true;
   });
 
+  const logoUrl = userRole === 'colaborador'
+    ? "https://lh3.googleusercontent.com/gps-cs-s/APNQkAForRZzi0p_dHcu4q-uB5_6Hmh_ZWM1hwqil-EcrY-fKLUJWx-Z1RHuhgUQTtqJXsV29-B0tbj3CuhgI93tL_ygBJPL6nmLWh2TGr4Imchb-7y8ozTXVOdxt5UFk-PmJqQndhUJLw=w229-h164-n-k-no-nu"
+    : "https://vyvompcoiaizoluuxnzx.supabase.co/storage/v1/object/sign/img/meu_logo.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9lYTFhZWQwNC03M2Y5LTQwODQtOWNiOS04ODBkMTA3MzAwY2UiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJpbWcvbWV1X2xvZ28ucG5nIiwic2NvcGUiOiJkb3dubG9hZCIsImlhdCI6MTc4MTc5NTUxOCwiZXhwIjoxODc2NDAzNTE4fQ.JgHY5piKmwxjB0nfW08joAWsNE-JYRA5kUUkVra9hFI";
+
   return (
     <aside id="sidebar-nav" className="w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 h-screen flex flex-col justify-between p-6 fixed top-0 left-0 no-print z-20 font-sans shadow-sm">
       <div className="flex flex-col">
@@ -56,17 +60,17 @@ export default function Sidebar({ currentView, onViewChange, onLogout, userRole 
           <div className="relative w-24 h-24 rounded-full bg-transparent flex items-center justify-center overflow-hidden p-0 group transition-all duration-300">
             <img 
               referrerPolicy="no-referrer"
-              src="https://vyvompcoiaizoluuxnzx.supabase.co/storage/v1/object/sign/img/meu_logo.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9lYTFhZWQwNC03M2Y5LTQwODQtOWNiOS04ODBkMTA3MzAwY2UiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJpbWcvbWV1X2xvZ28ucG5nIiwic2NvcGUiOiJkb3dubG9hZCIsImlhdCI6MTc4MTc5NTUxOCwiZXhwIjoxODc2NDAzNTE4fQ.JgHY5piKmwxjB0nfW08joAWsNE-JYRA5kUUkVra9hFI"
-              alt="GeorgeFctech 3D Logo"
+              src={logoUrl}
+              alt="GeorgeFctech Logo"
               className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
             />
           </div>
 
           <h2 className="text-lg font-bold font-display text-slate-800 dark:text-slate-100 tracking-wide mt-3">
-            GeorgeFctech-3D
+            {userRole === 'colaborador' ? 'GeorgeFctech Comercial' : 'GeorgeFctech-3D'}
           </h2>
           <p className="text-[10px] font-mono tracking-[0.18em] text-slate-400 mt-1 uppercase">
-            Modelagem • Escultura • Impressão 3D
+            {userRole === 'colaborador' ? 'Pedidos • Compras • Suprimentos' : 'Modelagem • Escultura • Impressão 3D'}
           </p>
           <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider mt-2.5 ${
             userRole === 'admin' 

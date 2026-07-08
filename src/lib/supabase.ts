@@ -86,13 +86,17 @@ CREATE TABLE IF NOT EXISTS g3d_shopping (
   purchase_link TEXT NOT NULL,
   category TEXT NOT NULL,
   notes TEXT,
-  checked BOOLEAN DEFAULT FALSE
+  checked BOOLEAN DEFAULT FALSE,
+  requested_by TEXT,
+  department TEXT,
+  company TEXT
 );
 
 -- 4. Tabela de Funções / Cargos por Email (Admin vs Colaborador)
 CREATE TABLE IF NOT EXISTS g3d_user_roles (
   email TEXT PRIMARY KEY,
-  role TEXT NOT NULL DEFAULT 'colaborador' -- 'admin' ou 'colaborador'
+  role TEXT NOT NULL DEFAULT 'colaborador', -- 'admin' ou 'colaborador'
+  username TEXT UNIQUE
 );
 
 -- Habilitar leitura pública ou autenticada de todos os registros

@@ -216,7 +216,10 @@ export function use3DState() {
     purchaseLink: db.purchase_link,
     category: db.category,
     notes: db.notes || undefined,
-    checked: !!db.checked
+    checked: !!db.checked,
+    requestedBy: db.requested_by || undefined,
+    department: db.department || undefined,
+    company: db.company || undefined
   });
 
   const mapShoppingToDb = (app: ShoppingItem) => ({
@@ -227,7 +230,10 @@ export function use3DState() {
     purchase_link: app.purchaseLink,
     category: app.category,
     notes: app.notes || null,
-    checked: app.checked
+    checked: app.checked,
+    requested_by: app.requestedBy || null,
+    department: app.department || null,
+    company: app.company || null
   });
 
   // Load state (either from Supabase or LocalStorage)

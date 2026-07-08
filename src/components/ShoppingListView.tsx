@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.5
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   ShoppingBag, 
   Plus, 
@@ -27,8 +27,12 @@ import {
   HelpCircle,
   ArchiveRestore,
   PlusCircle,
-  AlertCircle
+  AlertCircle,
+  QrCode,
+  Camera,
+  ScanLine
 } from 'lucide-react';
+import { Html5Qrcode } from 'html5-qrcode';
 import { ShoppingItem, InventoryItem } from '../types';
 
 const ensureAbsoluteUrl = (url: string | undefined): string => {
@@ -62,19 +66,28 @@ export default function ShoppingListView({
   userRole
 }: ShoppingListViewProps) {
   const [formOpen, setFormOpen] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
   
   // Form states (Add)
   const [materialName, setMaterialName] = useState('');
   const [qtyNeeded, setQtyNeeded] = useState(1);
   const [estUnitCost, setEstUnitCost] = useState(120.00);
   const [purchaseLink, setPurchaseLink] = useState('');
-  const [category, setCategory] = useState<'Filamento' | 'Peças de Reposição' | 'Acessórios/Insumos' | 'Outros'>('Filamento');
+  const [category, setCategory] = useState<'Filamento' | 'Peças de Reposição' | 'Acessórios/Insumos' | 'Outros'>(() => {
+    return userRole === 'colaborador' ? 'Acessórios/Insumos' : 'Filamento';
+  });
   const [notes, setNotes] = useState('');
+  const [requestedBy, setRequestedBy] = useState(() => {
+    return sessionStorage.getItem('g3d_username') || sessionStorage.getItem('g3d_user_email') || '';
+  });
+  const [department, setDepartment] = useState('');
+  const [company, setCompany] = useState('');
 
   // Filtering states
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('Todos');
   const [filterStatus, setFilterStatus] = useState<string>('Todos'); // 'Todos' | 'Pendentes' | 'Comprados'
+  const [filterCompany, setFilterCompany] = useState<string>('Todos'); // Custom filter for Company
 
   // Edit mode states
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -84,9 +97,40 @@ export default function ShoppingListView({
   const [editLink, setEditLink] = useState('');
   const [editNotes, setEditNotes] = useState('');
   const [editCategory, setEditCategory] = useState<'Filamento' | 'Peças de Reposição' | 'Acessórios/Insumos' | 'Outros'>('Filamento');
+  const [editRequestedBy, setEditRequestedBy] = useState('');
+  const [editDepartment, setEditDepartment] = useState('');
+  const [editCompany, setEditCompany] = useState('');
+
+  // General Independent Report customizer fields (stored in local state for print visualization)
+  const [reportCompany, setReportCompany] = useState('');
+  const [reportResponsible, setReportResponsible] = useState('');
+  const [reportDepartment, setReportDepartment] = useState('');
 
   // Inventory Registration Success Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const handleScanSuccess = (code: string, matchedProduct?: any) => {
+    if (matchedProduct) {
+      setMaterialName(matchedProduct.name);
+      setEstUnitCost(matchedProduct.cost);
+      setCategory(matchedProduct.category);
+      setNotes(`[Escaneado: ${code}] ${matchedProduct.notes}`);
+      setCompany(matchedProduct.company || 'GeorgeFctech Comercial');
+      
+      // Auto-open form if closed
+      setFormOpen(true);
+      setToastMessage(`Produto localizado: ${matchedProduct.name}! Preenchido com sucesso.`);
+    } else {
+      // Unknown code
+      setMaterialName(`Produto [Código: ${code}]`);
+      setNotes(`[Código de barras/QR: ${code}]`);
+      setCompany('GeorgeFctech Comercial');
+      setFormOpen(true);
+      setToastMessage(`Código desconhecido (${code}). Preparamos o campo com o código do produto.`);
+    }
+    setScannerOpen(false);
+    setTimeout(() => setToastMessage(null), 4000);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,7 +142,10 @@ export default function ShoppingListView({
       estUnitCost,
       purchaseLink: purchaseLink.trim(),
       category,
-      notes: notes.trim()
+      notes: notes.trim(),
+      requestedBy: requestedBy.trim() || undefined,
+      department: department.trim() || undefined,
+      company: company.trim() || undefined
     });
 
     // Reset Form
@@ -106,8 +153,11 @@ export default function ShoppingListView({
     setQtyNeeded(1);
     setEstUnitCost(120.00);
     setPurchaseLink('');
-    setCategory('Filamento');
+    setCategory(userRole === 'colaborador' ? 'Acessórios/Insumos' : 'Filamento');
     setNotes('');
+    setRequestedBy(sessionStorage.getItem('g3d_username') || sessionStorage.getItem('g3d_user_email') || '');
+    setDepartment('');
+    setCompany('');
     setFormOpen(false);
   };
 
@@ -119,6 +169,9 @@ export default function ShoppingListView({
     setEditLink(item.purchaseLink);
     setEditNotes(item.notes || '');
     setEditCategory(item.category);
+    setEditRequestedBy(item.requestedBy || '');
+    setEditDepartment(item.department || '');
+    setEditCompany(item.company || '');
   };
 
   const handleSaveEdit = (id: string) => {
@@ -128,7 +181,10 @@ export default function ShoppingListView({
       estUnitCost: editCost,
       purchaseLink: editLink.trim(),
       category: editCategory,
-      notes: editNotes.trim()
+      notes: editNotes.trim(),
+      requestedBy: editRequestedBy.trim() || undefined,
+      department: editDepartment.trim() || undefined,
+      company: editCompany.trim() || undefined
     });
     setEditingId(null);
   };
@@ -151,6 +207,9 @@ export default function ShoppingListView({
   // Excel Link-Friendly Format HTML Spreadsheet Generation
   const generateExcel = () => {
     if (shopping.length === 0) return;
+
+    const selectedCompany = filterCompany !== 'Todos' ? filterCompany : 'GERAL / GeorgeFctech-3D';
+    const reportTitle = `${selectedCompany.toUpperCase()} - TABELA COMERCIAL DE PEDIDOS`;
 
     const htmlContent = `
 <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
@@ -186,16 +245,19 @@ export default function ShoppingListView({
 <body>
   <table border="1" style="border-collapse: collapse; width: 100%; border: 1px solid #cbd5e1;">
     <tr>
-      <td colspan="9" class="title-cell" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 18px; font-weight: bold; color: #0f172a; background-color: #f1f5f9; text-align: center; border: 1px solid #94a3b8; padding: 16px;">GEORGEFCTECH 3D - TABELA COMERCIAL DE PEDIDOS</td>
+      <td colspan="12" class="title-cell" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 18px; font-weight: bold; color: #0f172a; background-color: #f1f5f9; text-align: center; border: 1px solid #94a3b8; padding: 16px;">${reportTitle}</td>
     </tr>
     <tr>
-      <td colspan="9" class="info-cell" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 12px; text-align: center; color: #475569; border: 1px solid #cbd5e1; padding: 8px;">Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')} | Total Planejado: R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+      <td colspan="12" class="info-cell" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 12px; text-align: center; color: #475569; border: 1px solid #cbd5e1; padding: 8px;">Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')} | Total Planejado: R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
     </tr>
     <thead>
       <tr>
         <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; width: 110px; text-align: left;">ID Único</th>
         <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; width: 280px; text-align: left;">Material / Item Planejado</th>
         <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; width: 140px; text-align: left;">Categoria</th>
+        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; width: 140px; text-align: left;">Empresa</th>
+        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; width: 150px; text-align: left;">Solicitante (Responsável)</th>
+        <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; width: 120px; text-align: left;">Setor</th>
         <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; width: 70px; text-align: center;">Qtd.</th>
         <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; width: 130px; text-align: right;">Custo Unitário</th>
         <th style="background-color: #1e293b; color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; padding: 12px 10px; border: 1px solid #475569; width: 130px; text-align: right;">Custo Total</th>
@@ -210,6 +272,9 @@ export default function ShoppingListView({
           <td style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; border: 1px solid #cbd5e1; color: #334155; padding: 10px;">${item.id}</td>
           <td style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; color: #0f172a; border: 1px solid #cbd5e1; padding: 10px;">${item.materialName}</td>
           <td style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; border: 1px solid #cbd5e1; color: #334155; padding: 10px;">${item.category}</td>
+          <td style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; border: 1px solid #cbd5e1; color: #334155; padding: 10px;">${item.company || 'GeorgeFctech-3D'}</td>
+          <td style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; border: 1px solid #cbd5e1; color: #334155; padding: 10px;">${item.requestedBy || 'Administração'}</td>
+          <td style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; border: 1px solid #cbd5e1; color: #334155; padding: 10px;">${item.department || 'Geral'}</td>
           <td class="center-col" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; text-align: center; border: 1px solid #cbd5e1; color: #334155; padding: 10px;">${item.qtyNeeded}</td>
           <td class="number-col" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; text-align: right; border: 1px solid #cbd5e1; color: #334155; padding: 10px;">R$ ${item.estUnitCost.toFixed(2)}</td>
           <td class="number-col" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; font-weight: bold; color: #1e40af; text-align: right; border: 1px solid #cbd5e1; padding: 10px;">R$ ${(item.qtyNeeded * item.estUnitCost).toFixed(2)}</td>
@@ -231,7 +296,7 @@ export default function ShoppingListView({
     const url = URL.createObjectURL(blob);
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute('href', url);
-    downloadAnchor.setAttribute('download', `Pedido_de_Compras_GeorgeFctech_${new Date().toISOString().split('T')[0]}.xls`);
+    downloadAnchor.setAttribute('download', `Pedido_de_Compras_Independentes_${new Date().toISOString().split('T')[0]}.xls`);
     downloadAnchor.click();
   };
 
@@ -259,20 +324,39 @@ export default function ShoppingListView({
   const pendingValue = shopping.filter(i => !i.checked).reduce((acc, i) => acc + (i.qtyNeeded * i.estUnitCost), 0);
   const boughValue = shopping.filter(i => i.checked).reduce((acc, i) => acc + (i.qtyNeeded * i.estUnitCost), 0);
 
+  // Dynamic list of unique companies for filtering
+  const companiesList = useMemo(() => {
+    const list = new Set<string>();
+    shopping.forEach(item => {
+      if (item.company?.trim()) {
+        list.add(item.company.trim());
+      }
+    });
+    return Array.from(list);
+  }, [shopping]);
+
   // Filtering Logic
   const filteredShopping = shopping.filter(item => {
     const matchesSearch = item.materialName.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          (item.notes && item.notes.toLowerCase().includes(searchQuery.toLowerCase()));
+                          (item.notes && item.notes.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                          (item.requestedBy && item.requestedBy.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                          (item.department && item.department.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                          (item.company && item.company.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesCategory = filterCategory === 'Todos' || item.category === filterCategory;
     const matchesStatus = filterStatus === 'Todos' || 
                           (filterStatus === 'Pendentes' && !item.checked) || 
                           (filterStatus === 'Comprados' && item.checked);
+    const matchesCompany = filterCompany === 'Todos' ||
+                          (item.company && item.company.toLowerCase() === filterCompany.toLowerCase()) ||
+                          (!item.company && filterCompany.toLowerCase() === 'georgefctech-3d');
 
-    return matchesSearch && matchesCategory && matchesStatus;
+    return matchesSearch && matchesCategory && matchesStatus && matchesCompany;
   });
 
   // Calculate stats per category
-  const categoriesList = ['Filamento', 'Peças de Reposição', 'Acessórios/Insumos', 'Outros'];
+  const categoriesList = userRole === 'colaborador'
+    ? ['Acessórios/Insumos', 'Outros']
+    : ['Filamento', 'Peças de Reposição', 'Acessórios/Insumos', 'Outros'];
   const getCategoryStats = (cat: string) => {
     const items = shopping.filter(i => i.category === cat);
     const count = items.length;
@@ -304,14 +388,20 @@ export default function ShoppingListView({
             <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 bg-transparent border border-slate-200 flex items-center justify-center p-0">
               <img 
                 referrerPolicy="no-referrer"
-                src="https://vyvompcoiaizoluuxnzx.supabase.co/storage/v1/object/sign/img/meu_logo.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9lYTFhZWQwNC03M2Y5LTQwODQtOWNiOS04ODBkMTA3MzAwY2UiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJpbWcvbWV1X2xvZ28ucG5nIiwic2NvcGUiOiJkb3dubG9hZCIsImlhdCI6MTc4MTc5NTUxOCwiZXhwIjoxODc2NDAzNTE4fQ.JgHY5piKmwxjB0nfW08joAWsNE-JYRA5kUUkVra9hFI"
-                alt="GeorgeFctech 3D Logo"
+                src={userRole === 'colaborador'
+                  ? "https://lh3.googleusercontent.com/gps-cs-s/APNQkAForRZzi0p_dHcu4q-uB5_6Hmh_ZWM1hwqil-EcrY-fKLUJWx-Z1RHuhgUQTtqJXsV29-B0tbj3CuhgI93tL_ygBJPL6nmLWh2TGr4Imchb-7y8ozTXVOdxt5UFk-PmJqQndhUJLw=w229-h164-n-k-no-nu"
+                  : "https://vyvompcoiaizoluuxnzx.supabase.co/storage/v1/object/sign/img/meu_logo.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9lYTFhZWQwNC03M2Y5LTQwODQtOWNiOS04ODBkMTA3MzAwY2UiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJpbWcvbWV1X2xvZ28ucG5nIiwic2NvcGUiOiJkb3dubG9hZCIsImlhdCI6MTc4MTc5NTUxOCwiZXhwIjoxODc2NDAzNTE4fQ.JgHY5piKmwxjB0nfW08joAWsNE-JYRA5kUUkVra9hFI"}
+                alt="GeorgeFctech Logo"
                 className="w-full h-full object-cover"
               />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-slate-900">GeorgeFctech-3D</h2>
-              <p className="text-[10px] text-slate-500 font-mono">Gestão Comercial & Suprimentos de Impressão 3D</p>
+              <h2 className="text-xl font-bold text-slate-900">
+                {userRole === 'colaborador' ? 'GeorgeFctech Comercial' : 'GeorgeFctech-3D'}
+              </h2>
+              <p className="text-[10px] text-slate-500 font-mono">
+                {userRole === 'colaborador' ? 'Gestão Comercial & Planejamento de Compras' : 'Gestão Comercial & Suprimentos de Impressão 3D'}
+              </p>
             </div>
           </div>
           <div className="text-right">
@@ -325,23 +415,24 @@ export default function ShoppingListView({
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 pb-5 border-b border-slate-200 no-print">
         <div>
           <h1 className="text-3xl font-bold font-display tracking-tight text-slate-950 mb-1">
-            Planejamento de Compras & Suprimentos
+            {userRole === 'colaborador' ? 'Fazer Pedido de Compras' : 'Planejamento de Compras & Suprimentos'}
           </h1>
           <p className="text-sm text-slate-500">
-            Monitore custos operacionais de aquisição de filamentos e peças sob demanda para sua oficina. Economize exportando ordens prontas para planilhas.
+            {userRole === 'colaborador' 
+              ? 'Cadastre novos pedidos de compras comerciais para reabastecimento. Pesquise e imprima a tabela comercial.'
+              : 'Monitore custos operacionais de aquisição de filamentos e peças sob demanda para sua oficina. Economize exportando ordens prontas para planilhas.'
+            }
           </p>
         </div>
         
         <div className="flex flex-col sm:flex-row gap-3 mt-4 md:mt-0 select-none">
-          {userRole !== 'colaborador' && (
-            <button
-              onClick={() => setFormOpen(!formOpen)}
-              className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer"
-            >
-              {formOpen ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-              {formOpen ? "Fechar Painel" : "Cadastrar Item de Compra"}
-            </button>
-          )}
+          <button
+            onClick={() => setFormOpen(!formOpen)}
+            className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer"
+          >
+            {formOpen ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+            {formOpen ? "Fechar Painel" : (userRole === 'colaborador' ? "Fazer Pedido" : "Cadastrar Item de Compra")}
+          </button>
 
           <button
             onClick={generateExcel}
@@ -366,7 +457,7 @@ export default function ShoppingListView({
             }`}
           >
             <Printer className="w-4 h-4" />
-            IMPRIMIR TABELA
+            IMPRIMIR TABELA COMERCIAL
           </button>
         </div>
       </div>
@@ -447,11 +538,21 @@ export default function ShoppingListView({
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               <div className="md:col-span-2">
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">Nome do Material ou Insumo *</label>
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Nome do Material ou Insumo *</label>
+                  <button
+                    type="button"
+                    onClick={() => setScannerOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-indigo-700 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900 border border-indigo-200 dark:border-indigo-800 rounded-lg transition-all duration-150 cursor-pointer"
+                  >
+                    <QrCode className="w-3.5 h-3.5" />
+                    <span>Escanear Código (Barras/QR)</span>
+                  </button>
+                </div>
                 <input
                   type="text"
                   required
-                  placeholder="Ex: Filamento PETG HT Alta Temperatura 1kg Preto"
+                  placeholder={userRole === 'colaborador' ? "Ex: Papel Sulfite A4 Report, Teclado USB, Caneta Bic..." : "Ex: Filamento PETG HT Alta Temperatura 1kg Preto"}
                   value={materialName}
                   onChange={(e) => setMaterialName(e.target.value)}
                   className="w-full text-sm px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 text-slate-800 bg-white shadow-xs"
@@ -465,8 +566,8 @@ export default function ShoppingListView({
                   onChange={(e) => setCategory(e.target.value as any)}
                   className="w-full text-sm px-4 py-2 border border-slate-200 rounded-lg bg-white text-slate-800 focus:outline-none focus:border-indigo-500 shadow-xs"
                 >
-                  <option value="Filamento">Filamento de Impressão</option>
-                  <option value="Peças de Reposição">Peças de Reposição (Bicos, Correias)</option>
+                  {userRole !== 'colaborador' && <option value="Filamento">Filamento de Impressão</option>}
+                  {userRole !== 'colaborador' && <option value="Peças de Reposição">Peças de Reposição (Bicos, Correias)</option>}
                   <option value="Acessórios/Insumos">Acessórios / Outros Insumos</option>
                   <option value="Outros">Outras Despesas</option>
                 </select>
@@ -538,6 +639,44 @@ export default function ShoppingListView({
               </div>
             </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 pt-3 border-t border-dashed border-slate-200">
+              <div>
+                <label className="block text-xs font-bold text-indigo-600 uppercase tracking-wide mb-1.5">Nome da Empresa (Destino do Relatório) *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: FTEX, GeorgeFctech-3D..."
+                  value={company}
+                  onChange={(e) => setCompany(e.target.value)}
+                  className="w-full text-sm px-4 py-2 border border-indigo-200 rounded-lg focus:outline-none focus:border-indigo-500 text-slate-800 bg-white shadow-xs font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">Nome do Funcionário Responsável *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: José, George..."
+                  value={requestedBy}
+                  onChange={(e) => setRequestedBy(e.target.value)}
+                  className="w-full text-sm px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 text-slate-800 bg-white shadow-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">Setor de Trabalho *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: Linha branca, Manutenção..."
+                  value={department}
+                  onChange={(e) => setDepartment(e.target.value)}
+                  className="w-full text-sm px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 text-slate-800 bg-white shadow-xs"
+                />
+              </div>
+            </div>
+
             <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
               <button
                 type="button"
@@ -558,7 +697,7 @@ export default function ShoppingListView({
       )}
 
       {/* REPLENISHMENT SHORTCUTS (LOW STOCK WARNING) */}
-      {lowStockItems.length > 0 && (
+      {lowStockItems.length > 0 && userRole !== 'colaborador' && (
         <div className="bg-amber-50/50 border border-amber-200 rounded-xl p-5 mb-8 no-print flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-3xs">
           <div className="flex items-start gap-3">
             <span className="p-2.5 bg-amber-150 text-amber-700 rounded-lg mt-0.5">
@@ -642,6 +781,24 @@ export default function ShoppingListView({
             </button>
           ))}
         </div>
+
+        {/* Company filter dropdown */}
+        <div className="flex items-center gap-1.5 bg-slate-150 p-1 rounded-lg">
+          <span className="text-[10px] font-bold font-mono uppercase text-slate-500 px-1.5">
+            Empresa:
+          </span>
+          <select
+            value={filterCompany}
+            onChange={(e) => setFilterCompany(e.target.value)}
+            className="text-xs font-semibold bg-white border border-slate-200 rounded-md py-1 px-2.5 focus:outline-none focus:border-indigo-500 text-slate-800"
+          >
+            <option value="Todos">Todas</option>
+            <option value="georgefctech-3d">GeorgeFctech-3D</option>
+            {companiesList.filter(c => c.toLowerCase() !== 'georgefctech-3d').map(c => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* CORE DATA DISPLAY TABLE */}
@@ -674,10 +831,12 @@ export default function ShoppingListView({
                   <th className="py-3 px-5 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono w-12 text-center no-print">Status</th>
                   <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">Material / Item Planejado</th>
                   <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">Categoria</th>
+                  <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">Empresa</th>
+                  <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">Solicitante / Setor</th>
                   <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono text-center">Qtd.</th>
                   <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono text-right">Valor Unitário</th>
                   <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono text-right">Custo Total</th>
-                  {userRole !== 'colaborador' && <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono text-center no-print">Ações</th>}
+                  <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono text-center no-print">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -787,6 +946,56 @@ export default function ShoppingListView({
                         )}
                       </td>
 
+                      {/* Empresa */}
+                      <td className="py-3.5 px-4">
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            placeholder="Empresa (Ex: FTEX)"
+                            value={editCompany}
+                            onChange={(e) => setEditCompany(e.target.value)}
+                            className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded-md focus:outline-none focus:border-indigo-500 text-slate-800 bg-white"
+                          />
+                        ) : (
+                          <span className={`font-semibold text-sm ${item.checked ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
+                            {item.company || <span className="text-slate-400 italic text-xs">GeorgeFctech-3D</span>}
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Solicitante / Setor */}
+                      <td className="py-3.5 px-4">
+                        {isEditing ? (
+                          <div className="space-y-1">
+                            <input
+                              type="text"
+                              placeholder="Funcionário (Ex: José)"
+                              value={editRequestedBy}
+                              onChange={(e) => setEditRequestedBy(e.target.value)}
+                              className="w-full text-xs px-2.5 py-1 border border-slate-300 rounded-md focus:outline-none focus:border-indigo-500 text-slate-800 bg-white"
+                            />
+                            <input
+                              type="text"
+                              placeholder="Setor (Ex: Linha branca)"
+                              value={editDepartment}
+                              onChange={(e) => setEditDepartment(e.target.value)}
+                              className="w-full text-xs px-2.5 py-1 border border-slate-300 rounded-md focus:outline-none focus:border-indigo-500 text-slate-800 bg-white"
+                            />
+                          </div>
+                        ) : (
+                          <div>
+                            <p className={`font-semibold text-xs ${item.checked ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
+                              {item.requestedBy || <span className="text-slate-400 italic text-xs">Administração</span>}
+                            </p>
+                            {item.department && (
+                              <p className="text-[10px] text-slate-500 uppercase mt-0.5 font-bold tracking-wider">
+                                Setor: {item.department}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </td>
+
                       {/* Qtd */}
                       <td className="py-3.5 px-4 text-center font-mono text-sm">
                         {isEditing ? (
@@ -830,8 +1039,7 @@ export default function ShoppingListView({
                       </td>
 
                       {/* Actions Column */}
-                      {userRole !== 'colaborador' && (
-                        <td className="py-3.5 px-4 text-center select-none no-print">
+                      <td className="py-3.5 px-4 text-center select-none no-print">
                           {isEditing ? (
                             <div className="flex items-center justify-center gap-1.5">
                               <button
@@ -850,7 +1058,7 @@ export default function ShoppingListView({
                           ) : (
                             <div className="flex items-center justify-center gap-2">
                               {/* Import to Stock Filament (Only Filament & Checked) */}
-                              {item.category === 'Filamento' && item.checked && (
+                              {item.category === 'Filamento' && item.checked && userRole !== 'colaborador' && (
                                 <button
                                   onClick={() => handleImportToStock(item)}
                                   title="Enviar peças faturadas ao estoque ativo de Filamentos"
@@ -879,7 +1087,6 @@ export default function ShoppingListView({
                             </div>
                           )}
                         </td>
-                      )}
                     </tr>
                   );
                 })}
@@ -901,10 +1108,10 @@ export default function ShoppingListView({
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3">
+                    <div className="flex items-start gap-3 w-full">
                       <button
                         onClick={() => onToggleShoppingItemChecked(item.id)}
-                        className={`mt-1.5 h-6 w-6 rounded border flex items-center justify-center transition cursor-pointer no-print ${
+                        className={`mt-1.5 h-6 w-6 rounded border flex items-center justify-center transition cursor-pointer no-print shrink-0 ${
                           item.checked 
                             ? 'bg-emerald-600 border-emerald-600 text-white' 
                             : 'border-slate-300 hover:border-indigo-500 bg-white'
@@ -913,7 +1120,7 @@ export default function ShoppingListView({
                         {item.checked && <Check className="w-4 h-4 stroke-[3]" />}
                       </button>
 
-                      <div>
+                      <div className="flex-1 min-w-0">
                         {isEditing ? (
                           <div className="space-y-3 py-1 bg-slate-50 p-3 rounded-lg border border-slate-200 mt-2">
                             <div>
@@ -948,6 +1155,37 @@ export default function ShoppingListView({
                                 />
                               </div>
                             </div>
+                            <div className="space-y-2 pt-2 border-t border-dashed border-slate-200">
+                              <div>
+                                <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Empresa</label>
+                                <input
+                                  type="text"
+                                  value={editCompany}
+                                  onChange={(e) => setEditCompany(e.target.value)}
+                                  className="w-full text-xs px-2.5 py-1 border border-slate-300 rounded-md text-slate-800 bg-white"
+                                />
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Solicitante</label>
+                                  <input
+                                    type="text"
+                                    value={editRequestedBy}
+                                    onChange={(e) => setEditRequestedBy(e.target.value)}
+                                    className="w-full text-xs px-2.5 py-1 border border-slate-300 rounded-md text-slate-800 bg-white"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Setor</label>
+                                  <input
+                                    type="text"
+                                    value={editDepartment}
+                                    onChange={(e) => setEditDepartment(e.target.value)}
+                                    className="w-full text-xs px-2.5 py-1 border border-slate-300 rounded-md text-slate-800 bg-white"
+                                  />
+                                </div>
+                              </div>
+                            </div>
                             <div className="flex gap-1.5 pt-1.5 border-t border-slate-200 justify-end">
                               <button
                                 onClick={() => setEditingId(null)}
@@ -975,6 +1213,14 @@ export default function ShoppingListView({
                                 {item.notes}
                               </p>
                             )}
+                            <div className="mt-1 bg-slate-50 p-2 rounded border border-slate-150 space-y-1">
+                              <p className="text-[11px] text-slate-700">
+                                <strong className="text-slate-500">Empresa:</strong> {item.company || 'GeorgeFctech-3D'}
+                              </p>
+                              <p className="text-[11px] text-slate-700">
+                                <strong className="text-slate-500">Solicitante:</strong> {item.requestedBy || 'Administração'} {item.department ? `(${item.department})` : ''}
+                              </p>
+                            </div>
                             <div className="mt-2 flex flex-wrap items-center gap-1.5">
                               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${
                                 item.category === 'Filamento' ? 'bg-indigo-50 text-indigo-700' :
@@ -990,7 +1236,7 @@ export default function ShoppingListView({
                                   target="_blank"
                                   referrerPolicy="no-referrer"
                                   rel="noreferrer"
-                                  className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:underline print:text-blue-600 print:underline"
+                                  className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-650 hover:underline print:text-blue-600 print:underline"
                                 >
                                   <ExternalLink className="w-2.5 h-2.5 no-print" />
                                   <span>Acessar Link de Compra</span>
@@ -1012,30 +1258,28 @@ export default function ShoppingListView({
                         </strong>
                       </div>
 
-                      {userRole !== 'colaborador' && (
-                        <div className="flex items-center gap-1 no-print">
-                          {item.category === 'Filamento' && item.checked && (
-                            <button
-                              onClick={() => handleImportToStock(item)}
-                              className="p-1 px-2 rounded-md bg-indigo-50 border border-indigo-100 text-indigo-700 flex items-center gap-1 text-[10px] font-bold uppercase cursor-pointer"
-                            >
-                              +Estoque
-                            </button>
-                          )}
+                      <div className="flex items-center gap-1 no-print">
+                        {item.category === 'Filamento' && item.checked && userRole !== 'colaborador' && (
                           <button
-                            onClick={() => handleStartEdit(item)}
-                            className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded transition cursor-pointer"
+                            onClick={() => handleImportToStock(item)}
+                            className="p-1 px-2 rounded-md bg-indigo-50 border border-indigo-100 text-indigo-700 flex items-center gap-1 text-[10px] font-bold uppercase cursor-pointer"
                           >
-                            <Edit2 className="w-3.5 h-3.5" />
+                            +Estoque
                           </button>
-                          <button
-                            onClick={() => onDeleteShoppingItem(item.id)}
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      )}
+                        )}
+                        <button
+                          onClick={() => handleStartEdit(item)}
+                          className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded transition cursor-pointer"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => onDeleteShoppingItem(item.id)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   )}
 
@@ -1051,16 +1295,303 @@ export default function ShoppingListView({
       )}
 
       {/* FOOTER TIPS CARD */}
-      <div className="mt-8 bg-slate-50 border border-slate-200 rounded-xl p-5 no-print text-xs text-slate-600 space-y-2.5 select-none">
-        <h5 className="font-bold text-slate-800 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
-          <Sparkles className="w-4 h-4 text-indigo-500" />
-          Dicas de Gestor de Suprimentos
-        </h5>
-        <p className="leading-relaxed">
-          Sempre que um filamento em planejamento for adquirido, marque o checkbox correspondente. Se o item pertencer à categoria **Filamentos**, um assistente de 1 clique ficará visível permitindo empurrar esses rolos direto pro seu estoque físico de insumos sem precisar redigitar dados.
-        </p>
-      </div>
+      {userRole !== 'colaborador' && (
+        <div className="mt-8 bg-slate-50 border border-slate-200 rounded-xl p-5 no-print text-xs text-slate-600 space-y-2.5 select-none">
+          <h5 className="font-bold text-slate-800 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+            <Sparkles className="w-4 h-4 text-indigo-500" />
+            Dicas de Gestor de Suprimentos
+          </h5>
+          <p className="leading-relaxed">
+            Sempre que um filamento em planejamento for adquirido, marque o checkbox correspondente. Se o item pertencer à categoria **Filamentos**, um assistente de 1 clique ficará visível permitindo empurrar esses rolos direto pro seu estoque físico de insumos sem precisar redigitar dados.
+          </p>
+        </div>
+      )}
 
+      {/* TOAST NOTIFICATION */}
+      {toastMessage && (
+        <div className="fixed bottom-5 right-5 z-50 bg-indigo-600 text-white font-bold text-xs px-4 py-3 rounded-lg shadow-xl uppercase tracking-wider animate-bounce no-print">
+          {toastMessage}
+        </div>
+      )}
+
+      {/* SCANNER MODAL */}
+      <ScannerModal
+        isOpen={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onScanSuccess={handleScanSuccess}
+      />
+
+    </div>
+  );
+}
+
+interface ScannerModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onScanSuccess: (code: string, productData?: any) => void;
+}
+
+export function ScannerModal({ isOpen, onClose, onScanSuccess }: ScannerModalProps) {
+  const [activeTab, setActiveTab] = useState<'simulation' | 'camera'>('simulation');
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [typedCode, setTypedCode] = useState('');
+
+  const MOCK_BARCODES: Record<string, { name: string; cost: number; category: 'Acessórios/Insumos' | 'Outros'; company: string; notes: string }> = {
+    "7891000311500": {
+      name: "Papel Sulfite A4 Report 75g (Pacote 500 folhas)",
+      cost: 32.50,
+      category: "Acessórios/Insumos",
+      company: "GeorgeFctech Comercial",
+      notes: "Papel de alta alvura para relatórios e faturas comerciais"
+    },
+    "7891234567890": {
+      name: "Caneta Esferográfica Azul Bic (Caixa com 50un)",
+      cost: 45.00,
+      category: "Acessórios/Insumos",
+      company: "GeorgeFctech Comercial",
+      notes: "Canetas para preenchimento de termos e notas"
+    },
+    "7890123456789": {
+      name: "Teclado USB Com Fio Standard Dell",
+      cost: 89.90,
+      category: "Outros",
+      company: "GeorgeFctech Comercial",
+      notes: "Substituição de periférico operacional"
+    },
+    "7896001201550": {
+      name: "Fita Adesiva Larga Marrom 45mm x 50m (Pacote com 4)",
+      cost: 28.00,
+      category: "Acessórios/Insumos",
+      company: "GeorgeFctech Comercial",
+      notes: "Embalagens de remessas comerciais"
+    },
+    "7898000505100": {
+      name: "Grampeador de Mesa de Metal Standard",
+      cost: 42.90,
+      category: "Acessórios/Insumos",
+      company: "GeorgeFctech Comercial",
+      notes: "Organização de tabelas e recibos de compras"
+    },
+    "QR_ORGANIZER_PRO": {
+      name: "Organizador de Documentos Acrílico Triplo",
+      cost: 65.00,
+      category: "Acessórios/Insumos",
+      company: "GeorgeFctech Comercial",
+      notes: "Organização de notas e relatórios mensais"
+    },
+    "QR_CHAIR_PAD": {
+      name: "Almofada Ergonômica de Assento de Espuma de Memória",
+      cost: 120.00,
+      category: "Outros",
+      company: "GeorgeFctech Comercial",
+      notes: "Ergonomia para o caixa comercial"
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'camera') return;
+
+    let html5QrCode: Html5Qrcode | null = null;
+    const elementId = "qr-reader-container";
+
+    const startScanner = async () => {
+      try {
+        setCameraError(null);
+        setScanning(true);
+        html5QrCode = new Html5Qrcode(elementId);
+        
+        await html5QrCode.start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: (width, height) => {
+              const size = Math.min(width, height) * 0.7;
+              return { width: size, height: size };
+            },
+          },
+          (decodedText) => {
+            // Success
+            handleCodeScanned(decodedText);
+          },
+          () => {
+            // seeking...
+          }
+        );
+      } catch (err: any) {
+        console.error("Camera access error:", err);
+        setCameraError("Não foi possível acessar a câmera do dispositivo. Certifique-se de que o aplicativo tem permissão de acesso à câmera ou use a Simulação.");
+        setScanning(false);
+      }
+    };
+
+    startScanner();
+
+    return () => {
+      if (html5QrCode) {
+        if (html5QrCode.isScanning) {
+          html5QrCode.stop().then(() => {
+            html5QrCode?.clear();
+          }).catch(err => console.error("Error stopping scanner:", err));
+        }
+      }
+    };
+  }, [isOpen, activeTab]);
+
+  if (!isOpen) return null;
+
+  const handleCodeScanned = (code: string) => {
+    const codeTrimmed = code.trim();
+    const matched = MOCK_BARCODES[codeTrimmed];
+    onScanSuccess(codeTrimmed, matched);
+  };
+
+  const handleManualSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!typedCode.trim()) return;
+    handleCodeScanned(typedCode);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in no-print">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        
+        {/* Modal Header */}
+        <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-indigo-50/20 dark:bg-slate-950/20">
+          <div className="flex items-center gap-2">
+            <QrCode className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800 dark:text-white">
+              Leitor de Código de Barras / QR Code
+            </h3>
+          </div>
+          <button 
+            onClick={onClose}
+            className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-white transition duration-150 cursor-pointer text-xl font-bold"
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Tabs switcher */}
+        <div className="flex border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-955/40 p-1">
+          <button
+            type="button"
+            onClick={() => setActiveTab('simulation')}
+            className={`flex-1 py-2 text-xs font-bold rounded-lg transition ${
+              activeTab === 'simulation'
+                ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-400 shadow-3xs'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+            }`}
+          >
+            Simulador / Entrada Manual
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('camera')}
+            className={`flex-1 py-2 text-xs font-bold rounded-lg transition ${
+              activeTab === 'camera'
+                ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-400 shadow-3xs'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+            }`}
+          >
+            Leitor via Câmera (Real)
+          </button>
+        </div>
+
+        {/* Tab Content */}
+        <div className="p-5 overflow-y-auto flex-1 space-y-4">
+          {activeTab === 'camera' ? (
+            <div className="space-y-4">
+              <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
+                Aponte a câmera para o código de barras ou código QR do produto.
+              </p>
+              
+              <div className="relative">
+                <div id="qr-reader-container" className="overflow-hidden rounded-xl bg-black aspect-video w-full max-w-sm mx-auto border border-slate-200 dark:border-slate-800 flex items-center justify-center">
+                  {!scanning && !cameraError && (
+                    <span className="text-xs text-slate-400">Iniciando câmera...</span>
+                  )}
+                  {cameraError && (
+                    <div className="p-4 text-center max-w-xs space-y-2">
+                      <AlertTriangle className="w-8 h-8 text-rose-500 mx-auto" />
+                      <p className="text-[11px] text-rose-600 dark:text-rose-400 leading-normal">{cameraError}</p>
+                    </div>
+                  )}
+                </div>
+                {scanning && !cameraError && (
+                  <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                    <div className="w-48 h-48 border-2 border-indigo-500 border-dashed rounded-lg animate-pulse flex items-center justify-center">
+                      <ScanLine className="w-full text-indigo-450 animate-bounce" />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Manual Input */}
+              <form onSubmit={handleManualSubmit} className="space-y-2">
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                  Digite ou Cole o Código de Barras / QR Code
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={typedCode}
+                    onChange={(e) => setTypedCode(e.target.value)}
+                    placeholder="Ex: 7891000311500 ou QR_ORGANIZER_PRO"
+                    className="flex-1 text-xs px-3.5 py-2 border border-slate-200 dark:border-slate-850 rounded-lg text-slate-800 dark:text-white bg-white dark:bg-slate-950 focus:outline-none focus:border-indigo-500 font-mono"
+                  />
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider rounded-lg shadow-sm transition cursor-pointer"
+                  >
+                    Simular
+                  </button>
+                </div>
+              </form>
+
+              {/* Simulation options */}
+              <div className="space-y-2 pt-2 border-t border-dashed border-slate-100 dark:border-slate-800">
+                <span className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                  Sugestões de Produtos Comerciais Prontos
+                </span>
+                <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto">
+                  {Object.entries(MOCK_BARCODES).map(([code, prod]) => (
+                    <button
+                      key={code}
+                      type="button"
+                      onClick={() => handleCodeScanned(code)}
+                      className="p-3 bg-slate-50 dark:bg-slate-950/50 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 border border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-800 rounded-xl text-left transition text-xs font-medium cursor-pointer"
+                    >
+                      <div className="font-bold text-slate-800 dark:text-white flex items-center justify-between gap-1">
+                        <span className="truncate">{prod.name}</span>
+                        <span className="text-[10px] text-indigo-650 dark:text-indigo-400 shrink-0 font-mono font-bold">R$ {prod.cost.toFixed(2)}</span>
+                      </div>
+                      <div className="text-[10px] text-slate-400 dark:text-slate-500 font-mono mt-1 flex items-center justify-between">
+                        <span>Código: {code}</span>
+                        <span>{prod.category}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Modal Footer */}
+        <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/20 flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 rounded-lg duration-150 cursor-pointer"
+          >
+            Fechar
+          </button>
+        </div>
+
+      </div>
     </div>
   );
 }

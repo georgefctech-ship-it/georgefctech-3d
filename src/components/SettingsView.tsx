@@ -847,12 +847,15 @@ export default function SettingsView({
 
                         return (
                           <tr key={collab.email} className={`hover:bg-slate-50/50 transition-colors ${isPending ? 'bg-amber-500/[0.02]' : ''}`}>
-                            <td className="p-3 pl-4 font-mono font-medium text-slate-800">
-                              <div className="flex items-center gap-2">
-                                <span className="truncate">{collab.email}</span>
-                                {isSelf && (
-                                  <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-650 text-[9px] font-extrabold uppercase scale-90">VOCÊ</span>
-                                )}
+                            <td className="p-3 pl-4">
+                              <div className="flex flex-col">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-slate-905 text-sm">{collab.username || 'Sem usuário'}</span>
+                                  {isSelf && (
+                                    <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-650 text-[9px] font-extrabold uppercase scale-90">VOCÊ</span>
+                                  )}
+                                </div>
+                                <span className="text-[11px] text-slate-500 font-mono truncate">{collab.email}</span>
                               </div>
                             </td>
                             <td className="p-3">

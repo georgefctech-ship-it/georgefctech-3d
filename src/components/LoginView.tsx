@@ -54,6 +54,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
 
   // Form states
   const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isFirstAccess, setIsFirstAccess] = useState(false);
@@ -231,60 +232,80 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     }
 
     try {
-      const normalizedEmail = email.trim().toLowerCase();
+      const inputIdentifier = email.trim().toLowerCase();
+      let targetEmail = inputIdentifier;
+      let targetUsername = '';
+
+      // Check if input is a username or an email
+      if (!inputIdentifier.includes('@')) {
+        // Search by username in g3d_user_roles
+        const { data: userByUsername, error: usernameErr } = await supabase
+          .from('g3d_user_roles')
+          .select('email, role, username')
+          .eq('username', inputIdentifier)
+          .maybeSingle();
+
+        if (usernameErr) {
+          throw new Error('Erro ao buscar o nome de usuário no banco de dados.');
+        }
+
+        if (!userByUsername) {
+          throw new Error('Nome de usuário não cadastrado. Se você é novo, crie uma conta de colaborador.');
+        }
+
+        targetEmail = userByUsername.email;
+        targetUsername = userByUsername.username;
+      }
+
+      // Check role and approval status FIRST before authenticating
+      const { data: roleData, error: roleErr } = await supabase
+        .from('g3d_user_roles')
+        .select('role, username')
+        .eq('email', targetEmail)
+        .maybeSingle();
+
+      let assignedRole = '';
+      if (roleData) {
+        assignedRole = roleData.role;
+        targetUsername = roleData.username || targetUsername;
+      } else {
+        // Auto register role as pending for security
+        const isGeorgeEmail = targetEmail === 'georgefctec@gmail.com';
+        const defaultRole = isGeorgeEmail ? 'admin' : 'colaborador_pendente';
+        await supabase.from('g3d_user_roles').insert({
+          email: targetEmail,
+          role: defaultRole
+        });
+        assignedRole = defaultRole;
+      }
+
+      // Check system administrator permission (pending approval)
+      if (assignedRole === 'colaborador_pendente' || assignedRole === 'pendente') {
+        throw new Error('Cadastro pendente! Seu acesso necessita de liberação por um Administrador do sistema. Por favor, aguarde a aprovação.');
+      }
+
+      // If approved, sign in with Supabase Auth using the correct email
       const { data, error: authErr } = await supabase.auth.signInWithPassword({
-        email: normalizedEmail,
+        email: targetEmail,
         password: password
       });
 
       if (authErr) {
         throw new Error(authErr.message === 'Invalid login credentials' 
-          ? 'Credenciais de acesso incorretas. Por favor, verifique se digitou o e-mail e a senha corretos.' 
+          ? 'Senha de acesso incorreta para este usuário. Por favor, tente novamente.' 
           : authErr.message);
       }
 
       if (data.user) {
-        // Fetch user role from database
         const userEmail = (data.user.email || '').trim().toLowerCase();
-        const isGeorgeEmail = userEmail === 'georgefctec@gmail.com';
-        
-        const { data: roleData, error: roleErr } = await supabase
-          .from('g3d_user_roles')
-          .select('role')
-          .eq('email', userEmail)
-          .maybeSingle();
-
-        let assignedRole = '';
-        
-        if (roleData) {
-          assignedRole = roleData.role;
-        } else {
-          // Auto register role for this user if it doesn't exist
-          const defaultRole = isGeorgeEmail ? 'admin' : 'colaborador';
-          await supabase.from('g3d_user_roles').insert({
-            email: userEmail,
-            role: defaultRole
-          });
-          assignedRole = defaultRole;
-        }
-
-        // Se o colaborador estava listado como pendente, promovemos o acesso de entrada imediatamente de modo ativo
-        if (assignedRole === 'colaborador_pendente' || assignedRole === 'pendente') {
-          assignedRole = 'colaborador';
-          // Atualiza também na nuvem para manter persistente
-          try {
-            await supabase.from('g3d_user_roles').upsert({
-              email: userEmail,
-              role: 'colaborador'
-            });
-          } catch (e) {
-            console.error("Erro ao atualizar cargo pendente:", e);
-          }
-        }
-
         sessionStorage.setItem('g3d_authenticated', 'true');
         sessionStorage.setItem('g3d_user_role', assignedRole);
         sessionStorage.setItem('g3d_user_email', userEmail);
+        if (targetUsername) {
+          sessionStorage.setItem('g3d_username', targetUsername);
+        } else {
+          sessionStorage.setItem('g3d_username', userEmail.split('@')[0]);
+        }
         
         onLoginSuccess();
       }
@@ -301,7 +322,18 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     setSuccessMsg(null);
 
     const userEmail = email.trim().toLowerCase();
+    const cleanUsername = username.trim().toLowerCase();
     const isGeorgeEmail = userEmail === 'georgefctec@gmail.com';
+
+    if (!cleanUsername) {
+      setError('Por favor, defina um nome de usuário.');
+      return;
+    }
+
+    if (!/^[a-zA-Z0-9_]{3,20}$/.test(cleanUsername)) {
+      setError('O nome de usuário deve conter de 3 a 20 caracteres (apenas letras, números ou sublinhado, sem espaços).');
+      return;
+    }
 
     if (password.length < 6) {
       setError('A senha de login deve conter pelo menos 6 caracteres.');
@@ -322,6 +354,33 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     }
 
     try {
+      // Check if username is already taken in g3d_user_roles
+      const { data: existingByUsername, error: errUserCheck } = await supabase
+        .from('g3d_user_roles')
+        .select('email')
+        .eq('username', cleanUsername)
+        .maybeSingle();
+
+      if (existingByUsername) {
+        setError('Este nome de usuário já está sendo utilizado por outro membro. Por favor, tente outro.');
+        setLoading(false);
+        return;
+      }
+
+      // Check if email already registered in g3d_user_roles
+      const { data: existingByEmail, error: errEmailCheck } = await supabase
+        .from('g3d_user_roles')
+        .select('email')
+        .eq('email', userEmail)
+        .maybeSingle();
+
+      if (existingByEmail) {
+        setError('Este e-mail de recuperação já está cadastrado em nossa base de colaboradores.');
+        setLoading(false);
+        return;
+      }
+
+      // Register the user with Supabase Auth
       const { data, error: registerErr } = await supabase.auth.signUp({
         email: userEmail,
         password: password,
@@ -333,22 +392,30 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       if (registerErr) throw registerErr;
 
       if (data.user) {
-        // Save database role
-        const defaultRole = isGeorgeEmail ? 'admin' : 'colaborador';
-        await supabase.from('g3d_user_roles').upsert({
+        // Save database role with username - collaborators need system admin approval (colaborador_pendente)
+        const defaultRole = isGeorgeEmail ? 'admin' : 'colaborador_pendente';
+        
+        const { error: upsertErr } = await supabase.from('g3d_user_roles').upsert({
           email: userEmail,
-          role: defaultRole
+          role: defaultRole,
+          username: cleanUsername
         });
+
+        if (upsertErr) {
+          console.error("Erro ao inserir perfil do colaborador:", upsertErr);
+          throw new Error('Não foi possível gravar as informações do perfil no banco de dados. Contate o administrador.');
+        }
 
         if (isGeorgeEmail) {
           setSuccessMsg('Cadastro concluído com sucesso! Sua conta foi criada automaticamente como Administrador.');
         } else {
-          setSuccessMsg('Cadastro concluído com sucesso! Sua conta de Colaborador está ativa e você já pode acessar o sistema.');
+          setSuccessMsg('Cadastro solicitado com sucesso! Por segurança, seu acesso está PENDENTE. Solicite a liberação ao Administrador do sistema.');
         }
         
         setIsRegistering(false);
         setPassword('');
         setConfirmPassword('');
+        setUsername('');
       }
     } catch (err: any) {
       setError(err.message || 'Falha ao registrar colaborador.');
@@ -760,21 +827,36 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
               {isRegistering ? (
                 <form onSubmit={handleSupabaseRegister} className="space-y-4">
                   <div className="space-y-1">
-                    <h3 className="text-slate-900 dark:text-white font-bold text-sm">Registrar Novo Membro</h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      O usuário cadastrado terá o papel padrão de <strong>Colaborador</strong> (visualiza estoque de filamentos e lista de compras).
+                    <h3 className="text-slate-900 dark:text-white font-bold text-sm">Registrar Novo Colaborador</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                      Cadastre-se com um <strong>nome de usuário</strong> único para fazer o login. Seu e-mail será utilizado exclusivamente para <strong>recuperação de senha</strong> e seu acesso ficará sujeito à aprovação do Administrador.
                     </p>
                   </div>
 
                   <div className="space-y-3.5">
                     <div className="flex flex-col gap-1">
-                      <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">E-mail</label>
+                      <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Nome de Usuário (Login)</label>
+                      <div className="relative">
+                        <Users className="absolute left-3 top-3.5 w-4 h-4 text-slate-400 dark:text-slate-500" />
+                        <input
+                          type="text"
+                          required
+                          placeholder="Ex: joao_3d"
+                          value={username}
+                          onChange={(e) => setUsername(e.target.value)}
+                          className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 rounded-lg text-sm text-slate-900 dark:text-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">E-mail de Recuperação</label>
                       <div className="relative">
                         <Mail className="absolute left-3 top-3.5 w-4 h-4 text-slate-400 dark:text-slate-500" />
                         <input
                           type="email"
                           required
-                          placeholder="exemplo@empresa.com"
+                          placeholder="Ex: joao@gmail.com (Apenas para recuperar senha)"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
                           className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 rounded-lg text-sm text-slate-900 dark:text-white"
@@ -818,7 +900,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
                     disabled={loading}
                     className="w-full flex items-center justify-center gap-2 mt-2 px-5 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs uppercase tracking-wider rounded-lg disabled:opacity-50 cursor-pointer"
                   >
-                    {loading ? 'Cadastrando...' : 'Finalizar Cadastro de Membro'}
+                    {loading ? 'Cadastrando...' : 'Finalizar Cadastro (Aguardando Aprovação)'}
                     <UserPlus className="w-4 h-4" />
                   </button>
 
@@ -836,19 +918,19 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
                   <div className="space-y-1">
                     <h3 className="text-slate-900 dark:text-white font-bold text-sm">Autenticidade em Nuvem</h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Faça o login corporativo para começar a registrar e sincronizar dados com a empresa.
+                      Entre com seu Nome de Usuário ou E-mail corporativo para sincronizar dados em tempo real.
                     </p>
                   </div>
 
                   <div className="space-y-3.5">
                     <div className="flex flex-col gap-1">
-                      <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-450">E-mail Corporativo</label>
+                      <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-455">Nome de Usuário ou E-mail</label>
                       <div className="relative">
-                        <Mail className="absolute left-3 top-3.5 w-4 h-4 text-slate-400 dark:text-slate-500" />
+                        <Users className="absolute left-3 top-3.5 w-4 h-4 text-slate-400 dark:text-slate-500" />
                         <input
-                          type="email"
+                          type="text"
                           required
-                          placeholder="colaborador@empresa.com"
+                          placeholder="Seu usuário (Ex: joao_3d) ou e-mail"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
                           className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 rounded-lg text-sm text-slate-900 dark:text-white"
