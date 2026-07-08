@@ -23,10 +23,13 @@
 
 /* Print Overrides: Ensure premium physical paper formatting */
 @media print {
-  html, body, .dark, .dark body, .dark main, .dark #print-area, .dark #print-area * {
+  html, body, .dark, .dark body, .dark main, .dark #print-area, .dark #print-area *,
+  #root, #root *, main, main *, div, div * {
     background-color: #ffffff !important;
     background: #ffffff !important;
     color: #000000 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
   }
   .no-print {
     display: none !important;
@@ -37,6 +40,7 @@
     max-width: 100% !important;
     width: 100% !important;
     margin: 0 !important;
+    overflow: visible !important;
   }
   /* Force expand the report print-area */
   #print-area {
@@ -67,6 +71,54 @@
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
+
+  /* Hide all scrollbar controls, sliders, and navigation indicators completely when printing */
+  ::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+  * {
+    -ms-overflow-style: none !important;
+    scrollbar-width: none !important;
+    overflow: visible !important;
+  }
+  
+  .overflow-x-auto,
+  .overflow-hidden {
+    overflow: visible !important;
+    overflow-x: visible !important;
+  }
+
+  /* Formal table adjustments for printing */
+  table {
+    width: 100% !important;
+    max-width: 100% !important;
+    table-layout: fixed !important; /* Forces columns to stay proportional on paper */
+    border-collapse: collapse !important;
+    page-break-inside: auto !important;
+  }
+  
+  tr {
+    page-break-inside: avoid !important;
+    page-break-after: auto !important;
+  }
+
+  /* Column widths exactly distributed for beautiful, elegant report table prints */
+  th, td {
+    padding: 8px 10px !important;
+    font-size: 11px !important;
+    word-break: break-word !important;
+    white-space: normal !important;
+  }
+
+  th.material-col, td.material-col { width: 33% !important; }
+  th.category-col, td.category-col { width: 14% !important; }
+  th.company-col, td.company-col { width: 10% !important; }
+  th.requester-col, td.requester-col { width: 19% !important; }
+  th.qty-col, td.qty-col { width: 6% !important; text-align: center !important; }
+  th.price-col, td.price-col { width: 9% !important; text-align: right !important; }
+  th.total-col, td.total-col { width: 9% !important; text-align: right !important; }
 }
 
 /* System-wide Elegant Dark/Light Mode Overrides */

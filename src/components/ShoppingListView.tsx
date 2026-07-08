@@ -35,13 +35,84 @@ import {
 import { Html5Qrcode } from 'html5-qrcode';
 import { ShoppingItem, InventoryItem } from '../types';
 
-const ensureAbsoluteUrl = (url: string | undefined): string => {
-  if (!url) return '';
+const ensureAbsoluteUrl = (url: string | undefined, productName?: string): string => {
+  if (!url || !url.trim()) {
+    if (productName) {
+      return `https://lista.mercadolivre.com.br/${encodeURIComponent(productName)}`;
+    }
+    return '';
+  }
   const trimmed = url.trim();
+  
+  // If it is just a search phrase or non-standard link like "mercado livre"
+  if (!trimmed.includes('.') || trimmed.includes(' ')) {
+    if (trimmed.toLowerCase().includes('mercado') || trimmed.toLowerCase().includes('ml')) {
+      return `https://lista.mercadolivre.com.br/${encodeURIComponent(productName || trimmed)}`;
+    }
+    return `https://www.google.com/search?q=${encodeURIComponent(productName || trimmed)}`;
+  }
+
   if (/^(f|ht)tps?:\/\//i.test(trimmed)) {
     return trimmed;
   }
   return `https://${trimmed}`;
+};
+
+const getProductImage = (item: ShoppingItem): string => {
+  // If item already contains an image (optional, in case we add one in future)
+  if ((item as any).image) return (item as any).image;
+  
+  const link = (item.purchaseLink || '').toLowerCase();
+  const name = item.materialName.toLowerCase();
+  
+  // Specific checks for common items with high-resolution Unsplash photos
+  if (name.includes('papel') || name.includes('sulfite') || name.includes('a4') || name.includes('report')) {
+    return 'https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=200&auto=format&fit=crop&q=80';
+  }
+  if (name.includes('caneta') || name.includes('lápis') || name.includes('bic')) {
+    return 'https://images.unsplash.com/photo-1583485088034-697b5bc54ccd?w=200&auto=format&fit=crop&q=80';
+  }
+  if (name.includes('teclado') || name.includes('keyboard') || name.includes('mouse')) {
+    return 'https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=200&auto=format&fit=crop&q=80';
+  }
+  if (name.includes('fita') || name.includes('adesiva') || name.includes('marrom') || name.includes('embalagem')) {
+    return 'https://images.unsplash.com/photo-1603513492128-ba7bc9b3e143?w=200&auto=format&fit=crop&q=80';
+  }
+  if (name.includes('grampeador') || name.includes('clip')) {
+    return 'https://images.unsplash.com/photo-1541829015-64654fd2c906?w=200&auto=format&fit=crop&q=80';
+  }
+  if (name.includes('organizador') || name.includes('acrílico') || name.includes('gaveta')) {
+    return 'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=200&auto=format&fit=crop&q=80';
+  }
+  if (name.includes('almofada') || name.includes('ergonômica') || name.includes('cadeira') || name.includes('assento')) {
+    return 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=200&auto=format&fit=crop&q=80';
+  }
+  if (name.includes('filamento') || name.includes('pla') || name.includes('petg') || name.includes('abs') || name.includes('rolo')) {
+    return 'https://images.unsplash.com/photo-1615840287214-7fe58a8f3685?w=200&auto=format&fit=crop&q=80';
+  }
+  if (name.includes('bico') || name.includes('nozzle') || name.includes('extrusora') || name.includes('reparo')) {
+    return 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=200&auto=format&fit=crop&q=80';
+  }
+  if (name.includes('placa') || name.includes('fonte') || name.includes('circuito') || name.includes('cooler') || name.includes('módulo')) {
+    return 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=200&auto=format&fit=crop&q=80';
+  }
+  
+  // Try mapping common websites from link
+  if (link.includes('mercadolivre') || link.includes('mlb')) {
+    return 'https://images.unsplash.com/photo-1472851294608-062f824d296e?w=200&auto=format&fit=crop&q=80';
+  }
+  if (link.includes('amazon')) {
+    return 'https://images.unsplash.com/photo-1523474253046-8cd2748b5fd2?w=200&auto=format&fit=crop&q=80';
+  }
+  if (link.includes('shopee')) {
+    return 'https://images.unsplash.com/photo-1556742044-3c52d6e88c62?w=200&auto=format&fit=crop&q=80';
+  }
+  if (link.includes('aliexpress')) {
+    return 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=200&auto=format&fit=crop&q=80';
+  }
+
+  // Fallback default professional product box
+  return 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=200&auto=format&fit=crop&q=80';
 };
 
 interface ShoppingListViewProps {
@@ -67,6 +138,7 @@ export default function ShoppingListView({
 }: ShoppingListViewProps) {
   const [formOpen, setFormOpen] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerMode, setScannerMode] = useState<'create' | 'search'>('create');
   
   // Form states (Add)
   const [materialName, setMaterialName] = useState('');
@@ -110,23 +182,28 @@ export default function ShoppingListView({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const handleScanSuccess = (code: string, matchedProduct?: any) => {
-    if (matchedProduct) {
-      setMaterialName(matchedProduct.name);
-      setEstUnitCost(matchedProduct.cost);
-      setCategory(matchedProduct.category);
-      setNotes(`[Escaneado: ${code}] ${matchedProduct.notes}`);
-      setCompany(matchedProduct.company || 'GeorgeFctech Comercial');
-      
-      // Auto-open form if closed
-      setFormOpen(true);
-      setToastMessage(`Produto localizado: ${matchedProduct.name}! Preenchido com sucesso.`);
+    if (scannerMode === 'search') {
+      setSearchQuery(code);
+      setToastMessage(`Busca ativada pelo código: ${code}. ${matchedProduct ? `Item: ${matchedProduct.name}` : ''}`);
     } else {
-      // Unknown code
-      setMaterialName(`Produto [Código: ${code}]`);
-      setNotes(`[Código de barras/QR: ${code}]`);
-      setCompany('GeorgeFctech Comercial');
-      setFormOpen(true);
-      setToastMessage(`Código desconhecido (${code}). Preparamos o campo com o código do produto.`);
+      if (matchedProduct) {
+        setMaterialName(matchedProduct.name);
+        setEstUnitCost(matchedProduct.cost);
+        setCategory(matchedProduct.category);
+        setNotes(`[Escaneado: ${code}] ${matchedProduct.notes}`);
+        setCompany(matchedProduct.company || 'GeorgeFctech Comercial');
+        
+        // Auto-open form if closed
+        setFormOpen(true);
+        setToastMessage(`Produto localizado: ${matchedProduct.name}! Preenchido com sucesso.`);
+      } else {
+        // Unknown code
+        setMaterialName(`Produto [Código: ${code}]`);
+        setNotes(`[Código de barras/QR: ${code}]`);
+        setCompany('GeorgeFctech Comercial');
+        setFormOpen(true); // Ensure open
+        setToastMessage(`Código desconhecido (${code}). Preparamos o campo com o código do produto.`);
+      }
     }
     setScannerOpen(false);
     setTimeout(() => setToastMessage(null), 4000);
@@ -341,7 +418,9 @@ export default function ShoppingListView({
                           (item.notes && item.notes.toLowerCase().includes(searchQuery.toLowerCase())) ||
                           (item.requestedBy && item.requestedBy.toLowerCase().includes(searchQuery.toLowerCase())) ||
                           (item.department && item.department.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                          (item.company && item.company.toLowerCase().includes(searchQuery.toLowerCase()));
+                          (item.company && item.company.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                          (searchQuery.replace(/\D/g, '').length > 0 && 
+                           item.notes && item.notes.replace(/\D/g, '').includes(searchQuery.replace(/\D/g, '')));
     const matchesCategory = filterCategory === 'Todos' || item.category === filterCategory;
     const matchesStatus = filterStatus === 'Todos' || 
                           (filterStatus === 'Pendentes' && !item.checked) || 
@@ -542,7 +621,10 @@ export default function ShoppingListView({
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Nome do Material ou Insumo *</label>
                   <button
                     type="button"
-                    onClick={() => setScannerOpen(true)}
+                    onClick={() => {
+                      setScannerMode('create');
+                      setScannerOpen(true);
+                    }}
                     className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-indigo-700 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900 border border-indigo-200 dark:border-indigo-800 rounded-lg transition-all duration-150 cursor-pointer"
                   >
                     <QrCode className="w-3.5 h-3.5" />
@@ -729,17 +811,41 @@ export default function ShoppingListView({
       <div className="bg-white border border-slate-200 rounded-xl p-4 mb-6 shadow-3xs no-print flex flex-col lg:flex-row lg:items-center gap-4 select-none">
         
         {/* Search input */}
-        <div className="relative flex-1">
-          <span className="absolute left-3.5 top-2.5 text-slate-400">
-            <Search className="w-4 h-4" />
-          </span>
-          <input
-            type="text"
-            placeholder="Filtrar por nome do material, notas ou especificações..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full text-xs pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 text-slate-800 bg-slate-50 focus:bg-white"
-          />
+        <div className="relative flex-1 flex gap-2">
+          <div className="relative flex-1">
+            <span className="absolute left-3.5 top-2.5 text-slate-400">
+              <Search className="w-4 h-4" />
+            </span>
+            <input
+              type="text"
+              placeholder="Filtrar por nome do material, notas ou especificações..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full text-xs pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 text-slate-800 bg-slate-50 focus:bg-white"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 text-xs font-bold"
+              >
+                ×
+              </button>
+            )}
+          </div>
+          
+          <button
+            type="button"
+            onClick={() => {
+              setScannerMode('search');
+              setScannerOpen(true);
+            }}
+            title="Escanear Código de Barras / QR para Buscar"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 font-bold text-xs uppercase tracking-wider cursor-pointer shadow-3xs transition duration-150 shrink-0"
+          >
+            <QrCode className="w-3.5 h-3.5" />
+            <span>Buscar p/ Scanner</span>
+          </button>
         </div>
 
         {/* Categories selector Buttons */}
@@ -829,13 +935,13 @@ export default function ShoppingListView({
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 select-none">
                   <th className="py-3 px-5 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono w-12 text-center no-print">Status</th>
-                  <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">Material / Item Planejado</th>
-                  <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">Categoria</th>
-                  <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">Empresa</th>
-                  <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">Solicitante / Setor</th>
-                  <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono text-center">Qtd.</th>
-                  <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono text-right">Valor Unitário</th>
-                  <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono text-right">Custo Total</th>
+                  <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono material-col">Material / Item Planejado</th>
+                  <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono category-col">Categoria</th>
+                  <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono company-col">Empresa</th>
+                  <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono requester-col">Solicitante / Setor</th>
+                  <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono text-center qty-col">Qtd.</th>
+                  <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono text-right price-col">Valor Unitário</th>
+                  <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono text-right total-col">Custo Total</th>
                   <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono text-center no-print">Ações</th>
                 </tr>
               </thead>
@@ -866,7 +972,7 @@ export default function ShoppingListView({
                       </td>
 
                       {/* Name / Form Editable Column */}
-                      <td className="py-3.5 px-4">
+                      <td className="py-3.5 px-4 material-col">
                         {isEditing ? (
                           <div className="space-y-2 py-1 max-w-lg">
                             <input
@@ -904,35 +1010,57 @@ export default function ShoppingListView({
                             </div>
                           </div>
                         ) : (
-                          <div>
-                            <span className={`font-bold text-sm leading-tight block ${
-                              item.checked ? 'text-slate-400 line-through font-semibold' : 'text-slate-900 font-sans'
-                            }`}>
-                              {item.materialName}
-                            </span>
-                            {item.notes && (
-                              <p className={`text-xs mt-0.5 max-w-md ${item.checked ? 'text-slate-400 line-through' : 'text-slate-500'}`}>
-                                {item.notes}
-                              </p>
-                            )}
-                            {item.purchaseLink && (
-                              <a
-                                href={ensureAbsoluteUrl(item.purchaseLink)}
-                                target="_blank"
+                          <div className="flex items-center gap-3">
+                            {/* Product Image Thumbnail */}
+                            <div className="w-12 h-12 rounded-lg overflow-hidden border border-slate-200 bg-slate-50 shrink-0 flex items-center justify-center shadow-3xs print:border print:border-slate-300">
+                              <img 
+                                src={getProductImage(item)} 
+                                alt={item.materialName} 
+                                className="w-full h-full object-cover"
                                 referrerPolicy="no-referrer"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-650 hover:text-indigo-800 mt-1 hover:underline print:text-blue-600 print:underline"
-                              >
-                                <ExternalLink className="w-3.5 h-3.5 no-print" />
-                                <span>Acessar Link de Compra</span>
-                              </a>
-                            )}
+                              />
+                            </div>
+                            <div className="min-w-0">
+                              <span className={`font-bold text-sm leading-tight block ${
+                                item.checked ? 'text-slate-400 line-through font-semibold' : 'text-slate-900 font-sans'
+                              }`}>
+                                {item.materialName}
+                              </span>
+                              {item.notes && (
+                                <p className={`text-xs mt-0.5 max-w-md truncate ${item.checked ? 'text-slate-400 line-through' : 'text-slate-500'}`}>
+                                  {item.notes}
+                                </p>
+                              )}
+                              {item.purchaseLink ? (
+                                <a
+                                  href={ensureAbsoluteUrl(item.purchaseLink, item.materialName)}
+                                  target="_blank"
+                                  referrerPolicy="no-referrer"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-650 hover:text-indigo-800 mt-1 hover:underline print:text-blue-600 print:underline"
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5 no-print" />
+                                  <span>Acessar Link de Compra</span>
+                                </a>
+                              ) : (
+                                <a
+                                  href={ensureAbsoluteUrl(undefined, item.materialName)}
+                                  target="_blank"
+                                  referrerPolicy="no-referrer"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-450 hover:text-indigo-700 mt-1 hover:underline print:text-blue-600 print:underline"
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5 no-print" />
+                                  <span>Pesquisar para Comprar</span>
+                                </a>
+                              )}
+                            </div>
                           </div>
                         )}
                       </td>
 
                       {/* Category icon and tag badge */}
-                      <td className="py-3.5 px-4 whitespace-nowrap">
+                      <td className="py-3.5 px-4 whitespace-nowrap category-col">
                         {!isEditing && (
                           <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold ${
                             item.category === 'Filamento' ? 'bg-indigo-50 text-indigo-700' :
@@ -947,7 +1075,7 @@ export default function ShoppingListView({
                       </td>
 
                       {/* Empresa */}
-                      <td className="py-3.5 px-4">
+                      <td className="py-3.5 px-4 company-col">
                         {isEditing ? (
                           <input
                             type="text"
@@ -964,7 +1092,7 @@ export default function ShoppingListView({
                       </td>
 
                       {/* Solicitante / Setor */}
-                      <td className="py-3.5 px-4">
+                      <td className="py-3.5 px-4 requester-col">
                         {isEditing ? (
                           <div className="space-y-1">
                             <input
@@ -997,7 +1125,7 @@ export default function ShoppingListView({
                       </td>
 
                       {/* Qtd */}
-                      <td className="py-3.5 px-4 text-center font-mono text-sm">
+                      <td className="py-3.5 px-4 text-center font-mono text-sm qty-col">
                         {isEditing ? (
                           <input
                             type="number"
@@ -1014,7 +1142,7 @@ export default function ShoppingListView({
                       </td>
 
                       {/* Unit Cost */}
-                      <td className="py-3.5 px-4 text-right font-mono text-xs">
+                      <td className="py-3.5 px-4 text-right font-mono text-xs price-col">
                         {isEditing ? (
                           <input
                             type="number"
@@ -1032,7 +1160,7 @@ export default function ShoppingListView({
                       </td>
 
                       {/* Total cost */}
-                      <td className="py-3.5 px-4 text-right font-mono text-sm">
+                      <td className="py-3.5 px-4 text-right font-mono text-sm total-col">
                         <span className={`font-bold ${item.checked ? 'text-slate-400 font-semibold' : 'text-indigo-700 font-semibold'}`}>
                           R$ {itemTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </span>
