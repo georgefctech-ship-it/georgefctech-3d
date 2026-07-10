@@ -31,7 +31,8 @@ import {
   QrCode,
   Camera,
   ScanLine,
-  FileText
+  FileText,
+  Barcode
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { ShoppingItem, InventoryItem } from '../types';
@@ -1392,42 +1393,37 @@ export default function ShoppingListView({
       {/* FILTER & ADVANCED SEARCH BAR */}
       <div className="bg-white border border-slate-200 rounded-xl p-4 mb-6 shadow-3xs no-print flex flex-col lg:flex-row lg:items-center gap-4 select-none">
         
-        {/* Search input */}
-        <div className="relative flex-1 flex gap-2">
-          <div className="relative flex-1">
+        {/* Search input with Barcode indication */}
+        <div className="relative flex-1">
+          <div className="relative">
             <span className="absolute left-3.5 top-2.5 text-slate-400">
               <Search className="w-4 h-4" />
             </span>
             <input
               type="text"
-              placeholder="Filtrar por nome do material, notas ou especificações..."
+              placeholder="🔍 Buscar pelo Código de Barras cadastrado (ex: 789...) ou Nome do Item..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full text-xs pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 text-slate-800 bg-slate-50 focus:bg-white"
+              className="w-full text-xs pl-10 pr-10 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 text-slate-800 bg-slate-50 focus:bg-white font-medium"
             />
-            {searchQuery && (
+            {searchQuery ? (
               <button
                 type="button"
                 onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                className="absolute right-3 top-2 text-slate-400 hover:text-slate-600 text-sm font-bold h-6 w-6 flex items-center justify-center rounded-full hover:bg-slate-200/50 cursor-pointer"
               >
                 ×
               </button>
+            ) : (
+              <span className="absolute right-3.5 top-2.5 text-slate-400" title="Busca por Código de Barras Ativa">
+                <Barcode className="w-4 h-4" />
+              </span>
             )}
           </div>
-          
-          <button
-            type="button"
-            onClick={() => {
-              setScannerMode('search');
-              setScannerOpen(true);
-            }}
-            title="Escanear Código de Barras / QR para Buscar"
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 font-bold text-xs uppercase tracking-wider cursor-pointer shadow-3xs transition duration-150 shrink-0"
-          >
-            <QrCode className="w-3.5 h-3.5" />
-            <span>Buscar p/ Scanner</span>
-          </button>
+          <div className="mt-1 flex items-center gap-1.5 text-[10px] text-indigo-600 font-bold px-1">
+            <Barcode className="w-3.5 h-3.5 text-indigo-500" />
+            <span>Colaborador: Digite ou use o leitor de código de barras para filtrar instantaneamente.</span>
+          </div>
         </div>
 
         {/* Categories selector Buttons */}
