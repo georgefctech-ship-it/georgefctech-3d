@@ -454,6 +454,14 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
                 Configurar e Entrar
                 <ArrowRight className="w-4 h-4" />
               </button>
+
+              <button
+                type="button"
+                onClick={() => { setIsFirstAccess(false); setError(null); }}
+                className="w-full text-center mt-2 text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-semibold transition cursor-pointer"
+              >
+                Voltar para o Login
+              </button>
             </form>
           ) : isResettingPassword ? (
             // PASSWORD RESET/CHOOSE NEW PASSWORD VIEW
@@ -712,6 +720,17 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
                 {loading ? 'Autenticando...' : 'Entrar no Sistema'}
                 <ArrowRight className="w-4 h-4" />
               </button>
+
+              <div className="flex flex-col gap-2 pt-1 border-t border-slate-100 dark:border-slate-800/60 mt-3">
+                <button
+                  type="button"
+                  onClick={() => { setIsFirstAccess(true); setError(null); setSuccessMsg(null); }}
+                  className="w-full text-center text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-semibold transition cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  Primeiro acesso? Cadastrar senha mestra
+                </button>
+              </div>
             </form>
           )}
         </div>
