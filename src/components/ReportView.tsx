@@ -228,7 +228,8 @@ export default function ReportView({ projects }: ReportViewProps) {
         <p class="desc">Manufatura Aditiva de Engenharia & Prototipagem Avançada</p>
       </div>
       <div class="header-meta">
-        <div class="doc-title">PROPOSTA DE FATURAMENTO</div>
+        <div class="doc-title" style="font-weight: bold; font-size: 13px;">PROPOSTA DE FATURAMENTO</div>
+        <div style="font-weight: bold; color: #1e1b4b; margin: 4px 0;">Firma Responsável: GeorgeFctech-3D</div>
         <div>Emissão: ${dateFormatted}</div>
         <div>ID: G3D-REP-${new Date().getFullYear()}</div>
       </div>
@@ -401,6 +402,7 @@ export default function ReportView({ projects }: ReportViewProps) {
           
           <div className="text-right mt-4 sm:mt-0 font-mono text-xs text-slate-600">
             <div className="font-bold text-slate-950 uppercase tracking-wider mb-1">PROPOSTA DE FATURAMENTO</div>
+            <div className="font-bold text-slate-900 mb-1">Firma Responsável: GeorgeFctech-3D</div>
             <div>Emissão: {new Date().toLocaleDateString('pt-BR')}</div>
             <div className="text-[10px] mt-1 text-slate-500">Documento ID: G3D-REP-{new Date().getFullYear()}</div>
           </div>

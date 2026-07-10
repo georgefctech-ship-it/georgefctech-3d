@@ -813,6 +813,7 @@ export default function ShoppingListView({
       <div class="header-left">
         <h1>GeorgeFctech 3D &bull; Gestão de Insumos</h1>
         <p>Relatório de Planejamento de Compras Comerciais</p>
+        <p style="margin-top: 6px; font-size: 11px; color: #cbd5e1; font-weight: bold;">Firma Responsável: GeorgeFctech-3D</p>
       </div>
       <div class="header-right">
         <h2>${selectedCompany.toUpperCase()}</h2>
@@ -1041,6 +1042,7 @@ export default function ShoppingListView({
           </div>
           <div className="text-right">
             <h3 className="text-sm font-bold uppercase tracking-wider text-indigo-700 font-mono">Relatório Comercial de Pedidos</h3>
+            <p className="text-[10px] text-slate-800 font-bold font-mono">Firma Responsável: GeorgeFctech-3D</p>
             <p className="text-[10px] text-slate-500 font-mono">Data: {new Date().toLocaleDateString('pt-BR')}</p>
           </div>
         </div>
@@ -1597,58 +1599,47 @@ export default function ShoppingListView({
                             </div>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-3">
-                            {/* Product Image Thumbnail */}
-                            <div className="w-12 h-12 rounded-lg overflow-hidden border border-slate-200 bg-slate-50 shrink-0 flex items-center justify-center shadow-3xs print:border print:border-slate-300">
-                              <img 
-                                src={getProductImage(item)} 
-                                alt={item.materialName} 
-                                className="w-full h-full object-cover"
+                          <div className="min-w-0 py-1">
+                            <span className={`font-bold text-sm leading-tight block ${
+                              item.checked ? 'text-slate-400 line-through font-semibold' : 'text-slate-900 font-sans'
+                            }`}>
+                              {item.materialName}
+                            </span>
+                            {item.barcode && (
+                              <div className="mt-0.5">
+                                <span className="inline-block font-mono text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded px-1.5 py-0.5 select-all dark:bg-indigo-950/40 dark:border-indigo-900">
+                                  Cód/Modelo: {item.barcode}
+                                </span>
+                              </div>
+                            )}
+                            {item.notes && (
+                              <p className={`text-xs mt-0.5 max-w-md truncate ${item.checked ? 'text-slate-400 line-through' : 'text-slate-500'}`}>
+                                {item.notes}
+                              </p>
+                            )}
+                            {item.purchaseLink ? (
+                              <a
+                                href={ensureAbsoluteUrl(item.purchaseLink, item.materialName)}
+                                target="_blank"
                                 referrerPolicy="no-referrer"
-                              />
-                            </div>
-                            <div className="min-w-0">
-                              <span className={`font-bold text-sm leading-tight block ${
-                                item.checked ? 'text-slate-400 line-through font-semibold' : 'text-slate-900 font-sans'
-                              }`}>
-                                {item.materialName}
-                              </span>
-                              {item.barcode && (
-                                <div className="mt-0.5">
-                                  <span className="inline-block font-mono text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded px-1.5 py-0.5 select-all dark:bg-indigo-950/40 dark:border-indigo-900">
-                                    Cód/Modelo: {item.barcode}
-                                  </span>
-                                </div>
-                              )}
-                              {item.notes && (
-                                <p className={`text-xs mt-0.5 max-w-md truncate ${item.checked ? 'text-slate-400 line-through' : 'text-slate-500'}`}>
-                                  {item.notes}
-                                </p>
-                              )}
-                              {item.purchaseLink ? (
-                                <a
-                                  href={ensureAbsoluteUrl(item.purchaseLink, item.materialName)}
-                                  target="_blank"
-                                  referrerPolicy="no-referrer"
-                                  rel="noreferrer"
-                                  className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-650 hover:text-indigo-800 mt-1 hover:underline print:text-blue-600 print:underline"
-                                >
-                                  <ExternalLink className="w-3.5 h-3.5 no-print" />
-                                  <span>Acessar Link de Compra</span>
-                                </a>
-                              ) : (
-                                <a
-                                  href={ensureAbsoluteUrl(undefined, item.materialName)}
-                                  target="_blank"
-                                  referrerPolicy="no-referrer"
-                                  rel="noreferrer"
-                                  className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-450 hover:text-indigo-700 mt-1 hover:underline print:text-blue-600 print:underline"
-                                >
-                                  <ExternalLink className="w-3.5 h-3.5 no-print" />
-                                  <span>Pesquisar para Comprar</span>
-                                </a>
-                              )}
-                            </div>
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-650 hover:text-indigo-800 mt-1 hover:underline print:text-blue-600 print:underline"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5 no-print" />
+                                <span>Acessar Link de Compra</span>
+                              </a>
+                            ) : (
+                              <a
+                                href={ensureAbsoluteUrl(undefined, item.materialName)}
+                                target="_blank"
+                                referrerPolicy="no-referrer"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-450 hover:text-indigo-700 mt-1 hover:underline print:text-blue-600 print:underline"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5 no-print" />
+                                <span>Pesquisar para Comprar</span>
+                              </a>
+                            )}
                           </div>
                         )}
                       </td>
