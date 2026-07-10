@@ -295,7 +295,8 @@ export default function ShoppingListView({
   const generateReport = () => {
     if (shopping.length === 0) return;
 
-    const selectedCompany = filterCompany !== 'Todos' ? filterCompany : 'GERAL / GeorgeFctech-3D';
+    const defaultCompanyLabel = userRole === 'colaborador' ? 'GeorgeFctech Comercial' : 'GeorgeFctech-3D';
+    const selectedCompany = filterCompany !== 'Todos' ? filterCompany : `GERAL / ${defaultCompanyLabel}`;
     const reportTitle = `${selectedCompany.toUpperCase()} - PEDIDO COMERCIAL`;
     const dateFormatted = new Date().toLocaleDateString('pt-BR');
     const timeFormatted = new Date().toLocaleTimeString('pt-BR');
@@ -414,17 +415,17 @@ export default function ShoppingListView({
       <tr style="height: 100pt;">
         <td colspan="7" class="title-banner" style="background-color: #0f172a; color: #ffffff; padding: 25px 30px; border-radius: 12px; border: 1px solid #0f172a; height: 100pt; vertical-align: middle;">
           <div style="font-size: 10pt; font-weight: bold; letter-spacing: 0.1em; text-transform: uppercase; color: #818cf8; margin-bottom: 6px;">
-            GeorgeFctech 3D &bull; Gestão de Insumos
+            ${userRole === 'colaborador' ? 'GeorgeFctech Comercial &bull; Pedidos' : 'GeorgeFctech 3D &bull; Gestão de Insumos'}
           </div>
           <div style="font-size: 20pt; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 10px; color: #ffffff;">
-            ${reportTitle}
+            ${userRole === 'colaborador' ? 'Pedido de Compras Comercial' : reportTitle}
           </div>
           <div style="font-size: 10pt; color: #94a3b8; font-family: 'Segoe UI', sans-serif;">
             <span>🕒 Gerado em: <strong style="color: #cbd5e1;">${dateFormatted} às ${timeFormatted}</strong></span>
             &nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;&nbsp;&nbsp;&nbsp;
-            <span>🏢 Empresa: <strong style="color: #cbd5e1;">${selectedCompany}</strong></span>
+            <span>👤 Responsável: <strong style="color: #cbd5e1;">${requestedBy || 'Colaborador'}</strong></span>
             &nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;&nbsp;&nbsp;&nbsp;
-            <span>📦 Total de Itens: <strong style="color: #cbd5e1;">${shopping.length}</strong></span>
+            <span>🏢 Empresa: <strong style="color: #cbd5e1;">${userRole === 'colaborador' ? (company || 'GeorgeFctech Comercial') : selectedCompany}</strong></span>
           </div>
         </td>
       </tr>
@@ -570,7 +571,8 @@ export default function ShoppingListView({
   const downloadHtmlReport = () => {
     if (shopping.length === 0) return;
 
-    const selectedCompany = filterCompany !== 'Todos' ? filterCompany : 'GERAL / GeorgeFctech-3D';
+    const defaultCompanyLabel = userRole === 'colaborador' ? 'GeorgeFctech Comercial' : 'GeorgeFctech-3D';
+    const selectedCompany = filterCompany !== 'Todos' ? filterCompany : `GERAL / ${defaultCompanyLabel}`;
     const reportTitle = `${selectedCompany.toUpperCase()} - PEDIDO COMERCIAL`;
     const dateFormatted = new Date().toLocaleDateString('pt-BR');
     const timeFormatted = new Date().toLocaleTimeString('pt-BR');
@@ -812,12 +814,16 @@ export default function ShoppingListView({
   <div class="container">
     <div class="header-banner">
       <div class="header-left">
-        <h1>GeorgeFctech 3D &bull; Gestão de Insumos</h1>
-        <p>Relatório de Planejamento de Compras Comerciais</p>
+        <h1>${userRole === 'colaborador' ? 'GeorgeFctech Comercial &bull; Pedidos' : 'GeorgeFctech 3D &bull; Gestão de Insumos'}</h1>
+        <p>${userRole === 'colaborador' ? 'Pedido de Compras Comercial' : 'Relatório de Planejamento de Compras Comerciais'}</p>
+        ${userRole === 'colaborador' ? `
+        <p style="margin-top: 6px; font-size: 11px; color: #cbd5e1; font-weight: bold;">Responsável: ${requestedBy || 'Colaborador'} &bull; Empresa: ${company || 'GeorgeFctech Comercial'}</p>
+        ` : `
         <p style="margin-top: 6px; font-size: 11px; color: #cbd5e1; font-weight: bold;">Firma Responsável: GeorgeFctech-3D</p>
+        `}
       </div>
       <div class="header-right">
-        <h2>${selectedCompany.toUpperCase()}</h2>
+        <h2>${userRole === 'colaborador' ? (company || 'GeorgeFctech Comercial').toUpperCase() : selectedCompany.toUpperCase()}</h2>
         <p>Gerado em: ${dateFormatted} às ${timeFormatted}</p>
       </div>
     </div>
@@ -911,11 +917,11 @@ export default function ShoppingListView({
     <div class="footer">
       <div class="signature-box">
         <p style="margin: 0 0 10px 0; font-size: 12px; color: #64748b; text-align: left;">Assinatura do Responsável Técnico:</p>
-        <div class="signature-line">Gestão de Suprimentos - GeorgeFctech-3D</div>
+        <div class="signature-line">${userRole === 'colaborador' ? requestedBy || 'Colaborador' : 'Gestão de Suprimentos - GeorgeFctech-3D'}</div>
       </div>
       <div class="signature-box">
         <p style="margin: 0 0 10px 0; font-size: 12px; color: #64748b; text-align: left;">Liberação e Aprovação de Custos:</p>
-        <div class="signature-line">Departamento Financeiro / Comercial</div>
+        <div class="signature-line">${userRole === 'colaborador' ? company || 'GeorgeFctech Comercial' : 'Departamento Financeiro / Comercial'}</div>
       </div>
     </div>
   </div>
@@ -963,11 +969,16 @@ export default function ShoppingListView({
     const list = new Set<string>();
     shopping.forEach(item => {
       if (item.company?.trim()) {
-        list.add(item.company.trim());
+        const companyName = item.company.trim();
+        if (userRole === 'colaborador' && (companyName.toLowerCase() === 'georgefctech-3d' || companyName.toLowerCase().includes('geral'))) {
+          // Skip admin-specific company name in collaborator view
+          return;
+        }
+        list.add(companyName);
       }
     });
     return Array.from(list);
-  }, [shopping]);
+  }, [shopping, userRole]);
 
   // Filtering Logic
   const filteredShopping = shopping.filter(item => {
@@ -1043,7 +1054,14 @@ export default function ShoppingListView({
           </div>
           <div className="text-right">
             <h3 className="text-sm font-bold uppercase tracking-wider text-indigo-700 font-mono">Relatório Comercial de Pedidos</h3>
-            <p className="text-[10px] text-slate-800 font-bold font-mono">Firma Responsável: GeorgeFctech-3D</p>
+            {userRole === 'colaborador' ? (
+              <>
+                <p className="text-[10px] text-slate-800 font-bold font-mono">Responsável: {requestedBy || 'Colaborador'}</p>
+                <p className="text-[10px] text-slate-800 font-bold font-mono">Empresa: {company || 'GeorgeFctech Comercial'}</p>
+              </>
+            ) : (
+              <p className="text-[10px] text-slate-800 font-bold font-mono">Firma Responsável: GeorgeFctech-3D</p>
+            )}
             <p className="text-[10px] text-slate-500 font-mono">Data: {new Date().toLocaleDateString('pt-BR')}</p>
           </div>
         </div>
@@ -1477,7 +1495,7 @@ export default function ShoppingListView({
             className="text-xs font-semibold bg-white border border-slate-200 rounded-md py-1 px-2.5 focus:outline-none focus:border-indigo-500 text-slate-800"
           >
             <option value="Todos">Todas</option>
-            <option value="georgefctech-3d">GeorgeFctech-3D</option>
+            {userRole !== 'colaborador' && <option value="georgefctech-3d">GeorgeFctech-3D</option>}
             {companiesList.filter(c => c.toLowerCase() !== 'georgefctech-3d').map(c => (
               <option key={c} value={c}>{c}</option>
             ))}
