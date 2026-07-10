@@ -294,461 +294,273 @@ export default function ShoppingListView({
     if (shopping.length === 0) return;
 
     const selectedCompany = filterCompany !== 'Todos' ? filterCompany : 'GERAL / GeorgeFctech-3D';
-    const reportTitle = `${selectedCompany.toUpperCase()} - RELATÓRIO COMERCIAL DE PEDIDOS`;
+    const reportTitle = `${selectedCompany.toUpperCase()} - PEDIDO COMERCIAL`;
     const dateFormatted = new Date().toLocaleDateString('pt-BR');
     const timeFormatted = new Date().toLocaleTimeString('pt-BR');
 
-    const htmlContent = `<!DOCTYPE html>
-<html lang="pt-BR">
+    // Excel-compatible HTML Spreadsheet 2003 wrapper that preserves rich styling, gridlines, and hyperlinks
+    const excelContent = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:x="urn:schemas-microsoft-com:office:excel"
+      xmlns="http://www.w3.org/TR/REC-html40">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${reportTitle}</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <!--[if gte mso 9]>
+  <xml>
+    <x:ExcelWorkbook>
+      <x:ExcelWorksheets>
+        <x:ExcelWorksheet>
+          <x:Name>Pedido Comercial</x:Name>
+          <x:WorksheetOptions>
+            <x:DisplayGridlines/>
+          </x:WorksheetOptions>
+        </x:ExcelWorksheet>
+      </x:ExcelWorksheets>
+    </x:ExcelWorkbook>
+  </xml>
+  <![endif]-->
   <style>
-    :root {
-      --primary: #4f46e5;
-      --primary-hover: #4338ca;
-      --secondary: #0f172a;
-      --success: #059669;
-      --warning: #d97706;
-      --slate-50: #f8fafc;
-      --slate-100: #f1f5f9;
-      --slate-200: #e2e8f0;
-      --slate-300: #cbd5e1;
-      --slate-700: #334155;
-      --slate-800: #1e293b;
-      --slate-900: #0f172a;
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
     body {
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      margin: 0;
+      padding: 30px;
       background-color: #f8fafc;
-      color: var(--slate-900);
-      line-height: 1.5;
-      padding: 40px 20px;
     }
-
-    .container {
-      max-width: 1200px;
+    .wrapper {
+      max-width: 1150px;
       margin: 0 auto;
-      background: #ffffff;
-      border-radius: 20px;
-      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
-      border: 1px solid var(--slate-200);
-      overflow: hidden;
     }
-
-    .header {
-      background: linear-gradient(135deg, var(--slate-900) 0%, #1e1b4b 100%);
+    table.main-table {
+      width: 1150px;
+      border-collapse: collapse;
+      table-layout: fixed;
+      background-color: #ffffff;
+    }
+    .title-banner {
+      background: #0f172a;
+      background-image: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
       color: #ffffff;
-      padding: 40px;
-      position: relative;
-    }
-
-    .header-logo {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      font-weight: 800;
-      font-size: 14px;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: #a5b4fc;
-      margin-bottom: 15px;
-    }
-
-    .header-title {
-      font-size: 28px;
-      font-weight: 800;
-      letter-spacing: -0.025em;
-      margin-bottom: 10px;
-      line-height: 1.2;
-    }
-
-    .header-meta {
-      font-size: 13px;
-      color: #cbd5e1;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 20px;
-      margin-top: 20px;
-      font-family: 'JetBrains Mono', monospace;
-    }
-
-    .header-meta span {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .stats-grid {
-      display: grid;
-      grid-template-cols: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 20px;
-      padding: 30px 40px;
-      background-color: var(--slate-50);
-      border-bottom: 1px solid var(--slate-200);
-    }
-
-    .stat-card {
-      background: #ffffff;
-      padding: 20px;
+      padding: 30px;
       border-radius: 12px;
-      border: 1px solid var(--slate-200);
-      display: flex;
-      flex-direction: column;
+      border: 1px solid #0f172a;
     }
-
-    .stat-label {
-      font-size: 11px;
+    .stat-card {
+      background-color: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 16px;
+      vertical-align: top;
+    }
+    .stat-title {
+      font-size: 9pt;
+      font-weight: bold;
       text-transform: uppercase;
-      font-weight: 700;
-      color: var(--slate-700);
-      letter-spacing: 0.05em;
+      color: #64748b;
       margin-bottom: 6px;
     }
-
     .stat-value {
-      font-size: 24px;
+      font-size: 18pt;
       font-weight: 800;
-      color: var(--slate-900);
     }
-
-    .stat-value.highlight {
-      color: var(--primary);
-    }
-
-    .table-container {
-      padding: 40px;
-      overflow-x: auto;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      text-align: left;
-    }
-
     th {
-      font-size: 11px;
-      text-transform: uppercase;
-      font-weight: 700;
-      color: var(--slate-700);
-      letter-spacing: 0.05em;
-      padding: 16px 20px;
-      border-bottom: 2px solid var(--slate-200);
-      background-color: var(--slate-50);
-    }
-
-    td {
-      padding: 20px;
-      border-bottom: 1px solid var(--slate-100);
-      font-size: 14px;
+      background-color: #1e1b4b;
+      color: #ffffff;
+      font-weight: bold;
+      font-size: 11pt;
+      border: 1px solid #cbd5e1;
+      text-align: left;
+      padding: 12px 10px;
+      height: 30pt;
       vertical-align: middle;
     }
-
-    tr:hover td {
-      background-color: rgba(79, 70, 229, 0.01);
+    td {
+      border: 1px solid #cbd5e1;
+      padding: 12px 10px;
+      font-size: 10pt;
+      color: #1e293b;
+      vertical-align: middle;
     }
-
-    .product-cell {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-
-    .product-img {
-      width: 56px;
-      height: 56px;
-      border-radius: 10px;
-      object-fit: cover;
-      background-color: var(--slate-100);
-      border: 1px solid var(--slate-200);
-      flex-shrink: 0;
-    }
-
-    .product-info {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .product-name {
-      font-weight: 700;
-      color: var(--slate-900);
-    }
-
-    .product-notes {
-      font-size: 12px;
-      color: var(--slate-700);
-    }
-
-    .product-barcode {
-      display: inline-block;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 10px;
-      background-color: #eef2ff;
-      color: #4338ca;
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-weight: bold;
-      width: fit-content;
-      margin-top: 2px;
-    }
-
     .badge {
-      display: inline-flex;
-      align-items: center;
+      display: inline-block;
       padding: 4px 10px;
-      border-radius: 9999px;
-      font-size: 11px;
-      font-weight: 700;
+      border-radius: 12px;
+      font-size: 8.5pt;
+      font-weight: bold;
       text-transform: uppercase;
+      text-align: center;
     }
-
-    .badge-filamento { background-color: #eef2ff; color: #4338ca; }
-    .badge-reparacao { background-color: #fff1f2; color: #be123c; }
-    .badge-insumos { background-color: #f0fdfa; color: #0f766e; }
-    .badge-outros { background-color: #f1f5f9; color: #334155; }
-
-    .badge-pending { background-color: #fef3c7; color: #d97706; }
-    .badge-bought { background-color: #d1fae5; color: #059669; }
-
-    .price-col {
-      font-family: 'JetBrains Mono', monospace;
-      font-weight: 600;
-    }
-
-    .total-price {
-      font-family: 'JetBrains Mono', monospace;
-      font-weight: 700;
-      color: var(--primary);
-    }
-
-    .action-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      background-color: var(--primary);
-      color: #ffffff;
-      padding: 8px 16px;
-      border-radius: 8px;
-      font-size: 12px;
-      font-weight: 700;
-      text-decoration: none;
-      transition: background-color 0.15s ease;
-      text-transform: uppercase;
-      letter-spacing: 0.02em;
-    }
-
-    .action-btn:hover {
-      background-color: var(--primary-hover);
-    }
-
-    .action-btn.secondary {
-      background-color: var(--slate-100);
-      color: var(--slate-700);
-      border: 1px solid var(--slate-200);
-    }
-
-    .action-btn.secondary:hover {
-      background-color: var(--slate-200);
-    }
-
-    .footer {
-      background-color: var(--slate-50);
-      padding: 30px 40px;
-      border-top: 1px solid var(--slate-200);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 12px;
-      color: var(--slate-700);
-    }
-
-    .print-btn {
-      background-color: var(--slate-800);
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 8px;
-      font-weight: 700;
-      cursor: pointer;
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      transition: opacity 0.15s;
-    }
-
-    .print-btn:hover {
-      opacity: 0.9;
-    }
-
-    @media print {
-      body {
-        background-color: #ffffff;
-        padding: 0;
-      }
-      .container {
-        box-shadow: none;
-        border: none;
-      }
-      .print-btn {
-        display: none;
-      }
-      .action-btn {
-        border: 1px solid var(--slate-300);
-        background: transparent !important;
-        color: var(--slate-900) !important;
-        font-weight: normal;
-        text-decoration: underline;
-      }
-    }
-
-    @media (max-width: 768px) {
-      .stats-grid {
-        grid-template-cols: 1fr;
-        padding: 20px;
-      }
-      .table-container {
-        padding: 10px;
-      }
-      td, th {
-        padding: 12px 10px;
-      }
-      .header {
-        padding: 24px;
-      }
-      .header-title {
-        font-size: 20px;
-      }
+    .link-btn {
+      color: #4f46e5;
+      font-weight: bold;
+      text-decoration: underline;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <!-- Header -->
-    <div class="header">
-      <div class="header-logo">
-        <svg style="width:16px;height:16px" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4"></path>
-        </svg>
-        GeorgeFctech 3D - Gestor de Suprimentos
-      </div>
-      <h1 class="header-title">${reportTitle}</h1>
-      <div class="header-meta">
-        <span>🕒 Gerado em: ${dateFormatted} às ${timeFormatted}</span>
-        <span>🏢 Empresa: ${selectedCompany}</span>
-        <span>📦 Total de Itens: ${shopping.length}</span>
-      </div>
-    </div>
+  <div class="wrapper">
+    <table class="main-table" style="width: 1150px; table-layout: fixed; border-collapse: collapse;">
+      <colgroup>
+        <col width="380" style="width: 380px;" />
+        <col width="140" style="width: 140px;" />
+        <col width="60"  style="width: 60px;" />
+        <col width="120" style="width: 120px;" />
+        <col width="130" style="width: 130px;" />
+        <col width="110" style="width: 110px;" />
+        <col width="210" style="width: 210px;" />
+      </colgroup>
 
-    <!-- Stats summary cards -->
-    <div class="stats-grid">
-      <div class="stat-card">
-        <span class="stat-label">Custo Estimado Geral</span>
-        <span class="stat-value highlight">R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-      </div>
-      <div class="stat-card">
-        <span class="stat-label">Itens Pendentes</span>
-        <span class="stat-value">${shopping.filter(i => !i.checked).length} de ${shopping.length}</span>
-      </div>
-      <div class="stat-card">
-        <span class="stat-label">Itens Adquiridos</span>
-        <span class="stat-value" style="color: var(--success);">${shopping.filter(i => i.checked).length}</span>
-      </div>
-    </div>
+      <!-- 1. HEADER BANNER ROW -->
+      <tr style="height: 100pt;">
+        <td colspan="7" class="title-banner" style="background-color: #0f172a; color: #ffffff; padding: 25px 30px; border-radius: 12px; border: 1px solid #0f172a; height: 100pt; vertical-align: middle;">
+          <div style="font-size: 10pt; font-weight: bold; letter-spacing: 0.1em; text-transform: uppercase; color: #818cf8; margin-bottom: 6px;">
+            GeorgeFctech 3D &bull; Gestão de Insumos
+          </div>
+          <div style="font-size: 20pt; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 10px; color: #ffffff;">
+            ${reportTitle}
+          </div>
+          <div style="font-size: 10pt; color: #94a3b8; font-family: 'Segoe UI', sans-serif;">
+            <span>🕒 Gerado em: <strong style="color: #cbd5e1;">${dateFormatted} às ${timeFormatted}</strong></span>
+            &nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;&nbsp;&nbsp;&nbsp;
+            <span>🏢 Empresa: <strong style="color: #cbd5e1;">${selectedCompany}</strong></span>
+            &nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;&nbsp;&nbsp;&nbsp;
+            <span>📦 Total de Itens: <strong style="color: #cbd5e1;">${shopping.length}</strong></span>
+          </div>
+        </td>
+      </tr>
 
-    <!-- Table content -->
-    <div class="table-container">
-      <table>
-        <thead>
-          <tr>
-            <th style="width: 45%;">Produto / Material</th>
-            <th style="width: 15%;">Categoria</th>
-            <th style="width: 10%; text-align: center;">Qtd</th>
-            <th style="width: 15%; text-align: right;">Unitário</th>
-            <th style="width: 15%; text-align: right;">Custo Total</th>
-            <th style="width: 15%; text-align: center;">Status</th>
-            <th style="width: 15%; text-align: right;">Link de Compra</th>
+      <!-- Spacing Row -->
+      <tr style="height: 15pt;"><td colspan="7" style="border: none; height: 15pt;"></td></tr>
+
+      <!-- 2. STATS CARD ROW (Implemented as nested table for absolute side-by-side reliability) -->
+      <tr style="height: 65pt;">
+        <td colspan="7" style="border: none; padding: 0; height: 65pt;">
+          <table style="width: 100%; border-collapse: collapse; table-layout: fixed;">
+            <tr>
+              <!-- Card 1 -->
+              <td class="stat-card" style="width: 32%; background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px; vertical-align: top;">
+                <div class="stat-title" style="font-size: 9pt; font-weight: bold; text-transform: uppercase; color: #64748b; margin-bottom: 6px;">Custo Previsto Geral</div>
+                <div class="stat-value" style="font-size: 18pt; font-weight: 800; color: #4f46e5;">R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              </td>
+              <!-- Spacing -->
+              <td style="width: 2%; border: none;"></td>
+              <!-- Card 2 -->
+              <td class="stat-card" style="width: 32%; background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px; vertical-align: top;">
+                <div class="stat-title" style="font-size: 9pt; font-weight: bold; text-transform: uppercase; color: #64748b; margin-bottom: 6px;">Itens Pendentes</div>
+                <div class="stat-value" style="font-size: 18pt; font-weight: 800; color: #b45309;">${shopping.filter(i => !i.checked).length} de ${shopping.length}</div>
+              </td>
+              <!-- Spacing -->
+              <td style="width: 2%; border: none;"></td>
+              <!-- Card 3 -->
+              <td class="stat-card" style="width: 32%; background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px; vertical-align: top;">
+                <div class="stat-title" style="font-size: 9pt; font-weight: bold; text-transform: uppercase; color: #64748b; margin-bottom: 6px;">Itens Adquiridos</div>
+                <div class="stat-value" style="font-size: 18pt; font-weight: 800; color: #059669;">${shopping.filter(i => i.checked).length}</div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+
+      <!-- Spacing Row -->
+      <tr style="height: 20pt;"><td colspan="7" style="border: none; height: 20pt;"></td></tr>
+
+      <!-- 3. DATA TABLE HEADERS -->
+      <tr style="height: 32pt;">
+        <th style="width: 380px; background-color: #1e1b4b; color: #ffffff; font-weight: bold; border: 1px solid #cbd5e1; padding: 12px 10px; font-size: 11pt; vertical-align: middle; text-align: left;">Material / Produto</th>
+        <th style="width: 140px; background-color: #1e1b4b; color: #ffffff; font-weight: bold; border: 1px solid #cbd5e1; padding: 12px 10px; font-size: 11pt; vertical-align: middle; text-align: center;">Categoria</th>
+        <th style="width: 60px; background-color: #1e1b4b; color: #ffffff; font-weight: bold; border: 1px solid #cbd5e1; padding: 12px 10px; font-size: 11pt; vertical-align: middle; text-align: center;">Qtd</th>
+        <th style="width: 120px; background-color: #1e1b4b; color: #ffffff; font-weight: bold; border: 1px solid #cbd5e1; padding: 12px 10px; font-size: 11pt; vertical-align: middle; text-align: right;">Unitário</th>
+        <th style="width: 130px; background-color: #1e1b4b; color: #ffffff; font-weight: bold; border: 1px solid #cbd5e1; padding: 12px 10px; font-size: 11pt; vertical-align: middle; text-align: right;">Custo Total</th>
+        <th style="width: 110px; background-color: #1e1b4b; color: #ffffff; font-weight: bold; border: 1px solid #cbd5e1; padding: 12px 10px; font-size: 11pt; vertical-align: middle; text-align: center;">Status</th>
+        <th style="width: 210px; background-color: #1e1b4b; color: #ffffff; font-weight: bold; border: 1px solid #cbd5e1; padding: 12px 10px; font-size: 11pt; vertical-align: middle; text-align: center;">Link de Acesso</th>
+      </tr>
+
+      <!-- 4. DATA ROWS -->
+      ${shopping.map((item, index) => {
+        const itemTotal = item.qtyNeeded * item.estUnitCost;
+        const absoluteUrl = ensureAbsoluteUrl(item.purchaseLink, item.materialName);
+        
+        const statusText = item.checked ? 'Comprado' : 'Pendente';
+        const statusColor = item.checked ? '#047857' : '#b45309';
+        const statusBg = item.checked ? '#ecfdf5' : '#fffbeb';
+        const statusBorder = item.checked ? '#a7f3d0' : '#fde68a';
+        
+        const categoryLabel = item.category || 'Outros';
+        
+        // Custom Category styling based on standard modern palette
+        let catColor = '#334155';
+        let catBg = '#f1f5f9';
+        let catBorder = '#e2e8f0';
+        if (categoryLabel === 'Filamento') {
+          catColor = '#4338ca';
+          catBg = '#eef2ff';
+          catBorder = '#c7d2fe';
+        } else if (categoryLabel === 'Peças de Reposição') {
+          catColor = '#b91c1c';
+          catBg = '#fef2f2';
+          catBorder = '#fecaca';
+        } else if (categoryLabel === 'Acessórios/Insumos') {
+          catColor = '#0f766e';
+          catBg = '#f0fdfa';
+          catBorder = '#ccfbf1';
+        }
+
+        const rowBg = index % 2 === 0 ? '#ffffff' : '#f8fafc';
+        const details = item.notes ? `<div style="font-size: 8.5pt; color: #64748b; font-weight: normal; margin-top: 4px; font-style: italic;">Obs: ${item.notes}</div>` : '';
+        const barcodeText = item.barcode ? `<div style="font-size: 8.5pt; color: #4338ca; font-weight: bold; margin-top: 2px;">Cód/Modelo: ${item.barcode}</div>` : '';
+
+        return `
+          <tr style="height: auto; background-color: ${rowBg};">
+            <td style="width: 380px; border: 1px solid #cbd5e1; text-align: left; padding: 12px 10px; font-weight: bold; color: #0f172a; vertical-align: middle;">
+              <div style="font-size: 10.5pt; color: #0f172a;">${item.materialName}</div>
+              ${barcodeText}
+              ${details}
+            </td>
+            <td style="width: 140px; border: 1px solid #cbd5e1; text-align: center; padding: 12px 10px; vertical-align: middle;">
+              <span class="badge" style="display: inline-block; padding: 4px 8px; border-radius: 12px; font-size: 8pt; font-weight: bold; text-transform: uppercase; background-color: ${catBg}; color: ${catColor}; border: 1px solid ${catBorder};">
+                ${categoryLabel}
+              </span>
+            </td>
+            <td style="width: 60px; border: 1px solid #cbd5e1; text-align: center; padding: 12px 10px; font-weight: bold; color: #0f172a; vertical-align: middle; font-size: 11pt;">
+              ${item.qtyNeeded}
+            </td>
+            <td style="width: 120px; border: 1px solid #cbd5e1; text-align: right; padding: 12px 10px; color: #1e293b; vertical-align: middle; font-family: Courier New, monospace; font-weight: bold;">
+              R$ ${item.estUnitCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </td>
+            <td style="width: 130px; border: 1px solid #cbd5e1; text-align: right; padding: 12px 10px; font-weight: bold; color: #4f46e5; vertical-align: middle; font-family: Courier New, monospace;">
+              R$ ${itemTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </td>
+            <td style="width: 110px; border: 1px solid #cbd5e1; text-align: center; padding: 12px 10px; vertical-align: middle;">
+              <span class="badge" style="display: inline-block; padding: 4px 8px; border-radius: 12px; font-size: 8.5pt; font-weight: bold; text-transform: uppercase; background-color: ${statusBg}; color: ${statusColor}; border: 1px solid ${statusBorder};">
+                ${statusText}
+              </span>
+            </td>
+            <td style="width: 210px; border: 1px solid #cbd5e1; text-align: center; padding: 12px 10px; vertical-align: middle;">
+              <a href="${absoluteUrl}" class="link-btn" style="color: #4f46e5; text-decoration: underline; font-weight: bold; font-size: 9.5pt;">Acessar Link</a>
+            </td>
           </tr>
-        </thead>
-        <tbody>
-          ${shopping.map(item => {
-            const itemTotal = item.qtyNeeded * item.estUnitCost;
-            const absoluteUrl = ensureAbsoluteUrl(item.purchaseLink, item.materialName);
-            const isCustomLink = !!item.purchaseLink;
-            const itemCategoryClass = 
-              item.category === 'Filamento' ? 'badge-filamento' :
-              item.category === 'Peças de Reposição' ? 'badge-reparacao' :
-              item.category === 'Acessórios/Insumos' ? 'badge-insumos' : 'badge-outros';
+        `;
+      }).join('')}
 
-            return `
-              <tr>
-                <td>
-                  <div class="product-cell">
-                    <img class="product-img" src="${getProductImage(item)}" alt="${item.materialName}" loading="lazy" />
-                    <div class="product-info">
-                      <span class="product-name">${item.materialName}</span>
-                      ${item.notes ? `<span class="product-notes">${item.notes}</span>` : ''}
-                      ${item.barcode ? `<span class="product-barcode">Cód/Modelo: ${item.barcode}</span>` : ''}
-                    </div>
-                  </div>
-                </td>
-                <td>
-                  <span class="badge ${itemCategoryClass}">${item.category}</span>
-                </td>
-                <td style="text-align: center; font-weight: 600;">
-                  ${item.qtyNeeded}
-                </td>
-                <td style="text-align: right;" class="price-col">
-                  R$ ${item.estUnitCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </td>
-                <td style="text-align: right;" class="total-price">
-                  R$ ${itemTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </td>
-                <td style="text-align: center;">
-                  <span class="badge ${item.checked ? 'badge-bought' : 'badge-pending'}">
-                    ${item.checked ? 'Comprado' : 'Pendente'}
-                  </span>
-                </td>
-                <td style="text-align: right;">
-                  <a href="${absoluteUrl}" target="_blank" class="action-btn ${isCustomLink ? '' : 'secondary'}">
-                    ${isCustomLink ? 'Comprar Link' : 'Pesquisar'}
-                  </a>
-                </td>
-              </tr>
-            `;
-          }).join('')}
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Footer -->
-    <div class="footer">
-      <div>
-        <strong>GeorgeFctech 3D</strong> - Impressões 3D & Organização Comercial de Insumos
-      </div>
-      <div>
-        <button class="print-btn" onclick="window.print()">Imprimir / Salvar PDF</button>
-      </div>
-    </div>
+      <!-- 5. VALOR TOTAL ROW -->
+      <tr style="height: 35pt; background-color: #f1f5f9;">
+        <td colspan="4" style="border: 1px solid #cbd5e1; text-align: right; font-weight: bold; font-size: 11pt; color: #1e293b; padding: 12px 10px; vertical-align: middle;">
+          VALOR TOTAL ESTIMADO DO PEDIDO:
+        </td>
+        <td style="border: 1px solid #cbd5e1; text-align: right; font-weight: bold; font-size: 12pt; color: #4f46e5; padding: 12px 10px; vertical-align: middle; font-family: Courier New, monospace;">
+          R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </td>
+        <td colspan="2" style="border: 1px solid #cbd5e1; background-color: #f1f5f9; vertical-align: middle;"></td>
+      </tr>
+    </table>
   </div>
 </body>
 </html>`;
 
-    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8;' });
+    // Download compiled Excel Spreadsheet
+    const blob = new Blob([excelContent], { type: 'application/vnd.ms-excel;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute('href', url);
-    downloadAnchor.setAttribute('download', `Relatorio_Compras_${new Date().toISOString().split('T')[0]}.html`);
+    downloadAnchor.setAttribute('download', `Pedido_Comercial_${new Date().toISOString().split('T')[0]}.xls`);
     downloadAnchor.click();
   };
 

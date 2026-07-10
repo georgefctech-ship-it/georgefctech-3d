@@ -74,146 +74,256 @@ export default function SettingsView({
   const [newCollabRole, setNewCollabRole] = useState('colaborador_pendente');
 
   const fetchCollaborators = async () => {
-    const supabase = getSupabaseClient();
-    if (!supabase) return;
     setCollabLoading(true);
     setCollabError(null);
+    
+    // Check local storage users
+    const localUsersStr = localStorage.getItem('g3d_local_users') || '[]';
+    let localUsers: any[] = [];
     try {
-      const { data, error } = await supabase
-        .from('g3d_user_roles')
-        .select('*')
-        .order('email', { ascending: true });
-      if (error) throw error;
-      setCollaborators(data || []);
-    } catch (err: any) {
-      setCollabError(err.message || 'Erro ao carregar lista de colaboradores.');
-    } finally {
+      localUsers = JSON.parse(localUsersStr);
+    } catch (e) {
+      localUsers = [];
+    }
+
+    const supabase = getSupabaseClient();
+    if (supabase && hasSupabaseConfigured()) {
+      try {
+        const { data, error } = await supabase
+          .from('g3d_user_roles')
+          .select('*')
+          .order('email', { ascending: true });
+        if (error) throw error;
+        
+        // Merge Supabase users and any local users to display them nicely
+        const merged = [...(data || [])];
+        localUsers.forEach(lu => {
+          if (!merged.some(dbu => dbu.email?.toLowerCase() === lu.email?.toLowerCase())) {
+            merged.push(lu);
+          }
+        });
+        setCollaborators(merged);
+      } catch (err: any) {
+        console.warn("Erro ao buscar no Supabase, exibindo locais:", err);
+        setCollaborators(localUsers);
+      } finally {
+        setCollabLoading(false);
+      }
+    } else {
+      setCollaborators(localUsers);
       setCollabLoading(false);
     }
   };
 
   const handleApproveCollaborator = async (email: string) => {
-    const supabase = getSupabaseClient();
-    if (!supabase) return;
     setCollabLoading(true);
     setCollabError(null);
+    
+    // 1. Update in local storage
+    const localUsersStr = localStorage.getItem('g3d_local_users') || '[]';
+    let localUsers: any[] = [];
     try {
-      const { error } = await supabase
-        .from('g3d_user_roles')
-        .update({ role: 'colaborador' })
-        .eq('email', email);
-      if (error) throw error;
-      
-      setCollabSuccess(`Acesso do colaborador ${email} liberado com sucesso!`);
-      await fetchCollaborators();
-      setTimeout(() => setCollabSuccess(null), 3500);
-    } catch (err: any) {
-      setCollabError(err.message || 'Erro ao aprovar colaborador.');
-    } finally {
-      setCollabLoading(false);
+      localUsers = JSON.parse(localUsersStr);
+    } catch (e) {}
+    
+    localUsers = localUsers.map(u => {
+      if (u.email?.toLowerCase() === email.toLowerCase()) {
+        return { ...u, role: 'colaborador' };
+      }
+      return u;
+    });
+    localStorage.setItem('g3d_local_users', JSON.stringify(localUsers));
+
+    // 2. Update in Supabase
+    const supabase = getSupabaseClient();
+    if (supabase && hasSupabaseConfigured()) {
+      try {
+        const { error } = await supabase
+          .from('g3d_user_roles')
+          .update({ role: 'colaborador' })
+          .eq('email', email);
+        if (error) throw error;
+      } catch (err: any) {
+        console.error("Erro ao atualizar no Supabase:", err);
+      }
     }
+
+    setCollabSuccess(`Acesso do colaborador ${email} liberado com sucesso!`);
+    await fetchCollaborators();
+    setTimeout(() => setCollabSuccess(null), 3500);
+    setCollabLoading(false);
   };
 
   const handleBlockCollaborator = async (email: string) => {
-    const supabase = getSupabaseClient();
-    if (!supabase) return;
     setCollabLoading(true);
     setCollabError(null);
+
+    // 1. Update in local storage
+    const localUsersStr = localStorage.getItem('g3d_local_users') || '[]';
+    let localUsers: any[] = [];
     try {
-      const { error } = await supabase
-        .from('g3d_user_roles')
-        .update({ role: 'colaborador_pendente' })
-        .eq('email', email);
-      if (error) throw error;
-      
-      setCollabSuccess(`Acesso de ${email} suspenso/colocado em pendência.`);
-      await fetchCollaborators();
-      setTimeout(() => setCollabSuccess(null), 3500);
-    } catch (err: any) {
-      setCollabError(err.message || 'Erro ao suspender colaborador.');
-    } finally {
-      setCollabLoading(false);
+      localUsers = JSON.parse(localUsersStr);
+    } catch (e) {}
+
+    localUsers = localUsers.map(u => {
+      if (u.email?.toLowerCase() === email.toLowerCase()) {
+        return { ...u, role: 'colaborador_pendente' };
+      }
+      return u;
+    });
+    localStorage.setItem('g3d_local_users', JSON.stringify(localUsers));
+
+    // 2. Update in Supabase
+    const supabase = getSupabaseClient();
+    if (supabase && hasSupabaseConfigured()) {
+      try {
+        const { error } = await supabase
+          .from('g3d_user_roles')
+          .update({ role: 'colaborador_pendente' })
+          .eq('email', email);
+        if (error) throw error;
+      } catch (err: any) {
+        console.error("Erro ao suspender no Supabase:", err);
+      }
     }
+
+    setCollabSuccess(`Acesso de ${email} suspenso/colocado em pendência.`);
+    await fetchCollaborators();
+    setTimeout(() => setCollabSuccess(null), 3500);
+    setCollabLoading(false);
   };
 
   const handleChangeRole = async (email: string, newRole: string) => {
-    const supabase = getSupabaseClient();
-    if (!supabase) return;
     setCollabLoading(true);
     setCollabError(null);
+
+    // 1. Update in local storage
+    const localUsersStr = localStorage.getItem('g3d_local_users') || '[]';
+    let localUsers: any[] = [];
     try {
-      const { error } = await supabase
-        .from('g3d_user_roles')
-        .update({ role: newRole })
-        .eq('email', email);
-      if (error) throw error;
-      
-      setCollabSuccess(`Cargo de ${email} alterado para ${newRole === 'admin' ? 'Administrador' : (newRole === 'colaborador' ? 'Colaborador Ativo' : 'Pendente')}!`);
-      await fetchCollaborators();
-      setTimeout(() => setCollabSuccess(null), 3500);
-    } catch (err: any) {
-      setCollabError(err.message || 'Erro ao alterar cargo.');
-    } finally {
-      setCollabLoading(false);
+      localUsers = JSON.parse(localUsersStr);
+    } catch (e) {}
+
+    localUsers = localUsers.map(u => {
+      if (u.email?.toLowerCase() === email.toLowerCase()) {
+        return { ...u, role: newRole };
+      }
+      return u;
+    });
+    localStorage.setItem('g3d_local_users', JSON.stringify(localUsers));
+
+    // 2. Update in Supabase
+    const supabase = getSupabaseClient();
+    if (supabase && hasSupabaseConfigured()) {
+      try {
+        const { error } = await supabase
+          .from('g3d_user_roles')
+          .update({ role: newRole })
+          .eq('email', email);
+        if (error) throw error;
+      } catch (err: any) {
+        console.error("Erro ao alterar cargo no Supabase:", err);
+      }
     }
+
+    setCollabSuccess(`Cargo de ${email} alterado para ${newRole === 'admin' ? 'Administrador' : (newRole === 'colaborador' ? 'Colaborador Ativo' : 'Pendente')}!`);
+    await fetchCollaborators();
+    setTimeout(() => setCollabSuccess(null), 3500);
+    setCollabLoading(false);
   };
 
   const handleDeleteCollaborator = async (email: string) => {
     if (!window.confirm(`Tem certeza que deseja remover o colaborador ${email} do sistema?`)) {
       return;
     }
-    const supabase = getSupabaseClient();
-    if (!supabase) return;
     setCollabLoading(true);
     setCollabError(null);
+
+    // 1. Delete in local storage
+    const localUsersStr = localStorage.getItem('g3d_local_users') || '[]';
+    let localUsers: any[] = [];
     try {
-      const { error } = await supabase
-        .from('g3d_user_roles')
-        .delete()
-        .eq('email', email);
-      if (error) throw error;
-      
-      setCollabSuccess(`Cadastro de ${email} foi excluído do sistema!`);
-      await fetchCollaborators();
-      setTimeout(() => setCollabSuccess(null), 3500);
-    } catch (err: any) {
-      setCollabError(err.message || 'Erro ao deletar colaborador.');
-    } finally {
-      setCollabLoading(false);
+      localUsers = JSON.parse(localUsersStr);
+    } catch (e) {}
+
+    localUsers = localUsers.filter(u => u.email?.toLowerCase() !== email.toLowerCase());
+    localStorage.setItem('g3d_local_users', JSON.stringify(localUsers));
+
+    // 2. Delete in Supabase
+    const supabase = getSupabaseClient();
+    if (supabase && hasSupabaseConfigured()) {
+      try {
+        const { error } = await supabase
+          .from('g3d_user_roles')
+          .delete()
+          .eq('email', email);
+        if (error) throw error;
+      } catch (err: any) {
+        console.error("Erro ao deletar no Supabase:", err);
+      }
     }
+
+    setCollabSuccess(`Cadastro de ${email} foi excluído do sistema!`);
+    await fetchCollaborators();
+    setTimeout(() => setCollabSuccess(null), 3500);
+    setCollabLoading(false);
   };
 
   const handleAddCollaboratorDirectly = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCollabEmail.trim()) return;
-    const supabase = getSupabaseClient();
-    if (!supabase) return;
     setCollabLoading(true);
     setCollabError(null);
+
+    const emailVal = newCollabEmail.trim().toLowerCase();
+
+    // 1. Add/Upsert in local storage
+    const localUsersStr = localStorage.getItem('g3d_local_users') || '[]';
+    let localUsers: any[] = [];
     try {
-      const { error } = await supabase
-        .from('g3d_user_roles')
-        .upsert({
-          email: newCollabEmail.trim().toLowerCase(),
-          role: newCollabRole
-        });
-      if (error) throw error;
-      
-      setCollabSuccess(`Colaborador ${newCollabEmail} registrado diretamente no banco!`);
-      setNewCollabEmail('');
-      await fetchCollaborators();
-      setTimeout(() => setCollabSuccess(null), 3500);
-    } catch (err: any) {
-      setCollabError(err.message || 'Erro ao registrar colaborador diretamente.');
-    } finally {
-      setCollabLoading(false);
+      localUsers = JSON.parse(localUsersStr);
+    } catch (e) {}
+
+    const existingIdx = localUsers.findIndex(u => u.email?.toLowerCase() === emailVal);
+    if (existingIdx >= 0) {
+      localUsers[existingIdx] = { ...localUsers[existingIdx], role: newCollabRole };
+    } else {
+      localUsers.push({
+        email: emailVal,
+        username: emailVal.split('@')[0],
+        password: '123', // Default password for pre-added
+        role: newCollabRole
+      });
     }
+    localStorage.setItem('g3d_local_users', JSON.stringify(localUsers));
+
+    // 2. Update/Upsert in Supabase
+    const supabase = getSupabaseClient();
+    if (supabase && hasSupabaseConfigured()) {
+      try {
+        const { error } = await supabase
+          .from('g3d_user_roles')
+          .upsert({
+            email: emailVal,
+            role: newCollabRole,
+            username: emailVal.split('@')[0],
+            password: '123'
+          });
+        if (error) throw error;
+      } catch (err: any) {
+        console.error("Erro ao cadastrar diretamente no Supabase:", err);
+      }
+    }
+
+    setCollabSuccess(`Colaborador ${newCollabEmail} registrado diretamente no sistema!`);
+    setNewCollabEmail('');
+    await fetchCollaborators();
+    setTimeout(() => setCollabSuccess(null), 3500);
+    setCollabLoading(false);
   };
 
   useEffect(() => {
-    if (hasSupabaseConfigured()) {
-      fetchCollaborators();
-    }
+    fetchCollaborators();
   }, []);
 
   const handleSaveSupabase = async (e: React.FormEvent) => {
@@ -744,17 +854,15 @@ export default function SettingsView({
               </p>
             </div>
           </div>
-          {hasSupabaseConfigured() && (
-            <button
-              onClick={fetchCollaborators}
-              disabled={collabLoading}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-950 text-xs font-semibold rounded-lg border border-slate-200 transition disabled:opacity-50 cursor-pointer"
-              title="Recarregar lista"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${collabLoading ? 'animate-spin' : ''}`} />
-              Atualizar Lista
-            </button>
-          )}
+          <button
+            onClick={fetchCollaborators}
+            disabled={collabLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-950 text-xs font-semibold rounded-lg border border-slate-200 transition disabled:opacity-50 cursor-pointer"
+            title="Recarregar lista"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${collabLoading ? 'animate-spin' : ''}`} />
+            Atualizar Lista
+          </button>
         </div>
 
         {collabError && (
@@ -771,16 +879,16 @@ export default function SettingsView({
           </div>
         )}
 
-        {!hasSupabaseConfigured() ? (
-          <div className="p-8 text-center bg-slate-50 border border-dashed border-slate-200 rounded-lg">
-            <Database className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-            <h4 className="text-sm font-bold text-slate-700 mb-1">Módulo Cloud Desconectado</h4>
-            <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-              O controle de liberação de colaboradores só pode ser utilizado quando o banco de dados nuvem (Supabase) estiver configurado. Ative a sincronização na seção acima.
-            </p>
+        {!hasSupabaseConfigured() && (
+          <div className="p-3 mb-4 bg-indigo-50 border border-indigo-200 text-indigo-800 text-[11px] rounded-lg flex items-center gap-2">
+            <Database className="w-3.5 h-3.5 text-indigo-600 flex-shrink-0" />
+            <span>
+              <strong>Armazenamento Local Ativo:</strong> Seus colaboradores e aprovações estão salvos neste navegador. Ative a Sincronização Cloud acima se quiser usar banco na nuvem.
+            </span>
           </div>
-        ) : (
-          <div className="space-y-6">
+        )}
+
+        <div className="space-y-6">
             {/* FORMULÁRIO DE PRÉ-CADASTRO / REGISTRO DIRETO CO-LAB */}
             <form onSubmit={handleAddCollaboratorDirectly} className="bg-slate-50/50 p-4 border border-slate-200 rounded-lg">
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-705 mb-3 flex items-center gap-1.5">
@@ -947,7 +1055,6 @@ export default function SettingsView({
               </div>
             )}
           </div>
-        )}
       </div>
     </div>
   );

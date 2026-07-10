@@ -37,6 +37,12 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [supabaseActive, setSupabaseActive] = useState(false);
   
+  // Individual user registration states
+  const [isRegister, setIsRegister] = useState(false);
+  const [registerEmail, setRegisterEmail] = useState('');
+  const [registerUsername, setRegisterUsername] = useState('');
+  const [registerRole, setRegisterRole] = useState<'admin' | 'colaborador'>('colaborador');
+
   // Recovery/Forgot Password states
   const [email, setEmail] = useState('');
   const [isForgotPassword, setIsForgotPassword] = useState(false);
@@ -168,54 +174,239 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     }, 1500);
   };
 
+  const handleUserRegistration = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccessMsg(null);
+    setLoading(true);
+
+    const emailVal = registerEmail.trim().toLowerCase();
+    const usernameVal = registerUsername.trim();
+    const passwordVal = password;
+    const confirmPasswordVal = confirmPassword;
+
+    if (!emailVal || !usernameVal || !passwordVal) {
+      setError('Por favor, preencha todos os campos obrigatórios.');
+      setLoading(false);
+      return;
+    }
+
+    if (passwordVal.length < 4) {
+      setError('A senha deve conter pelo menos 4 caracteres.');
+      setLoading(false);
+      return;
+    }
+
+    if (passwordVal !== confirmPasswordVal) {
+      setError('As senhas digitadas não coincidem.');
+      setLoading(false);
+      return;
+    }
+
+    // Role defaults to registering status pending
+    let finalRole = registerRole === 'admin' ? 'admin_pendente' : 'colaborador_pendente';
+
+    // Check local users
+    const localUsersStr = localStorage.getItem('g3d_local_users') || '[]';
+    let localUsers: any[] = [];
+    try {
+      localUsers = JSON.parse(localUsersStr);
+    } catch (e) {
+      localUsers = [];
+    }
+
+    // First user check - if no registered user exists, automatically approve as admin
+    const hasAnyUser = localUsers.length > 0;
+    if (!hasAnyUser && registerRole === 'admin') {
+      finalRole = 'admin';
+    }
+
+    const newUser = {
+      email: emailVal,
+      username: usernameVal,
+      password: passwordVal,
+      role: finalRole
+    };
+
+    if (localUsers.some(u => u.email === emailVal)) {
+      setError('Este e-mail já está cadastrado no sistema.');
+      setLoading(false);
+      return;
+    }
+
+    localUsers.push(newUser);
+    localStorage.setItem('g3d_local_users', JSON.stringify(localUsers));
+
+    // Save to Supabase if active
+    const supabase = getSupabaseClient();
+    if (supabase && hasSupabaseConfigured()) {
+      try {
+        let dbHasAnyApprovedAdmin = false;
+        try {
+          const { data: dbAdmins } = await supabase
+            .from('g3d_user_roles')
+            .select('email')
+            .eq('role', 'admin');
+          if (dbAdmins && dbAdmins.length > 0) {
+            dbHasAnyApprovedAdmin = true;
+          }
+        } catch (adminErr) {
+          console.warn("Erro ao checar administradores remotos:", adminErr);
+        }
+
+        if (!dbHasAnyApprovedAdmin && registerRole === 'admin') {
+          newUser.role = 'admin';
+        }
+
+        const { error: upsertErr } = await supabase.from('g3d_user_roles').upsert({
+          email: newUser.email,
+          username: newUser.username,
+          password: newUser.password,
+          role: newUser.role
+        });
+
+        if (upsertErr) throw upsertErr;
+      } catch (upsertErr: any) {
+        console.error("Erro ao salvar no Supabase:", upsertErr);
+        setError(`Cadastro salvo localmente, mas falhou ao sincronizar no Supabase: ${upsertErr.message}`);
+        setLoading(false);
+        return;
+      }
+    }
+
+    setLoading(false);
+    
+    if (newUser.role.includes('_pendente') || newUser.role === 'pendente') {
+      setSuccessMsg('Cadastro solicitado com sucesso! Peça ao Administrador para liberar seu acesso nas Configurações.');
+    } else {
+      setSuccessMsg('Cadastro de Administrador Master criado e ativado com sucesso!');
+    }
+
+    // Reset fields
+    setRegisterEmail('');
+    setRegisterUsername('');
+    setPassword('');
+    setConfirmPassword('');
+
+    setTimeout(() => {
+      setIsRegister(false);
+      setIsFirstAccess(false);
+      setError(null);
+      setSuccessMsg(null);
+    }, 4000);
+  };
+
   const handleMasterLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
-    const savedPassword = localStorage.getItem('g3d_master_password');
-    const finalUsername = userName.trim() || (selectedRole === 'admin' ? 'Administrador' : 'Colaborador');
-    
-    // Check local storage first
-    if (savedPassword && password === savedPassword) {
+    const inputEmailOrUser = userName.trim();
+    const inputPassword = password;
+
+    if (!inputEmailOrUser || !inputPassword) {
+      setError('Por favor, preencha o e-mail/usuário e senha para logar.');
+      setLoading(false);
+      return;
+    }
+
+    // 1. Legacy Fallback: Master Password check
+    const savedMasterPassword = localStorage.getItem('g3d_master_password');
+    if (savedMasterPassword && inputPassword === savedMasterPassword) {
       sessionStorage.setItem('g3d_authenticated', 'true');
       sessionStorage.setItem('g3d_user_role', selectedRole);
-      sessionStorage.setItem('g3d_username', finalUsername);
+      sessionStorage.setItem('g3d_username', inputEmailOrUser || (selectedRole === 'admin' ? 'Administrador' : 'Colaborador'));
+      sessionStorage.setItem('g3d_user_email', inputEmailOrUser.includes('@') ? inputEmailOrUser : 'admin@master.com');
       setLoading(false);
       onLoginSuccess();
       return;
     }
 
-    // Fallback: Check Supabase global master password
+    // 2. Local database check
+    const localUsersStr = localStorage.getItem('g3d_local_users') || '[]';
+    let localUsers: any[] = [];
+    try {
+      localUsers = JSON.parse(localUsersStr);
+    } catch (err) {
+      localUsers = [];
+    }
+
+    const matchedLocalUser = localUsers.find(
+      u => u.email?.toLowerCase() === inputEmailOrUser.toLowerCase() || u.username?.toLowerCase() === inputEmailOrUser.toLowerCase()
+    );
+
+    if (matchedLocalUser) {
+      if (matchedLocalUser.password === inputPassword) {
+        if (matchedLocalUser.role.includes('_pendente') || matchedLocalUser.role === 'pendente') {
+          setError('Acesso bloqueado. Seu cadastro está pendente de liberação pelo administrador.');
+          setLoading(false);
+          return;
+        }
+        
+        sessionStorage.setItem('g3d_authenticated', 'true');
+        sessionStorage.setItem('g3d_user_role', matchedLocalUser.role);
+        sessionStorage.setItem('g3d_username', matchedLocalUser.username);
+        sessionStorage.setItem('g3d_user_email', matchedLocalUser.email);
+        setLoading(false);
+        onLoginSuccess();
+        return;
+      } else {
+        setError('Senha incorreta para o usuário especificado.');
+        setLoading(false);
+        return;
+      }
+    }
+
+    // 3. Remote Supabase check
     const supabase = getSupabaseClient();
     if (supabase && hasSupabaseConfigured()) {
       try {
-        const { data, error: queryErr } = await supabase
+        const { data: dbUser, error: queryErr } = await supabase
           .from('g3d_user_roles')
-          .select('role')
-          .eq('email', 'system_master_password')
+          .select('*')
+          .or(`email.eq.${inputEmailOrUser},username.eq.${inputEmailOrUser}`)
           .maybeSingle();
 
         if (queryErr) throw queryErr;
 
-        if (data && data.role === password) {
-          // Synchronize locally for offline speed/redundancy
-          localStorage.setItem('g3d_master_password', password);
-          setHasMasterPassword(true);
-          sessionStorage.setItem('g3d_authenticated', 'true');
-          sessionStorage.setItem('g3d_user_role', selectedRole);
-          sessionStorage.setItem('g3d_username', finalUsername);
-          setLoading(false);
-          onLoginSuccess();
-          return;
+        if (dbUser) {
+          if (dbUser.password === inputPassword) {
+            if (dbUser.role.includes('_pendente') || dbUser.role === 'pendente') {
+              setError('Acesso bloqueado. Seu cadastro está pendente de liberação pelo administrador.');
+              setLoading(false);
+              return;
+            }
+
+            // Sync to local storage for offline use
+            const updatedLocalUsers = localUsers.filter(u => u.email !== dbUser.email);
+            updatedLocalUsers.push({
+              email: dbUser.email,
+              username: dbUser.username,
+              password: dbUser.password,
+              role: dbUser.role
+            });
+            localStorage.setItem('g3d_local_users', JSON.stringify(updatedLocalUsers));
+
+            sessionStorage.setItem('g3d_authenticated', 'true');
+            sessionStorage.setItem('g3d_user_role', dbUser.role);
+            sessionStorage.setItem('g3d_username', dbUser.username);
+            sessionStorage.setItem('g3d_user_email', dbUser.email);
+            setLoading(false);
+            onLoginSuccess();
+            return;
+          } else {
+            setError('Senha incorreta para o usuário especificado.');
+            setLoading(false);
+            return;
+          }
         }
       } catch (err: any) {
-        console.error("Erro de rede ao validar senha mestra:", err);
+        console.error("Erro ao validar login no Supabase:", err);
       }
     }
 
     setLoading(false);
-    setError('Senha incorreta. Por favor, tente novamente.');
+    setError('Nenhum usuário cadastrado com este e-mail/nome ou senha inválida.');
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
@@ -368,80 +559,194 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
           </p>
         </div>
 
-        {/* LOGIN CONTAINER CARD */}
-        <div className="bg-white dark:bg-slate-900/95 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-6 md:p-8 shadow-xl dark:shadow-2xl shadow-slate-200/50 dark:shadow-black/85 backdrop-blur-md">
+        {/* TABS CONTAINER */}
+        <div className="flex w-full items-stretch h-14 select-none">
+          {/* LOGIN TAB */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsFirstAccess(false);
+              setIsRegister(false);
+              setIsForgotPassword(false);
+              setError(null);
+              setSuccessMsg(null);
+            }}
+            className={`flex-1 flex items-center justify-center text-xs font-extrabold uppercase tracking-widest transition-all cursor-pointer ${
+              !isFirstAccess && !isRegister
+                ? 'bg-slate-100 dark:bg-slate-900 text-blue-600 dark:text-blue-400 border-t border-x border-slate-200 dark:border-slate-800 rounded-tl-2xl'
+                : 'bg-blue-700 hover:bg-blue-650 text-white/90 border-b border-blue-800 rounded-tl-2xl shadow-inner'
+            }`}
+          >
+            <LogIn className="w-4 h-4 mr-2" />
+            LOGIN
+          </button>
+
+          {/* REGISTER TAB */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsRegister(true);
+              setIsFirstAccess(false);
+              setIsForgotPassword(false);
+              setError(null);
+              setSuccessMsg(null);
+            }}
+            className={`flex-1 flex items-center justify-center text-xs font-extrabold uppercase tracking-widest transition-all cursor-pointer ${
+              isRegister
+                ? 'bg-blue-600 dark:bg-blue-900 text-white border-t border-x border-blue-600 dark:border-blue-800 rounded-tr-2xl'
+                : 'bg-slate-200 dark:bg-slate-800 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 border-b border-slate-200 dark:border-slate-800 rounded-tr-2xl shadow-inner'
+            }`}
+          >
+            <UserPlus className="w-4 h-4 mr-2" />
+            CADASTRAR
+          </button>
+        </div>
+
+        {/* CONTAINER CONTENT BOX */}
+        <div className={`border shadow-xl dark:shadow-2xl transition-all duration-300 rounded-b-2xl p-6 md:p-8 backdrop-blur-md ${
+          isFirstAccess || isRegister
+            ? 'bg-blue-600 dark:bg-blue-950 border-blue-600 dark:border-blue-850 text-white'
+            : 'bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-slate-800/80 text-slate-800 dark:text-slate-100'
+        }`}>
           
-          {isFirstAccess ? (
-            // CONFIGURING INITIAL LOCAL MASTER PASSWORD
-            <form onSubmit={handleSetupPassword} className="space-y-5">
-              <div className="space-y-1.5 mb-2">
-                <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-bold uppercase tracking-wider">
-                  Configuração de Primeiro Acesso
+          {isRegister ? (
+            // NEW INDIVIDUAL USER REGISTRATION FORM
+            <form onSubmit={handleUserRegistration} className="space-y-4 text-left">
+              <div className="space-y-1 text-center md:text-left">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-white/20 border border-white/25 text-white text-[10px] font-bold uppercase tracking-wider">
+                  Cadastro de Novo Usuário
                 </span>
-                <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-                  Defina sua Senha Mestra
+                <h2 className="text-lg font-extrabold text-white mt-1">
+                  Crie sua Conta Individual
                 </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                  Crie uma senha de segurança para proteger seus cálculos comerciais de acessos não autorizados. No futuro, você poderá ativar a sincronização na nuvem com o seu Supabase.
+                <p className="text-xs text-blue-100 leading-relaxed">
+                  Cadastre suas credenciais de acesso individuais para usar o painel do GeorgeFctech-3D. Colaboradores precisarão de aprovação do administrador para entrar.
                 </p>
               </div>
 
               {error && (
-                <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/40 text-rose-700 dark:text-rose-300 text-xs rounded-lg flex items-start gap-2.5">
-                  <ShieldAlert className="w-4 h-4 text-rose-500 dark:text-rose-400 flex-shrink-0 mt-0.5" />
+                <div className="p-3 bg-rose-500/20 border border-rose-500/30 text-rose-100 text-xs rounded-xl flex items-start gap-2.5">
+                  <ShieldAlert className="w-4 h-4 text-rose-200 flex-shrink-0 mt-0.5" />
                   <span>{error}</span>
                 </div>
               )}
 
               {successMsg && (
-                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/40 text-emerald-700 dark:text-emerald-300 text-xs rounded-lg flex items-start gap-2.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
+                <div className="p-3 bg-emerald-500/20 border border-emerald-200 text-emerald-100 text-xs rounded-xl flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-200 flex-shrink-0 mt-0.5" />
                   <span>{successMsg}</span>
                 </div>
               )}
 
               <div className="space-y-4">
+                {/* NOME / USUÁRIO INPUT */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
-                    Nova Senha Mestra
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-blue-100">
+                    Seu Nome / Usuário
                   </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                      <KeyRound className="w-4 h-4 text-slate-400 dark:text-slate-500" />
-                    </div>
+                  <div className="relative flex items-center bg-white dark:bg-slate-800 border border-blue-400 dark:border-slate-700 rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-white transition-all px-3 py-1">
+                    <Users className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mr-3" />
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: João, Maria..."
+                      value={registerUsername}
+                      onChange={(e) => setRegisterUsername(e.target.value)}
+                      className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-sm py-2"
+                    />
+                  </div>
+                </div>
+
+                {/* EMAIL INPUT */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-blue-100">
+                    Seu E-mail
+                  </label>
+                  <div className="relative flex items-center bg-white dark:bg-slate-800 border border-blue-400 dark:border-slate-700 rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-white transition-all px-3 py-1">
+                    <Mail className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mr-3" />
+                    <input
+                      type="email"
+                      required
+                      placeholder="exemplo@fctech.com"
+                      value={registerEmail}
+                      onChange={(e) => setRegisterEmail(e.target.value)}
+                      className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-sm py-2"
+                    />
+                  </div>
+                </div>
+
+                {/* ROLE / CARGO SELECTOR */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-blue-100">
+                    Selecione seu Perfil desejado
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setRegisterRole('admin')}
+                      className={`flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold uppercase tracking-wide border transition-all cursor-pointer ${
+                        registerRole === 'admin'
+                          ? 'bg-white text-blue-600 border-white shadow-md'
+                          : 'bg-blue-700 text-white/80 border-blue-500 hover:bg-blue-650'
+                      }`}
+                    >
+                      <Lock className="w-4 h-4" />
+                      Admin
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRegisterRole('colaborador')}
+                      className={`flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold uppercase tracking-wide border transition-all cursor-pointer ${
+                        registerRole === 'colaborador'
+                          ? 'bg-white text-blue-600 border-white shadow-md'
+                          : 'bg-blue-700 text-white/80 border-blue-500 hover:bg-blue-650'
+                      }`}
+                    >
+                      <Users className="w-4 h-4" />
+                      Colaborador
+                    </button>
+                  </div>
+                </div>
+
+                {/* SENHA INPUT */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-blue-100">
+                    Senha de Acesso
+                  </label>
+                  <div className="relative flex items-center bg-white dark:bg-slate-800 border border-blue-400 dark:border-slate-700 rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-white transition-all px-3 py-1">
+                    <KeyRound className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mr-3" />
                     <input
                       type={showPassword ? 'text' : 'password'}
                       required
                       placeholder="Mínimo de 4 caracteres"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full pl-10 pr-10 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 rounded-lg text-sm text-slate-900 dark:text-white focus:outline-none placeholder-slate-400 dark:placeholder-slate-600 transition-all font-mono"
+                      className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-sm py-2 font-mono"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-350"
+                      className="text-slate-400 hover:text-slate-650 ml-2 cursor-pointer"
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
 
+                {/* CONFIRMAÇÃO DE SENHA INPUT */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-blue-100">
                     Confirme a Senha
                   </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                      <Lock className="w-4 h-4 text-slate-400 dark:text-slate-500" />
-                    </div>
+                  <div className="relative flex items-center bg-white dark:bg-slate-800 border border-blue-400 dark:border-slate-700 rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-white transition-all px-3 py-1">
+                    <Lock className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mr-3" />
                     <input
                       type={showPassword ? 'text' : 'password'}
                       required
-                      placeholder="Repita a senha escrita"
+                      placeholder="Confirme sua senha"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="w-full pl-10 pr-10 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 rounded-lg text-sm text-slate-900 dark:text-white focus:outline-none placeholder-slate-400 dark:placeholder-slate-600 transition-all font-mono"
+                      className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-sm py-2 font-mono"
                     />
                   </div>
                 </div>
@@ -449,61 +754,150 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
 
               <button
                 type="submit"
-                className="w-full flex items-center justify-center gap-2 mt-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs uppercase tracking-wider rounded-lg shadow-lg cursor-pointer"
+                className="w-full flex items-center justify-center gap-2 mt-4 px-5 py-3.5 bg-white hover:bg-slate-50 text-blue-600 font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition-all duration-200 cursor-pointer"
               >
-                Configurar e Entrar
+                Cadastrar Conta
                 <ArrowRight className="w-4 h-4" />
               </button>
-
-              <button
-                type="button"
-                onClick={() => { setIsFirstAccess(false); setError(null); }}
-                className="w-full text-center mt-2 text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-semibold transition cursor-pointer"
-              >
-                Voltar para o Login
-              </button>
             </form>
-          ) : isResettingPassword ? (
-            // PASSWORD RESET/CHOOSE NEW PASSWORD VIEW
-            <form onSubmit={handleResetPassword} className="space-y-4">
-              <div className="space-y-1">
-                <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-650 dark:text-indigo-400 text-[10px] font-bold uppercase tracking-wider font-sans">
-                  Recuperação de Acesso
+          ) : isFirstAccess ? (
+            // CONFIGURING INITIAL LOCAL MASTER PASSWORD
+            <form onSubmit={handleSetupPassword} className="space-y-5">
+              <div className="space-y-1 text-center md:text-left">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-white/20 border border-white/25 text-white text-[10px] font-bold uppercase tracking-wider">
+                  Configuração de Primeiro Acesso
                 </span>
-                <h3 className="text-slate-900 dark:text-white font-bold text-sm">Defina a Nova Senha do Sistema</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Insira e confirme a nova senha de acesso única que será utilizada por todos os usuários do sistema.
+                <h2 className="text-lg font-extrabold text-white mt-1">
+                  Defina sua Senha Mestra
+                </h2>
+                <p className="text-xs text-blue-100 leading-relaxed">
+                  Crie uma senha de segurança para proteger seus cálculos comerciais. No futuro, você poderá ativar a sincronização na nuvem com o seu Supabase.
                 </p>
               </div>
 
               {error && (
-                <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/40 text-rose-700 dark:text-rose-300 text-xs rounded-lg flex items-start gap-2.5">
-                  <ShieldAlert className="w-4 h-4 text-rose-500 dark:text-rose-400 flex-shrink-0 mt-0.5" />
+                <div className="p-3 bg-rose-500/20 border border-rose-500/30 text-rose-100 text-xs rounded-xl flex items-start gap-2.5">
+                  <ShieldAlert className="w-4 h-4 text-rose-200 flex-shrink-0 mt-0.5" />
                   <span>{error}</span>
                 </div>
               )}
 
               {successMsg && (
-                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/40 text-emerald-700 dark:text-emerald-300 text-xs rounded-lg flex items-start gap-2.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
+                <div className="p-3 bg-emerald-500/20 border border-emerald-500/30 text-emerald-100 text-xs rounded-xl flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-200 flex-shrink-0 mt-0.5" />
                   <span>{successMsg}</span>
                 </div>
               )}
 
-              <div className="space-y-3.5">
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 font-sans">Nova Senha Única</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                      <KeyRound className="w-4 h-4 text-slate-400 dark:text-slate-500" />
-                    </div>
+              <div className="space-y-4">
+                {/* IDENTIFICATION NAME INPUT (Optional, like the image) */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-blue-100">
+                    Seu Nome / Identificação <span className="opacity-75 font-normal">(Opcional)</span>
+                  </label>
+                  <div className="relative flex items-center bg-white dark:bg-slate-800 border border-blue-400 dark:border-slate-700 rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-white transition-all px-3 py-1">
+                    <Users className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mr-3" />
+                    <input
+                      type="text"
+                      placeholder="Nome de usuário"
+                      value={userName}
+                      onChange={(e) => setUserName(e.target.value)}
+                      className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-sm py-2"
+                    />
+                  </div>
+                </div>
+
+                {/* NEW PASSWORD INPUT */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-blue-100">
+                    Nova Senha Mestra
+                  </label>
+                  <div className="relative flex items-center bg-white dark:bg-slate-800 border border-blue-400 dark:border-slate-700 rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-white transition-all px-3 py-1">
+                    <KeyRound className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mr-3" />
                     <input
                       type={showPassword ? 'text' : 'password'}
                       required
                       placeholder="Mínimo de 4 caracteres"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full pl-10 pr-10 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 rounded-lg text-sm text-slate-900 dark:text-white font-mono focus:outline-none"
+                      className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-sm py-2 font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="text-slate-400 hover:text-slate-650 ml-2 cursor-pointer"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* CONFIRM PASSWORD INPUT */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-blue-100">
+                    Confirme a Senha
+                  </label>
+                  <div className="relative flex items-center bg-white dark:bg-slate-800 border border-blue-400 dark:border-slate-700 rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-white transition-all px-3 py-1">
+                    <Lock className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mr-3" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      placeholder="Repita a senha escrita"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-sm py-2 font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full flex items-center justify-center gap-2 mt-4 px-5 py-3.5 bg-white hover:bg-slate-50 text-blue-600 font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition-all duration-200 cursor-pointer"
+              >
+                Cadastrar
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </form>
+          ) : isResettingPassword ? (
+            // PASSWORD RESET/CHOOSE NEW PASSWORD VIEW
+            <form onSubmit={handleResetPassword} className="space-y-4">
+              <div className="space-y-1">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 text-[10px] font-bold uppercase tracking-wider">
+                  Recuperação de Acesso
+                </span>
+                <h3 className="text-slate-900 dark:text-white font-extrabold text-sm mt-1">Defina a Nova Senha do Sistema</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Insira e confirme a nova senha de acesso única que será utilizada por todos os usuários do sistema.
+                </p>
+              </div>
+
+              {error && (
+                <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/40 text-rose-700 dark:text-rose-300 text-xs rounded-xl flex items-start gap-2.5">
+                  <ShieldAlert className="w-4 h-4 text-rose-500 dark:text-rose-400 flex-shrink-0 mt-0.5" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              {successMsg && (
+                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/40 text-emerald-700 dark:text-emerald-300 text-xs rounded-xl flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
+                  <span>{successMsg}</span>
+                </div>
+              )}
+
+              <div className="space-y-3.5">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Nova Senha Única</label>
+                  <div className="relative flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-blue-500/50 transition-all px-3 py-1">
+                    <KeyRound className="w-5 h-5 text-blue-500 dark:text-blue-400 flex-shrink-0 mr-3" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      placeholder="Mínimo de 4 caracteres"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-sm py-2 font-mono"
                     />
                     <button
                       type="button"
@@ -515,19 +909,17 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 font-sans">Confirme a Nova Senha</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                      <Lock className="w-4 h-4 text-slate-400 dark:text-slate-500" />
-                    </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Confirme a Nova Senha</label>
+                  <div className="relative flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-blue-500/50 transition-all px-3 py-1">
+                    <Lock className="w-5 h-5 text-blue-500 dark:text-blue-400 flex-shrink-0 mr-3" />
                     <input
                       type={showPassword ? 'text' : 'password'}
                       required
                       placeholder="Digite a senha novamente"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 rounded-lg text-sm text-slate-900 dark:text-white font-mono focus:outline-none"
+                      className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-sm py-2 font-mono"
                     />
                   </div>
                 </div>
@@ -536,7 +928,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full flex items-center justify-center gap-2 mt-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-550 text-white font-bold text-xs uppercase tracking-wider rounded-lg disabled:opacity-50 cursor-pointer animate-[pulse_3s_infinite]"
+                className="w-full flex items-center justify-center gap-2 mt-4 px-5 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl disabled:opacity-50 cursor-pointer transition-all"
               >
                 {loading ? 'Salvando...' : 'Atualizar e Gravar Senha'}
                 <CheckCircle2 className="w-4 h-4" />
@@ -546,43 +938,41 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
             // FORGOT PASSWORD EMAIL REQUEST VIEW
             <form onSubmit={handleForgotPassword} className="space-y-4">
               <div className="space-y-1">
-                <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-650 dark:text-indigo-400 text-[10px] font-bold uppercase tracking-wider font-sans">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 text-[10px] font-bold uppercase tracking-wider">
                   Recuperação de Acesso
                 </span>
-                <h3 className="text-slate-900 dark:text-white font-bold text-sm">Recuperar Senha do Sistema</h3>
+                <h3 className="text-slate-900 dark:text-white font-extrabold text-sm mt-1">Recuperar Senha do Sistema</h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   Insira o seu e-mail cadastrado (de Administrador ou Colaborador) para receber um link de redefinição de senha por e-mail.
                 </p>
               </div>
 
               {error && (
-                <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/40 text-rose-700 dark:text-rose-300 text-xs rounded-lg flex items-start gap-2.5">
+                <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/40 text-rose-700 dark:text-rose-300 text-xs rounded-xl flex items-start gap-2.5">
                   <ShieldAlert className="w-4 h-4 text-rose-500 dark:text-rose-400 flex-shrink-0 mt-0.5" />
                   <span>{error}</span>
                 </div>
               )}
 
               {successMsg && (
-                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/40 text-emerald-700 dark:text-emerald-300 text-xs rounded-lg flex items-start gap-2.5">
+                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/40 text-emerald-700 dark:text-emerald-300 text-xs rounded-xl flex items-start gap-2.5">
                   <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
                   <span>{successMsg}</span>
                 </div>
               )}
 
               <div className="space-y-3.5">
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 font-sans">Seu E-mail Cadastrado</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                      <Mail className="w-4 h-4 text-slate-400 dark:text-slate-500" />
-                    </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Seu E-mail Cadastrado</label>
+                  <div className="relative flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-blue-500/50 transition-all px-3 py-1">
+                    <Mail className="w-5 h-5 text-blue-500 dark:text-blue-400 flex-shrink-0 mr-3" />
                     <input
                       type="email"
                       required
                       placeholder="seu-email@provedor.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 rounded-lg text-sm text-slate-900 dark:text-white focus:outline-none"
+                      className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-sm py-2"
                     />
                   </div>
                 </div>
@@ -591,7 +981,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full flex items-center justify-center gap-2 mt-4 px-5 py-3 bg-indigo-600 hover:bg-indigo-550 text-white font-bold text-xs uppercase tracking-wider rounded-lg disabled:opacity-50 cursor-pointer"
+                className="w-full flex items-center justify-center gap-2 mt-4 px-5 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl disabled:opacity-50 cursor-pointer transition-all"
               >
                 {loading ? 'Enviando...' : 'Enviar Link de Redefinição'}
                 <ArrowRight className="w-4 h-4" />
@@ -600,7 +990,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
               <button
                 type="button"
                 onClick={() => { setIsForgotPassword(false); setError(null); setSuccessMsg(null); }}
-                className="w-full text-center mt-2 text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-semibold transition cursor-pointer"
+                className="w-full text-center mt-2 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-semibold transition cursor-pointer"
               >
                 Voltar para o Login
               </button>
@@ -608,15 +998,15 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
           ) : (
             // SINGLE UNIQUE SYSTEM LOGIN
             <form onSubmit={handleMasterLogin} className="space-y-5">
-              <div className="space-y-1">
-                <h3 className="text-slate-900 dark:text-white font-bold text-sm">Painel de Acesso Único</h3>
+              <div className="space-y-1 text-center md:text-left">
+                <h3 className="text-slate-900 dark:text-white font-extrabold text-base">Painel de Acesso Único</h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
                   Insira a chave de acesso única para entrar no sistema. Escolha o perfil desejado.
                 </p>
               </div>
 
               {error && (
-                <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/40 text-rose-700 dark:text-rose-300 text-xs rounded-lg flex items-start gap-2.5">
+                <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/40 text-rose-700 dark:text-rose-300 text-xs rounded-xl flex items-start gap-2.5">
                   <ShieldAlert className="w-4 h-4 text-rose-500 dark:text-rose-400 flex-shrink-0 mt-0.5" />
                   <span>{error}</span>
                 </div>
@@ -633,8 +1023,8 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
                     onClick={() => setSelectedRole('admin')}
                     className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-bold uppercase tracking-wide border transition-all cursor-pointer ${
                       selectedRole === 'admin'
-                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/10'
-                        : 'bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900'
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-600/10'
+                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750'
                     }`}
                   >
                     <Lock className="w-4 h-4" />
@@ -645,8 +1035,8 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
                     onClick={() => setSelectedRole('colaborador')}
                     className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-bold uppercase tracking-wide border transition-all cursor-pointer ${
                       selectedRole === 'colaborador'
-                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/10'
-                        : 'bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900'
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-600/10'
+                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750'
                     }`}
                   >
                     <Users className="w-4 h-4" />
@@ -660,16 +1050,14 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   Seu Nome / Identificação <span className="text-slate-400 dark:text-slate-600 font-normal">(Opcional)</span>
                 </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <Users className="w-4 h-4 text-slate-400 dark:text-slate-500" />
-                  </div>
+                <div className="relative flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-blue-500/50 transition-all px-3 py-1">
+                  <Users className="w-5 h-5 text-blue-500 dark:text-blue-400 flex-shrink-0 mr-3" />
                   <input
                     type="text"
-                    placeholder="Ex: George, João, Maria..."
+                    placeholder="Nome de usuário"
                     value={userName}
                     onChange={(e) => setUserName(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 rounded-lg text-sm text-slate-900 dark:text-white focus:outline-none placeholder-slate-400 dark:placeholder-slate-600 transition-all"
+                    className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-sm py-2"
                   />
                 </div>
               </div>
@@ -684,28 +1072,26 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
                     <button
                       type="button"
                       onClick={() => { setIsForgotPassword(true); setError(null); setSuccessMsg(null); }}
-                      className="text-[10.5px] text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-semibold cursor-pointer underline decoration-dotted"
+                      className="text-[10.5px] text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-semibold cursor-pointer underline decoration-dotted"
                     >
                       Esqueceu a senha?
                     </button>
                   )}
                 </div>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <KeyRound className="w-4 h-4 text-slate-400 dark:text-slate-500" />
-                  </div>
+                <div className="relative flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-blue-500/50 transition-all px-3 py-1">
+                  <KeyRound className="w-5 h-5 text-blue-500 dark:text-blue-400 flex-shrink-0 mr-3" />
                   <input
                     type={showPassword ? 'text' : 'password'}
                     required
-                    placeholder="Digite a senha mestra do sistema"
+                    placeholder="Sua senha"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-10 pr-10 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 rounded-lg text-sm text-slate-900 dark:text-white focus:outline-none placeholder-slate-400 dark:placeholder-slate-600 font-mono transition-all"
+                    className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-sm py-2 font-mono"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-350 cursor-pointer"
+                    className="text-slate-400 hover:text-slate-650 ml-2 cursor-pointer"
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -715,22 +1101,11 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full flex items-center justify-center gap-2 mt-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-550 text-white font-bold text-xs uppercase tracking-wider rounded-lg shadow-lg shadow-indigo-950/40 cursor-pointer animate-[pulse_3.5s_infinite]"
+                className="w-full flex items-center justify-center gap-2 mt-4 px-5 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-blue-500/15 cursor-pointer transition-all duration-200"
               >
-                {loading ? 'Autenticando...' : 'Entrar no Sistema'}
+                {loading ? 'Autenticando...' : 'Login'}
                 <ArrowRight className="w-4 h-4" />
               </button>
-
-              <div className="flex flex-col gap-2 pt-1 border-t border-slate-100 dark:border-slate-800/60 mt-3">
-                <button
-                  type="button"
-                  onClick={() => { setIsFirstAccess(true); setError(null); setSuccessMsg(null); }}
-                  className="w-full text-center text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-semibold transition cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  <UserPlus className="w-3.5 h-3.5" />
-                  Primeiro acesso? Cadastrar senha mestra
-                </button>
-              </div>
             </form>
           )}
         </div>
