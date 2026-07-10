@@ -45,6 +45,279 @@ export default function ReportView({ projects }: ReportViewProps) {
     return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
 
+  const downloadHtmlReport = () => {
+    if (filteredProjects.length === 0) return;
+
+    const clientLabel = selectedSub === 'Todos' ? 'Geral / Setores Consolidados' : selectedSub;
+    const reportTitle = `Demonstrativo_Tecnico_${clientLabel.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    const dateFormatted = new Date().toLocaleDateString('pt-BR');
+    const timeFormatted = new Date().toLocaleTimeString('pt-BR');
+
+    const htmlContent = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Demonstrativo Técnico & Faturamento Comercial - GeorgeFctech-3D</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      margin: 0;
+      padding: 40px 20px;
+      background-color: #f8fafc;
+      color: #1e293b;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 50px;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+    }
+    .header {
+      border-bottom: 2px solid #0f172a;
+      padding-bottom: 20px;
+      margin-bottom: 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .logo-title h1 {
+      margin: 0;
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: #0f172a;
+      text-transform: uppercase;
+    }
+    .logo-title h1 span {
+      color: #4f46e5;
+    }
+    .logo-title p.subtitle {
+      margin: 4px 0 0 0;
+      font-size: 11px;
+      font-family: monospace;
+      letter-spacing: 0.1em;
+      color: #4f46e5;
+      text-transform: uppercase;
+      font-weight: bold;
+    }
+    .logo-title p.desc {
+      margin: 8px 0 0 0;
+      font-size: 13px;
+      color: #64748b;
+    }
+    .header-meta {
+      text-align: right;
+      font-family: monospace;
+      font-size: 12px;
+      color: #475569;
+    }
+    .header-meta .doc-title {
+      font-weight: bold;
+      color: #0f172a;
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+    .intro-details {
+      background-color: #f8fafc;
+      border-left: 4px solid #0f172a;
+      padding: 16px;
+      font-size: 13px;
+      color: #334155;
+      border-radius: 0 8px 8px 0;
+      margin-bottom: 30px;
+      line-height: 1.6;
+    }
+    .section-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #0f172a;
+      border-bottom: 2px solid #e2e8f0;
+      padding-bottom: 8px;
+      margin-bottom: 15px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 30px;
+    }
+    th {
+      background-color: #f1f5f9;
+      color: #475569;
+      font-weight: bold;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 10px 12px;
+      border-bottom: 1px solid #cbd5e1;
+      text-align: left;
+    }
+    td {
+      padding: 12px;
+      border-bottom: 1px solid #f1f5f9;
+      font-size: 12px;
+      color: #334155;
+    }
+    .metric-table td {
+      font-size: 13px;
+    }
+    .metric-dot {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      background-color: #0f172a;
+      border-radius: 50%;
+      margin-right: 8px;
+    }
+    .price-col {
+      text-align: right;
+      font-family: monospace;
+      font-weight: bold;
+    }
+    .commercial-terms {
+      border-top: 1px solid #e2e8f0;
+      padding-top: 20px;
+      margin-bottom: 40px;
+      font-size: 11px;
+      color: #64748b;
+      line-height: 1.6;
+    }
+    .signatures {
+      border-top: 1px solid #cbd5e1;
+      padding-top: 30px;
+      display: grid;
+      grid-template-cols: 1fr 1fr;
+      gap: 40px;
+    }
+    .signature-line {
+      border-top: 1px solid #94a3b8;
+      margin-top: 50px;
+      padding-top: 8px;
+      font-size: 12px;
+      color: #475569;
+      text-align: center;
+      font-weight: 600;
+    }
+    @media print {
+      body {
+        background-color: #ffffff;
+        padding: 0;
+      }
+      .container {
+        border: none;
+        box-shadow: none;
+        padding: 0;
+        max-width: 100%;
+      }
+      tr {
+        page-break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo-title">
+        <h1>GeorgeFctech-<span>3D</span></h1>
+        <p class="subtitle">Modelagem • Escultura • Impressão 3D</p>
+        <p class="desc">Manufatura Aditiva de Engenharia & Prototipagem Avançada</p>
+      </div>
+      <div class="header-meta">
+        <div class="doc-title">PROPOSTA DE FATURAMENTO</div>
+        <div>Emissão: ${dateFormatted}</div>
+        <div>ID: G3D-REP-${new Date().getFullYear()}</div>
+      </div>
+    </div>
+
+    <div class="intro-details">
+      <div><strong>Destinatário / Solicitante:</strong> ${clientLabel}</div>
+      <div style="margin-top: 6px;"><strong>Descrição do Escopo:</strong> Consolidação periódica de serviços englobando Engenharia Mecânica de Campo, Modelagem Tridimensional Paramétrica de Peças Técnicas, Fatiamento Computacional e Impressão 3D (FDM). Valores baseados em custos operacionais e técnicos de peças.</div>
+    </div>
+
+    <div class="section-title">1. Demonstrativo Financeiro Comercial</div>
+    <table class="metric-table">
+      <thead>
+        <tr>
+          <th>Métrica Técnica</th>
+          <th style="text-align: right;">Valor Acumulado</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="metric-dot"></span>Tempo Alocado em Processamento / Máquina Ativo</td>
+          <td style="text-align: right; font-family: monospace; font-weight: bold;">${totalHours.toFixed(1)} h</td>
+        </tr>
+        <tr>
+          <td><span class="metric-dot"></span>Massa Total de Polímeros Termoplásticos Utilizada</td>
+          <td style="text-align: right; font-family: monospace; font-weight: bold;">${totalWeight.toFixed(2)} g</td>
+        </tr>
+        <tr style="background-color: #f8fafc; font-weight: bold;">
+          <td style="font-size: 14px; color: #0f172a;">VALOR LÍQUIDO TOTAL A FATURAR DA ORDEM</td>
+          <td style="text-align: right; font-size: 16px; color: #059669; font-family: monospace;">${formatBRL(totalValue)}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="section-title">2. Detalhamento de Serviços Realizados</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Origem</th>
+          <th>Modelo / Especificação Física</th>
+          <th>Material</th>
+          <th style="text-align: center;">Tempo (h)</th>
+          <th style="text-align: right;">Preço</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${filteredProjects.map(p => `
+          <tr>
+            <td style="font-weight: bold; color: #0f172a;">${p.client}</td>
+            <td>
+              <div style="font-weight: bold;">${p.name}</div>
+              <div style="font-size: 10px; color: #64748b; font-style: italic; margin-top: 2px;">${p.description}</div>
+            </td>
+            <td style="font-family: monospace; color: #475569;">${p.materialType}</td>
+            <td style="text-align: center; font-family: monospace; font-weight: 600;">${p.hours.toFixed(1)}h</td>
+            <td class="price-col">${formatBRL(calculateEarnings(p))}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+
+    <div class="commercial-terms">
+      <div style="font-weight: bold; margin-bottom: 6px; color: #0f172a;">Termos & Condições Comerciais:</div>
+      <div>• <strong>Prazo de Validade Comercial</strong>: Esta estimativa/proposta é válida por 10 dias úteis a contar de sua emissão.</div>
+      <div>• <strong>Garantia Mecânica</strong>: Todas as peças técnicas de reposição passam por inspeção de tensões físicas e térmicas antes do envio.</div>
+      <div>• <strong>Observação</strong>: Impressão realizada por deposição de termoplástico fundido (FDM) calibrado sob bicos de engenharia.</div>
+    </div>
+
+    <div class="signatures">
+      <div>
+        <div class="signature-line">GeorgeFctech-3D<br><span style="font-size: 10px; font-weight: normal; color: #64748b;">Especialista Responsável</span></div>
+      </div>
+      <div>
+        <div class="signature-line">Conferido por / Setor<br><span style="font-size: 10px; font-weight: normal; color: #64748b;">Visto de Recepção</span></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    // Download compiled HTML Document
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', url);
+    downloadAnchor.setAttribute('download', `${reportTitle}_${new Date().toISOString().split('T')[0]}.html`);
+    downloadAnchor.click();
+  };
+
   return (
     <div className="font-sans antialiased text-slate-800">
       {/* HEADER WITH PRINTABLE EXPLANATION */}
@@ -72,6 +345,14 @@ export default function ReportView({ projects }: ReportViewProps) {
               ))}
             </select>
           </div>
+
+          <button
+            onClick={downloadHtmlReport}
+            className="flex items-center justify-center gap-2 px-5 py-3 rounded-lg border border-indigo-200 bg-white hover:bg-indigo-50 text-indigo-700 font-bold text-sm tracking-wide shadow-sm hover:shadow-md transition duration-200 cursor-pointer"
+          >
+            <FileText className="w-4 h-4" />
+            SALVAR EM HTML
+          </button>
 
           <button
             onClick={() => window.print()}

@@ -30,7 +30,8 @@ import {
   AlertCircle,
   QrCode,
   Camera,
-  ScanLine
+  ScanLine,
+  FileText
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { ShoppingItem, InventoryItem } from '../types';
@@ -564,6 +565,373 @@ export default function ShoppingListView({
     downloadAnchor.click();
   };
 
+  // Standalone HTML Commercial Report Generation with Product Photos & Active Links
+  const downloadHtmlReport = () => {
+    if (shopping.length === 0) return;
+
+    const selectedCompany = filterCompany !== 'Todos' ? filterCompany : 'GERAL / GeorgeFctech-3D';
+    const reportTitle = `${selectedCompany.toUpperCase()} - PEDIDO COMERCIAL`;
+    const dateFormatted = new Date().toLocaleDateString('pt-BR');
+    const timeFormatted = new Date().toLocaleTimeString('pt-BR');
+
+    // Create a beautifully-styled, print-ready standalone HTML document
+    const htmlContent = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>${reportTitle}</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      margin: 0;
+      padding: 40px 20px;
+      background-color: #f8fafc;
+      color: #1e293b;
+    }
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 40px;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+    }
+    .header-banner {
+      background-color: #1e1b4b;
+      background-image: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+      color: #ffffff;
+      padding: 30px;
+      border-radius: 8px;
+      margin-bottom: 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header-left h1 {
+      margin: 0 0 8px 0;
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+    }
+    .header-left p {
+      margin: 0;
+      font-size: 14px;
+      color: #c7d2fe;
+    }
+    .header-right {
+      text-align: right;
+    }
+    .header-right h2 {
+      margin: 0 0 5px 0;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #a5b4fc;
+    }
+    .header-right p {
+      margin: 0;
+      font-size: 12px;
+      color: #cbd5e1;
+      font-family: monospace;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-cols: repeat(3, 1fr);
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+    .stat-card {
+      background-color: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 20px;
+    }
+    .stat-card h3 {
+      margin: 0 0 8px 0;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #64748b;
+    }
+    .stat-card p {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 800;
+      color: #1e1b4b;
+      font-family: monospace;
+    }
+    .stat-card.amber p {
+      color: #b45309;
+    }
+    .stat-card.emerald p {
+      color: #047857;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 30px;
+    }
+    th {
+      background-color: #f1f5f9;
+      color: #475569;
+      font-weight: 700;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 12px 16px;
+      border-bottom: 2px solid #e2e8f0;
+      text-align: left;
+    }
+    td {
+      padding: 14px 16px;
+      border-bottom: 1px solid #f1f5f9;
+      font-size: 13px;
+      color: #334155;
+    }
+    tr:hover td {
+      background-color: #f8fafc;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge-filamento { background-color: #eef2ff; color: #4338ca; }
+    .badge-pecas { background-color: #fef2f2; color: #b91c1c; }
+    .badge-acessorios { background-color: #f0fdfa; color: #0d9488; }
+    .badge-outros { background-color: #f1f5f9; color: #475569; }
+    
+    .badge-status-comprado { background-color: #ecfdf5; color: #047857; }
+    .badge-status-pendente { background-color: #fffbeb; color: #b45309; }
+
+    .price {
+      font-family: monospace;
+      font-weight: bold;
+      text-align: right;
+    }
+    .price-total {
+      color: #4f46e5;
+    }
+    .link-btn {
+      color: #2563eb;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .link-btn:hover {
+      text-decoration: underline;
+    }
+    .notes {
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 4px;
+      font-style: italic;
+    }
+    .barcode {
+      font-family: monospace;
+      font-size: 10px;
+      color: #4f46e5;
+      font-weight: bold;
+      background-color: #eef2ff;
+      padding: 2px 6px;
+      border-radius: 4px;
+      display: inline-block;
+      margin-top: 4px;
+    }
+    .total-row {
+      background-color: #f8fafc;
+      font-weight: 800;
+    }
+    .total-row td {
+      border-top: 2px solid #e2e8f0;
+      font-size: 14px;
+      color: #1e1b4b;
+    }
+    .footer {
+      border-top: 1px dashed #cbd5e1;
+      padding-top: 25px;
+      margin-top: 4px;
+      display: grid;
+      grid-template-cols: 1fr 1fr;
+      gap: 40px;
+    }
+    .signature-box {
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+    }
+    .signature-line {
+      border-top: 1px solid #cbd5e1;
+      margin-top: 40px;
+      padding-top: 8px;
+      font-size: 12px;
+      color: #64748b;
+      font-weight: 600;
+    }
+    @media print {
+      body {
+        background-color: #ffffff;
+        padding: 0;
+      }
+      .container {
+        border: none;
+        box-shadow: none;
+        padding: 0;
+      }
+      .header-banner {
+        background-color: #ffffff !important;
+        background-image: none !important;
+        color: #000000 !important;
+        border-bottom: 2px solid #000000;
+        padding: 10px 0;
+        margin-bottom: 20px;
+      }
+      .header-left p, .header-right h2, .header-right p {
+        color: #334155 !important;
+      }
+      .stat-card {
+        border: 1px solid #cbd5e1 !important;
+      }
+      th {
+        background-color: #f8fafc !important;
+        color: #000000 !important;
+        border-bottom: 2px solid #cbd5e1 !important;
+      }
+      tr {
+        page-break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-banner">
+      <div class="header-left">
+        <h1>GeorgeFctech 3D &bull; Gestão de Insumos</h1>
+        <p>Relatório de Planejamento de Compras Comerciais</p>
+      </div>
+      <div class="header-right">
+        <h2>${selectedCompany.toUpperCase()}</h2>
+        <p>Gerado em: ${dateFormatted} às ${timeFormatted}</p>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <h3>Custo Previsto Geral</h3>
+        <p>R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+      </div>
+      <div class="stat-card amber">
+        <h3>Itens Pendentes</h3>
+        <p>${shopping.filter(i => !i.checked).length} de ${shopping.length}</p>
+      </div>
+      <div class="stat-card emerald">
+        <h3>Itens Adquiridos</h3>
+        <p>${shopping.filter(i => i.checked).length}</p>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Material / Produto</th>
+          <th>Categoria</th>
+          <th>Solicitante / Setor</th>
+          <th style="text-align: center;">Qtd</th>
+          <th style="text-align: right;">Unitário</th>
+          <th style="text-align: right;">Custo Total</th>
+          <th>Status</th>
+          <th>Link para Compra</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${filteredShopping.map(item => {
+          const itemTotal = item.qtyNeeded * item.estUnitCost;
+          const absoluteUrl = ensureAbsoluteUrl(item.purchaseLink, item.materialName);
+          const statusText = item.checked ? 'Adquirido' : 'Pendente';
+          const statusClass = item.checked ? 'badge-status-comprado' : 'badge-status-pendente';
+          
+          let catClass = 'badge-outros';
+          if (item.category === 'Filamento') catClass = 'badge-filamento';
+          else if (item.category === 'Peças de Reposição') catClass = 'badge-pecas';
+          else if (item.category === 'Acessórios/Insumos') catClass = 'badge-acessorios';
+
+          const reqText = item.requestedBy || 'Administração';
+          const deptText = item.department ? ` - Setor: ${item.department}` : '';
+
+          return `
+            <tr>
+              <td>
+                <div style="font-weight: bold; color: #0f172a;">${item.materialName}</div>
+                ${item.barcode ? `<div class="barcode">Cód: ${item.barcode}</div>` : ''}
+                ${item.notes ? `<div class="notes">Obs: ${item.notes}</div>` : ''}
+              </td>
+              <td>
+                <span class="badge ${catClass}">${item.category || 'Outros'}</span>
+              </td>
+              <td>
+                <div style="font-weight: 500;">${reqText}</div>
+                <div style="font-size: 11px; color: #64748b;">${deptText}</div>
+              </td>
+              <td style="text-align: center; font-weight: bold;">
+                ${item.qtyNeeded}
+              </td>
+              <td class="price">
+                R$ ${item.estUnitCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </td>
+              <td class="price price-total">
+                R$ ${itemTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </td>
+              <td>
+                <span class="badge ${statusClass}">${statusText}</span>
+              </td>
+              <td>
+                <a href="${absoluteUrl}" class="link-btn" target="_blank" rel="noreferrer">Acessar Link</a>
+              </td>
+            </tr>
+          `;
+        }).join('')}
+        
+        <tr class="total-row">
+          <td colspan="5" style="text-align: right; padding-right: 20px;">VALOR TOTAL DO PEDIDO:</td>
+          <td class="price" style="color: #4f46e5; font-size: 15px;">
+            R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </td>
+          <td colspan="2"></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="footer">
+      <div class="signature-box">
+        <p style="margin: 0 0 10px 0; font-size: 12px; color: #64748b; text-align: left;">Assinatura do Responsável Técnico:</p>
+        <div class="signature-line">Gestão de Suprimentos - GeorgeFctech-3D</div>
+      </div>
+      <div class="signature-box">
+        <p style="margin: 0 0 10px 0; font-size: 12px; color: #64748b; text-align: left;">Liberação e Aprovação de Custos:</p>
+        <div class="signature-line">Departamento Financeiro / Comercial</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    // Download compiled HTML Document
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', url);
+    downloadAnchor.setAttribute('download', `Pedido_Comercial_${new Date().toISOString().split('T')[0]}.html`);
+    downloadAnchor.click();
+    
+    setToastMessage("Sucesso! O relatório de compras foi baixado como arquivo HTML.");
+    setTimeout(() => setToastMessage(null), 4000);
+  };
+
   // Import Purchased Filament directly to Active Inventory
   const handleImportToStock = (item: ShoppingItem) => {
     if (item.category !== 'Filamento') {
@@ -712,6 +1080,19 @@ export default function ShoppingListView({
           >
             <Download className="w-4 h-4" />
             GERAR PEDIDO COMERCIAL EXCEL
+          </button>
+
+          <button
+            onClick={downloadHtmlReport}
+            disabled={shopping.length === 0}
+            className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg border font-bold text-xs uppercase tracking-wider shadow-sm transition-all duration-200 ${
+              shopping.length === 0 
+                ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                : 'bg-white text-blue-700 border-blue-200 hover:bg-blue-50 hover:text-blue-800 hover:scale-102 cursor-pointer'
+            }`}
+          >
+            <FileText className="w-4 h-4" />
+            SALVAR RELATÓRIO EM HTML
           </button>
 
           <button
