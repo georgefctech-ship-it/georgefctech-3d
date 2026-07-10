@@ -890,7 +890,7 @@ export default function ShoppingListView({
           </button>
 
           <button
-            onClick={generateExcel}
+            onClick={generateReport}
             disabled={shopping.length === 0}
             className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg border font-bold text-xs uppercase tracking-wider shadow-sm transition-all duration-200 ${
               shopping.length === 0 
@@ -970,7 +970,7 @@ export default function ShoppingListView({
               R$ {pendingValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </h4>
             <p className="text-[10px] text-amber-600 mt-1.5 flex items-center gap-1 font-medium">
-              <AlertSquareSize className="w-3.5 h-3.5 text-amber-500" />
+              <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
               {shopping.filter(i => !i.checked).length} aquisições pendentes
             </p>
           </div>

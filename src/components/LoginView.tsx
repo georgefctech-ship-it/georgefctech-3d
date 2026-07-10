@@ -28,10 +28,25 @@ interface LoginViewProps {
 }
 
 export default function LoginView({ onLoginSuccess }: LoginViewProps) {
-  const [activeTab, setActiveTab] = useState<'master' | 'supabase'>('master');
-  const [isRegistering, setIsRegistering] = useState(false);
+  const [selectedRole, setSelectedRole] = useState<'admin' | 'colaborador'>('admin');
+  const [userName, setUserName] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isFirstAccess, setIsFirstAccess] = useState(false);
+  const [hasMasterPassword, setHasMasterPassword] = useState(!!localStorage.getItem('g3d_master_password'));
+  const [showPassword, setShowPassword] = useState(false);
   const [supabaseActive, setSupabaseActive] = useState(false);
   
+  // Recovery/Forgot Password states
+  const [email, setEmail] = useState('');
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
+  
+  // Feedback states
+  const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
   // Theme state
   const [localDarkMode, setLocalDarkMode] = useState(() => {
     return localStorage.getItem('g3d_dark_mode') === 'true';
@@ -52,24 +67,6 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     localStorage.setItem('g3d_dark_mode', nextVal ? 'true' : 'false');
   };
 
-  // Form states
-  const [email, setEmail] = useState('');
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [isFirstAccess, setIsFirstAccess] = useState(false);
-  const [hasMasterPassword, setHasMasterPassword] = useState(!!localStorage.getItem('g3d_master_password'));
-  const [showPassword, setShowPassword] = useState(false);
-  
-  // Recovery/Forgot Password states
-  const [isForgotPassword, setIsForgotPassword] = useState(false);
-  const [isResettingPassword, setIsResettingPassword] = useState(false);
-  
-  // Feedback states
-  const [error, setError] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
   useEffect(() => {
     const supabaseConfigured = hasSupabaseConfigured();
     // Check if master password exists in localStorage
@@ -78,7 +75,6 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     
     if (supabaseConfigured) {
       setSupabaseActive(true);
-      setActiveTab('supabase');
       setIsFirstAccess(false);
 
       // Centralized Check: If not in localStorage, check if it's already registered on Supabase query!
@@ -108,18 +104,16 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     } else if (!savedPassword) {
       // Se a nuvem não está configurada e não temos senha mestra, precisamos cadastrar a senha mestra
       setSupabaseActive(false);
-      setActiveTab('master');
       setIsFirstAccess(true);
     } else {
       // Se a nuvem não está configurada mas já temos senha mestra cadastrada, carregamos o formulário de login local direto
       setSupabaseActive(false);
-      setActiveTab('master');
       setIsFirstAccess(false);
     }
-    
+
     // Check if redirecting from a recovery link
     const hash = window.location.hash || '';
-    if (hash.includes('type=recovery') || hash.includes('access_token=') && hash.includes('type=')) {
+    if (hash.includes('type=recovery') || (hash.includes('access_token=') && hash.includes('type='))) {
       if (!hash.includes('error=')) {
         setIsResettingPassword(true);
       } else {
@@ -162,8 +156,10 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       }
     }
 
+    const finalUsername = userName.trim() || (selectedRole === 'admin' ? 'Administrador' : 'Colaborador');
     sessionStorage.setItem('g3d_authenticated', 'true');
-    sessionStorage.setItem('g3d_user_role', 'admin');
+    sessionStorage.setItem('g3d_user_role', selectedRole);
+    sessionStorage.setItem('g3d_username', finalUsername);
     
     setLoading(false);
     setSuccessMsg('Senha Mestra configurada com sucesso!');
@@ -178,11 +174,13 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     setLoading(true);
 
     const savedPassword = localStorage.getItem('g3d_master_password');
+    const finalUsername = userName.trim() || (selectedRole === 'admin' ? 'Administrador' : 'Colaborador');
     
     // Check local storage first
     if (savedPassword && password === savedPassword) {
       sessionStorage.setItem('g3d_authenticated', 'true');
-      sessionStorage.setItem('g3d_user_role', 'admin'); // Master password is always Admin
+      sessionStorage.setItem('g3d_user_role', selectedRole);
+      sessionStorage.setItem('g3d_username', finalUsername);
       setLoading(false);
       onLoginSuccess();
       return;
@@ -205,7 +203,8 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
           localStorage.setItem('g3d_master_password', password);
           setHasMasterPassword(true);
           sessionStorage.setItem('g3d_authenticated', 'true');
-          sessionStorage.setItem('g3d_user_role', 'admin');
+          sessionStorage.setItem('g3d_user_role', selectedRole);
+          sessionStorage.setItem('g3d_username', finalUsername);
           setLoading(false);
           onLoginSuccess();
           return;
@@ -217,211 +216,6 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
 
     setLoading(false);
     setError('Senha incorreta. Por favor, tente novamente.');
-  };
-
-  const handleSupabaseLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-
-    const supabase = getSupabaseClient();
-    if (!supabase) {
-      setError('O cliente Supabase não pôde ser iniciado.');
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const inputIdentifier = email.trim().toLowerCase();
-      let targetEmail = inputIdentifier;
-      let targetUsername = '';
-
-      // Check if input is a username or an email
-      if (!inputIdentifier.includes('@')) {
-        // Search by username in g3d_user_roles
-        const { data: userByUsername, error: usernameErr } = await supabase
-          .from('g3d_user_roles')
-          .select('email, role, username')
-          .eq('username', inputIdentifier)
-          .maybeSingle();
-
-        if (usernameErr) {
-          throw new Error('Erro ao buscar o nome de usuário no banco de dados.');
-        }
-
-        if (!userByUsername) {
-          throw new Error('Nome de usuário não cadastrado. Se você é novo, crie uma conta de colaborador.');
-        }
-
-        targetEmail = userByUsername.email;
-        targetUsername = userByUsername.username;
-      }
-
-      // Check role and approval status FIRST before authenticating
-      const { data: roleData, error: roleErr } = await supabase
-        .from('g3d_user_roles')
-        .select('role, username')
-        .eq('email', targetEmail)
-        .maybeSingle();
-
-      let assignedRole = '';
-      if (roleData) {
-        assignedRole = roleData.role;
-        targetUsername = roleData.username || targetUsername;
-      } else {
-        // Auto register role as pending for security
-        const isGeorgeEmail = targetEmail === 'georgefctec@gmail.com';
-        const defaultRole = isGeorgeEmail ? 'admin' : 'colaborador_pendente';
-        await supabase.from('g3d_user_roles').insert({
-          email: targetEmail,
-          role: defaultRole
-        });
-        assignedRole = defaultRole;
-      }
-
-      // Check system administrator permission (pending approval)
-      if (assignedRole === 'colaborador_pendente' || assignedRole === 'pendente') {
-        throw new Error('Cadastro pendente! Seu acesso necessita de liberação por um Administrador do sistema. Por favor, aguarde a aprovação.');
-      }
-
-      // If approved, sign in with Supabase Auth using the correct email
-      const { data, error: authErr } = await supabase.auth.signInWithPassword({
-        email: targetEmail,
-        password: password
-      });
-
-      if (authErr) {
-        throw new Error(authErr.message === 'Invalid login credentials' 
-          ? 'Senha de acesso incorreta para este usuário. Por favor, tente novamente.' 
-          : authErr.message);
-      }
-
-      if (data.user) {
-        const userEmail = (data.user.email || '').trim().toLowerCase();
-        sessionStorage.setItem('g3d_authenticated', 'true');
-        sessionStorage.setItem('g3d_user_role', assignedRole);
-        sessionStorage.setItem('g3d_user_email', userEmail);
-        if (targetUsername) {
-          sessionStorage.setItem('g3d_username', targetUsername);
-        } else {
-          sessionStorage.setItem('g3d_username', userEmail.split('@')[0]);
-        }
-        
-        onLoginSuccess();
-      }
-    } catch (err: any) {
-      setError(err.message || 'Erro inesperado ao realizar login.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSupabaseRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setSuccessMsg(null);
-
-    const userEmail = email.trim().toLowerCase();
-    const cleanUsername = username.trim().toLowerCase();
-    const isGeorgeEmail = userEmail === 'georgefctec@gmail.com';
-
-    if (!cleanUsername) {
-      setError('Por favor, defina um nome de usuário.');
-      return;
-    }
-
-    if (!/^[a-zA-Z0-9_]{3,20}$/.test(cleanUsername)) {
-      setError('O nome de usuário deve conter de 3 a 20 caracteres (apenas letras, números ou sublinhado, sem espaços).');
-      return;
-    }
-
-    if (password.length < 6) {
-      setError('A senha de login deve conter pelo menos 6 caracteres.');
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError('As senhas digitadas não coincidem.');
-      return;
-    }
-
-    setLoading(true);
-    const supabase = getSupabaseClient();
-    if (!supabase) {
-      setError('Supabase instável ou não configurado.');
-      setLoading(false);
-      return;
-    }
-
-    try {
-      // Check if username is already taken in g3d_user_roles
-      const { data: existingByUsername, error: errUserCheck } = await supabase
-        .from('g3d_user_roles')
-        .select('email')
-        .eq('username', cleanUsername)
-        .maybeSingle();
-
-      if (existingByUsername) {
-        setError('Este nome de usuário já está sendo utilizado por outro membro. Por favor, tente outro.');
-        setLoading(false);
-        return;
-      }
-
-      // Check if email already registered in g3d_user_roles
-      const { data: existingByEmail, error: errEmailCheck } = await supabase
-        .from('g3d_user_roles')
-        .select('email')
-        .eq('email', userEmail)
-        .maybeSingle();
-
-      if (existingByEmail) {
-        setError('Este e-mail de recuperação já está cadastrado em nossa base de colaboradores.');
-        setLoading(false);
-        return;
-      }
-
-      // Register the user with Supabase Auth
-      const { data, error: registerErr } = await supabase.auth.signUp({
-        email: userEmail,
-        password: password,
-        options: {
-          emailRedirectTo: window.location.origin
-        }
-      });
-
-      if (registerErr) throw registerErr;
-
-      if (data.user) {
-        // Save database role with username - collaborators need system admin approval (colaborador_pendente)
-        const defaultRole = isGeorgeEmail ? 'admin' : 'colaborador_pendente';
-        
-        const { error: upsertErr } = await supabase.from('g3d_user_roles').upsert({
-          email: userEmail,
-          role: defaultRole,
-          username: cleanUsername
-        });
-
-        if (upsertErr) {
-          console.error("Erro ao inserir perfil do colaborador:", upsertErr);
-          throw new Error('Não foi possível gravar as informações do perfil no banco de dados. Contate o administrador.');
-        }
-
-        if (isGeorgeEmail) {
-          setSuccessMsg('Cadastro concluído com sucesso! Sua conta foi criada automaticamente como Administrador.');
-        } else {
-          setSuccessMsg('Cadastro solicitado com sucesso! Por segurança, seu acesso está PENDENTE. Solicite a liberação ao Administrador do sistema.');
-        }
-        
-        setIsRegistering(false);
-        setPassword('');
-        setConfirmPassword('');
-        setUsername('');
-      }
-    } catch (err: any) {
-      setError(err.message || 'Falha ao registrar colaborador.');
-    } finally {
-      setLoading(false);
-    }
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
@@ -444,13 +238,30 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     }
 
     try {
+      // Verification: Check if the email belongs to an administrator or collaborator to prevent arbitrary requests
+      const { data: roleData, error: roleErr } = await supabase
+        .from('g3d_user_roles')
+        .select('role')
+        .eq('email', userEmail)
+        .maybeSingle();
+
+      if (roleErr) throw roleErr;
+
+      // Allow recovery for registered system users (like georgefctec@gmail.com)
+      if (!roleData) {
+        setError('Este e-mail não está cadastrado ou autorizado no sistema GeorgeFctech-3D.');
+        setLoading(false);
+        return;
+      }
+
+      // Supabase Auth reset password call
       const { error: resetErr } = await supabase.auth.resetPasswordForEmail(userEmail, {
         redirectTo: window.location.origin
       });
 
       if (resetErr) throw resetErr;
 
-      setSuccessMsg('E-mail enviado! Verifique seu lixo eletrônico ou caixa de entrada para continuar com a alteração.');
+      setSuccessMsg('E-mail enviado! Verifique sua caixa de entrada para redefinir a senha do sistema.');
       setEmail('');
     } catch (err: any) {
       setError(err.message || 'Erro ao enviar e-mail de recuperação.');
@@ -464,8 +275,8 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     setError(null);
     setSuccessMsg(null);
 
-    if (password.length < 6) {
-      setError('A nova senha deve possuir no mínimo 6 caracteres.');
+    if (password.length < 4) {
+      setError('A nova senha deve possuir no mínimo 4 caracteres.');
       return;
     }
 
@@ -483,23 +294,38 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     }
 
     try {
-      const { error: updateErr } = await supabase.auth.updateUser({
-        password: password
+      // 1. Update master password globally in the user_roles table
+      const { error: dbErr } = await supabase.from('g3d_user_roles').upsert({
+        email: 'system_master_password',
+        role: password
       });
 
-      if (updateErr) throw updateErr;
+      if (dbErr) throw dbErr;
 
-      setSuccessMsg('Sua nova senha foi gravada com sucesso! Agora você já pode entrar na sua conta.');
+      // 2. Also update the user's password in Supabase Auth (since they clicked the recovery link, they are logged in)
+      try {
+        await supabase.auth.updateUser({ password: password });
+      } catch (authErr) {
+        console.warn("Aviso ao atualizar senha auth:", authErr);
+      }
+
+      // 3. Save locally in localStorage
+      localStorage.setItem('g3d_master_password', password);
+      setHasMasterPassword(true);
+
+      setSuccessMsg('Senha de acesso única redefinida com sucesso! Redirecionando...');
       setPassword('');
       setConfirmPassword('');
+      
       setTimeout(() => {
         setIsResettingPassword(false);
         setIsForgotPassword(false);
         setSuccessMsg(null);
         window.location.hash = ''; // Clear hash
-      }, 3500);
+        onLoginSuccess();
+      }, 2000);
     } catch (err: any) {
-      setError(err.message || 'Erro ao atualizar senha.');
+      setError(err.message || 'Erro ao atualizar a senha.');
     } finally {
       setLoading(false);
     }
@@ -636,9 +462,9 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
                 <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-650 dark:text-indigo-400 text-[10px] font-bold uppercase tracking-wider font-sans">
                   Recuperação de Acesso
                 </span>
-                <h3 className="text-slate-900 dark:text-white font-bold text-sm">Defina sua Nova Senha</h3>
+                <h3 className="text-slate-900 dark:text-white font-bold text-sm">Defina a Nova Senha do Sistema</h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Insira e confirme sua nova senha para atualizar seu cadastro em nuvem.
+                  Insira e confirme a nova senha de acesso única que será utilizada por todos os usuários do sistema.
                 </p>
               </div>
 
@@ -658,13 +484,15 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
 
               <div className="space-y-3.5">
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Nova Senha</label>
+                  <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 font-sans">Nova Senha Única</label>
                   <div className="relative">
-                    <KeyRound className="absolute left-3 top-3.5 w-4 h-4 text-slate-400 dark:text-slate-500" />
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                      <KeyRound className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+                    </div>
                     <input
                       type={showPassword ? 'text' : 'password'}
                       required
-                      placeholder="Mínimo de 6 caracteres"
+                      placeholder="Mínimo de 4 caracteres"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       className="w-full pl-10 pr-10 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 rounded-lg text-sm text-slate-900 dark:text-white font-mono focus:outline-none"
@@ -672,7 +500,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-3 w-4 h-4 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer"
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-350 cursor-pointer"
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
@@ -680,9 +508,11 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Confirme a Nova Senha</label>
+                  <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 font-sans">Confirme a Nova Senha</label>
                   <div className="relative">
-                    <Lock className="absolute left-3 top-3.5 w-4 h-4 text-slate-400 dark:text-slate-400" />
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                      <Lock className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+                    </div>
                     <input
                       type={showPassword ? 'text' : 'password'}
                       required
@@ -698,7 +528,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full flex items-center justify-center gap-2 mt-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs uppercase tracking-wider rounded-lg disabled:opacity-50 cursor-pointer animate-[pulse_3s_infinite]"
+                className="w-full flex items-center justify-center gap-2 mt-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-550 text-white font-bold text-xs uppercase tracking-wider rounded-lg disabled:opacity-50 cursor-pointer animate-[pulse_3s_infinite]"
               >
                 {loading ? 'Salvando...' : 'Atualizar e Gravar Senha'}
                 <CheckCircle2 className="w-4 h-4" />
@@ -711,9 +541,9 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
                 <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-650 dark:text-indigo-400 text-[10px] font-bold uppercase tracking-wider font-sans">
                   Recuperação de Acesso
                 </span>
-                <h3 className="text-slate-900 dark:text-white font-bold text-sm">Recuperar minha Senha</h3>
+                <h3 className="text-slate-900 dark:text-white font-bold text-sm">Recuperar Senha do Sistema</h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Insira o seu e-mail cadastrado e enviaremos um link de acesso seguro para você definir uma nova senha no GeorgeFctech-3D.
+                  Insira o seu e-mail cadastrado (de Administrador ou Colaborador) para receber um link de redefinição de senha por e-mail.
                 </p>
               </div>
 
@@ -733,9 +563,11 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
 
               <div className="space-y-3.5">
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">E-mail Cadastrado</label>
+                  <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 font-sans">Seu E-mail Cadastrado</label>
                   <div className="relative">
-                    <Mail className="absolute left-3 top-3.5 w-4 h-4 text-slate-400 dark:text-slate-500" />
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                      <Mail className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+                    </div>
                     <input
                       type="email"
                       required
@@ -751,9 +583,9 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full flex items-center justify-center gap-2 mt-4 px-5 py-3 bg-indigo-600 hover:bg-indigo-505 text-white font-bold text-xs uppercase tracking-wider rounded-lg disabled:opacity-50 cursor-pointer"
+                className="w-full flex items-center justify-center gap-2 mt-4 px-5 py-3 bg-indigo-600 hover:bg-indigo-550 text-white font-bold text-xs uppercase tracking-wider rounded-lg disabled:opacity-50 cursor-pointer"
               >
-                {loading ? 'Enviando...' : 'Solicitar Link de Alteração'}
+                {loading ? 'Enviando...' : 'Enviar Link de Redefinição'}
                 <ArrowRight className="w-4 h-4" />
               </button>
 
@@ -766,48 +598,14 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
               </button>
             </form>
           ) : (
-            // STANDARD SYSTEM LOGIN / TABBED MODE
-            <div className="space-y-5">
-              
-              {/* TABS SELECTOR (Active only if Supabase is configured) */}
-              {supabaseActive && !isRegistering && (
-                <div className="flex border border-slate-200 dark:border-slate-800 p-1 rounded-xl bg-slate-100 dark:bg-slate-950">
-                  <button
-                    type="button"
-                    onClick={() => { 
-                      setActiveTab('supabase'); 
-                      setError(null); 
-                      setPassword('');
-                      setConfirmPassword('');
-                    }}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${
-                      activeTab === 'supabase'
-                        ? 'bg-indigo-600 text-white shadow-md'
-                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-                    }`}
-                  >
-                    <Users className="w-4 h-4" />
-                    Acesso em Nuvem (Multi-usuário)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { 
-                      setActiveTab('master'); 
-                      setError(null); 
-                      setPassword('');
-                      setConfirmPassword('');
-                    }}
-                    className={`flex-1 flex-row flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${
-                      activeTab === 'master'
-                        ? 'bg-indigo-600 text-white shadow-md'
-                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-202'
-                    }`}
-                  >
-                    <Lock className="w-4 h-4" />
-                    Senha Mestra (Admin)
-                  </button>
-                </div>
-              )}
+            // SINGLE UNIQUE SYSTEM LOGIN
+            <form onSubmit={handleMasterLogin} className="space-y-5">
+              <div className="space-y-1">
+                <h3 className="text-slate-900 dark:text-white font-bold text-sm">Painel de Acesso Único</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Insira a chave de acesso única para entrar no sistema. Escolha o perfil desejado.
+                </p>
+              </div>
 
               {error && (
                 <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/40 text-rose-700 dark:text-rose-300 text-xs rounded-lg flex items-start gap-2.5">
@@ -816,286 +614,105 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
                 </div>
               )}
 
-              {successMsg && (
-                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/40 text-emerald-700 dark:text-emerald-300 text-xs rounded-lg flex items-start gap-2.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
-                  <span>{successMsg}</span>
-                </div>
-              )}
-
-              {/* REGISTER NEW COLABORADOR VIEW */}
-              {isRegistering ? (
-                <form onSubmit={handleSupabaseRegister} className="space-y-4">
-                  <div className="space-y-1">
-                    <h3 className="text-slate-900 dark:text-white font-bold text-sm">Registrar Novo Colaborador</h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                      Cadastre-se com um <strong>nome de usuário</strong> único para fazer o login. Seu e-mail será utilizado exclusivamente para <strong>recuperação de senha</strong> e seu acesso ficará sujeito à aprovação do Administrador.
-                    </p>
-                  </div>
-
-                  <div className="space-y-3.5">
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Nome de Usuário (Login)</label>
-                      <div className="relative">
-                        <Users className="absolute left-3 top-3.5 w-4 h-4 text-slate-400 dark:text-slate-500" />
-                        <input
-                          type="text"
-                          required
-                          placeholder="Ex: joao_3d"
-                          value={username}
-                          onChange={(e) => setUsername(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 rounded-lg text-sm text-slate-900 dark:text-white"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">E-mail de Recuperação</label>
-                      <div className="relative">
-                        <Mail className="absolute left-3 top-3.5 w-4 h-4 text-slate-400 dark:text-slate-500" />
-                        <input
-                          type="email"
-                          required
-                          placeholder="Ex: joao@gmail.com (Apenas para recuperar senha)"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 rounded-lg text-sm text-slate-900 dark:text-white"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Nova Senha</label>
-                      <div className="relative">
-                        <KeyRound className="absolute left-3 top-3.5 w-4 h-4 text-slate-400 dark:text-slate-500" />
-                        <input
-                          type="password"
-                          required
-                          placeholder="Mínimo 6 dígitos"
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 rounded-lg text-sm text-slate-900 dark:text-white font-mono"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Confirme a Senha</label>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-3.5 w-4 h-4 text-slate-400 dark:text-slate-500" />
-                        <input
-                          type="password"
-                          required
-                          placeholder="Repita a senha"
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 rounded-lg text-sm text-slate-900 dark:text-white font-mono"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full flex items-center justify-center gap-2 mt-2 px-5 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs uppercase tracking-wider rounded-lg disabled:opacity-50 cursor-pointer"
-                  >
-                    {loading ? 'Cadastrando...' : 'Finalizar Cadastro (Aguardando Aprovação)'}
-                    <UserPlus className="w-4 h-4" />
-                  </button>
-
+              {/* ROLE SELECTOR */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Selecione seu Perfil de Acesso
+                </label>
+                <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
-                    onClick={() => { setIsRegistering(false); setError(null); }}
-                    className="w-full text-center text-xs text-slate-500 dark:text-slate-400 hover:text-indigo-650 dark:hover:text-white transition cursor-pointer"
+                    onClick={() => setSelectedRole('admin')}
+                    className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-bold uppercase tracking-wide border transition-all cursor-pointer ${
+                      selectedRole === 'admin'
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/10'
+                        : 'bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900'
+                    }`}
                   >
-                    Voltar para Login
+                    <Lock className="w-4 h-4" />
+                    Administrador
                   </button>
-                </form>
-              ) : activeTab === 'supabase' ? (
-                // SUPABASE MULTIUSER LOGIN
-                <form onSubmit={handleSupabaseLogin} className="space-y-4">
-                  <div className="space-y-1">
-                    <h3 className="text-slate-900 dark:text-white font-bold text-sm">Autenticidade em Nuvem</h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Entre com seu Nome de Usuário ou E-mail corporativo para sincronizar dados em tempo real.
-                    </p>
-                  </div>
-
-                  <div className="space-y-3.5">
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-455">Nome de Usuário ou E-mail</label>
-                      <div className="relative">
-                        <Users className="absolute left-3 top-3.5 w-4 h-4 text-slate-400 dark:text-slate-500" />
-                        <input
-                          type="text"
-                          required
-                          placeholder="Seu usuário (Ex: joao_3d) ou e-mail"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 rounded-lg text-sm text-slate-900 dark:text-white"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                      <div className="flex justify-between items-center mb-0.5">
-                        <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-455">Senha de Acesso</label>
-                        <button
-                          type="button"
-                          onClick={() => { setIsForgotPassword(true); setError(null); setSuccessMsg(null); }}
-                          className="text-[10.5px] text-indigo-650 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-semibold cursor-pointer underline decoration-dotted"
-                        >
-                          Esqueceu a senha?
-                        </button>
-                      </div>
-                      <div className="relative">
-                        <KeyRound className="absolute left-3 top-3.5 w-4 h-4 text-slate-400 dark:text-slate-500" />
-                        <input
-                          type={showPassword ? 'text' : 'password'}
-                          required
-                          placeholder="Digite sua senha cadastrada"
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          className="w-full pl-10 pr-10 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 rounded-lg text-sm text-slate-900 dark:text-white font-mono"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-3 w-4 h-4 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
-                        >
-                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
                   <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full flex items-center justify-center gap-2 mt-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs uppercase tracking-wider rounded-lg disabled:opacity-50 cursor-pointer"
+                    type="button"
+                    onClick={() => setSelectedRole('colaborador')}
+                    className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-bold uppercase tracking-wide border transition-all cursor-pointer ${
+                      selectedRole === 'colaborador'
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/10'
+                        : 'bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900'
+                    }`}
                   >
-                    {loading ? 'Validando...' : 'Fazer Login Sincronizado'}
-                    <LogIn className="w-4 h-4" />
+                    <Users className="w-4 h-4" />
+                    Colaborador
                   </button>
+                </div>
+              </div>
 
-                  <div className="text-center pt-1 border-t border-slate-200 dark:border-slate-800">
+              {/* IDENTIFICATION NAME INPUT */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Seu Nome / Identificação <span className="text-slate-400 dark:text-slate-600 font-normal">(Opcional)</span>
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                    <Users className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Ex: George, João, Maria..."
+                    value={userName}
+                    onChange={(e) => setUserName(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 rounded-lg text-sm text-slate-900 dark:text-white focus:outline-none placeholder-slate-400 dark:placeholder-slate-600 transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* UNIQUE PASSWORD INPUT */}
+              <div className="flex flex-col gap-1.5">
+                <div className="flex justify-between items-center mb-0.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    Senha de Acesso Única
+                  </label>
+                  {supabaseActive && (
                     <button
                       type="button"
-                      onClick={() => { setIsRegistering(true); setError(null); }}
-                      className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-semibold transition cursor-pointer"
+                      onClick={() => { setIsForgotPassword(true); setError(null); setSuccessMsg(null); }}
+                      className="text-[10.5px] text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-semibold cursor-pointer underline decoration-dotted"
                     >
-                      Cadastrar uma conta de Colaborador
+                      Esqueceu a senha?
                     </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                    <KeyRound className="w-4 h-4 text-slate-400 dark:text-slate-500" />
                   </div>
-                </form>
-              ) : !hasMasterPassword ? (
-                // LOCAL MASTER PASSWORD SIGN UP (IF NOT SET YET)
-                <form onSubmit={handleSetupPassword} className="space-y-4">
-                  <div className="space-y-1">
-                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-bold uppercase tracking-wider">
-                      Definir Senha Mestra
-                    </span>
-                    <h3 className="text-slate-900 dark:text-white font-bold text-sm">Cadastre sua Senha</h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Não há nenhuma senha mestra definida localmente neste navegador. Defina uma para atuar como redundância administrativa e acesso offline.
-                    </p>
-                  </div>
-
-                  <div className="space-y-3.5">
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Nova Senha Mestra</label>
-                      <div className="relative">
-                        <KeyRound className="absolute left-3 top-3.5 w-4 h-4 text-slate-400 dark:text-slate-500 font-sans" />
-                        <input
-                          type={showPassword ? 'text' : 'password'}
-                          required
-                          placeholder="Mínimo de 4 caracteres"
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          className="w-full pl-10 pr-10 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 rounded-lg text-sm text-slate-900 dark:text-white font-mono"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-3 w-4 h-4 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-350"
-                        >
-                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Confirme a Senha</label>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-3.5 w-4 h-4 text-slate-400 dark:text-slate-500 font-sans" />
-                        <input
-                          type={showPassword ? 'text' : 'password'}
-                          required
-                          placeholder="Repita a senha escrita"
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                          className="w-full pl-10 pr-10 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 rounded-lg text-sm text-slate-900 dark:text-white font-mono"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    placeholder="Digite a senha mestra do sistema"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full pl-10 pr-10 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 rounded-lg text-sm text-slate-900 dark:text-white focus:outline-none placeholder-slate-400 dark:placeholder-slate-600 font-mono transition-all"
+                  />
                   <button
-                    type="submit"
-                    className="w-full flex items-center justify-center gap-2 mt-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs uppercase tracking-wider rounded-lg shadow-lg cursor-pointer"
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-350 cursor-pointer"
                   >
-                    Gravar Senha e Entrar
-                    <ArrowRight className="w-4 h-4" />
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
-                </form>
-              ) : (
-                // LOCAL MASTER PASSWORD SIGN IN
-                <form onSubmit={handleMasterLogin} className="space-y-4">
-                  <div className="space-y-1">
-                    <h3 className="text-slate-900 dark:text-white font-bold text-sm">Painel de Administrador</h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Insira a Senha Mestra interna do sistema para ter acesso offline completo às ferramentas do console.
-                    </p>
-                  </div>
+                </div>
+              </div>
 
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
-                      Senha Mestra Cadastrada
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                        <KeyRound className="w-4 h-4 text-slate-400 dark:text-slate-500" />
-                      </div>
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        required
-                        placeholder="Sua senha mestra"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="w-full pl-10 pr-10 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 rounded-lg text-sm text-slate-900 dark:text-white focus:outline-none placeholder-slate-400 dark:placeholder-slate-600 font-mono transition-all"
-                        autoFocus
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-350"
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="w-full flex items-center justify-center gap-2 mt-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-550 text-white font-bold text-xs uppercase tracking-wider rounded-lg shadow-lg shadow-indigo-950/40 cursor-pointer animate-[pulse_3.5s_infinite]"
-                  >
-                    Autenticar Administrador
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                </form>
-              )}
-            </div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-2 mt-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-550 text-white font-bold text-xs uppercase tracking-wider rounded-lg shadow-lg shadow-indigo-950/40 cursor-pointer animate-[pulse_3.5s_infinite]"
+              >
+                {loading ? 'Autenticando...' : 'Entrar no Sistema'}
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </form>
           )}
         </div>
 
