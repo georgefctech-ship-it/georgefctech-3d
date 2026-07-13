@@ -295,9 +295,9 @@ export default function ShoppingListView({
   const generateReport = () => {
     if (shopping.length === 0) return;
 
-    const defaultCompanyLabel = userRole === 'colaborador' ? 'GeorgeFctech Comercial' : 'GeorgeFctech-3D';
-    const selectedCompany = filterCompany !== 'Todos' ? filterCompany : `GERAL / ${defaultCompanyLabel}`;
-    const reportTitle = `${selectedCompany.toUpperCase()} - PEDIDO COMERCIAL`;
+    const defaultCompanyLabel = userRole === 'colaborador' ? (company || 'Empresa Solicitante') : 'GeorgeFctech-3D';
+    const selectedCompany = filterCompany !== 'Todos' ? filterCompany : (userRole === 'colaborador' ? (company || 'Empresa Solicitante') : `GERAL / ${defaultCompanyLabel}`);
+    const reportTitle = userRole === 'colaborador' ? 'PEDIDO COMERCIAL DE COMPRAS' : `${selectedCompany.toUpperCase()} - PEDIDO COMERCIAL`;
     const dateFormatted = new Date().toLocaleDateString('pt-BR');
     const timeFormatted = new Date().toLocaleTimeString('pt-BR');
 
@@ -571,9 +571,9 @@ export default function ShoppingListView({
   const downloadHtmlReport = () => {
     if (shopping.length === 0) return;
 
-    const defaultCompanyLabel = userRole === 'colaborador' ? 'GeorgeFctech Comercial' : 'GeorgeFctech-3D';
-    const selectedCompany = filterCompany !== 'Todos' ? filterCompany : `GERAL / ${defaultCompanyLabel}`;
-    const reportTitle = `${selectedCompany.toUpperCase()} - PEDIDO COMERCIAL`;
+    const defaultCompanyLabel = userRole === 'colaborador' ? (company || 'Empresa Solicitante') : 'GeorgeFctech-3D';
+    const selectedCompany = filterCompany !== 'Todos' ? filterCompany : (userRole === 'colaborador' ? (company || 'Empresa Solicitante') : `GERAL / ${defaultCompanyLabel}`);
+    const reportTitle = userRole === 'colaborador' ? 'PEDIDO COMERCIAL DE COMPRAS' : `${selectedCompany.toUpperCase()} - PEDIDO COMERCIAL`;
     const dateFormatted = new Date().toLocaleDateString('pt-BR');
     const timeFormatted = new Date().toLocaleTimeString('pt-BR');
 
@@ -814,16 +814,16 @@ export default function ShoppingListView({
   <div class="container">
     <div class="header-banner">
       <div class="header-left">
-        <h1>${userRole === 'colaborador' ? 'GeorgeFctech Comercial &bull; Pedidos' : 'GeorgeFctech 3D &bull; Gestão de Insumos'}</h1>
-        <p>${userRole === 'colaborador' ? 'Pedido de Compras Comercial' : 'Relatório de Planejamento de Compras Comerciais'}</p>
+        <h1>${userRole === 'colaborador' ? 'Pedido de Compras Comercial' : 'GeorgeFctech 3D &bull; Gestão de Insumos'}</h1>
+        <p>${userRole === 'colaborador' ? 'Gestão de Insumos e Pedidos' : 'Relatório de Planejamento de Compras Comerciais'}</p>
         ${userRole === 'colaborador' ? `
-        <p style="margin-top: 6px; font-size: 11px; color: #cbd5e1; font-weight: bold;">Responsável: ${requestedBy || 'Colaborador'} &bull; Empresa: ${company || 'GeorgeFctech Comercial'}</p>
+        <p style="margin-top: 6px; font-size: 11px; color: #cbd5e1; font-weight: bold;">Responsável: ${requestedBy || 'Colaborador'} &bull; Empresa: ${company || 'Empresa Solicitante'}</p>
         ` : `
         <p style="margin-top: 6px; font-size: 11px; color: #cbd5e1; font-weight: bold;">Firma Responsável: GeorgeFctech-3D</p>
         `}
       </div>
       <div class="header-right">
-        <h2>${userRole === 'colaborador' ? (company || 'GeorgeFctech Comercial').toUpperCase() : selectedCompany.toUpperCase()}</h2>
+        <h2>${userRole === 'colaborador' ? (company || 'Empresa Solicitante').toUpperCase() : selectedCompany.toUpperCase()}</h2>
         <p>Gerado em: ${dateFormatted} às ${timeFormatted}</p>
       </div>
     </div>
@@ -921,7 +921,7 @@ export default function ShoppingListView({
       </div>
       <div class="signature-box">
         <p style="margin: 0 0 10px 0; font-size: 12px; color: #64748b; text-align: left;">Liberação e Aprovação de Custos:</p>
-        <div class="signature-line">${userRole === 'colaborador' ? company || 'GeorgeFctech Comercial' : 'Departamento Financeiro / Comercial'}</div>
+        <div class="signature-line">${userRole === 'colaborador' ? company || 'Empresa Solicitante' : 'Departamento Financeiro / Comercial'}</div>
       </div>
     </div>
   </div>
@@ -1033,22 +1033,24 @@ export default function ShoppingListView({
       <div className="hidden print:block border-b-2 border-indigo-600 pb-5 mb-8">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 bg-transparent border border-slate-200 flex items-center justify-center p-0">
-              <img 
-                referrerPolicy="no-referrer"
-                src={userRole === 'colaborador'
-                  ? "https://lh3.googleusercontent.com/gps-cs-s/APNQkAForRZzi0p_dHcu4q-uB5_6Hmh_ZWM1hwqil-EcrY-fKLUJWx-Z1RHuhgUQTtqJXsV29-B0tbj3CuhgI93tL_ygBJPL6nmLWh2TGr4Imchb-7y8ozTXVOdxt5UFk-PmJqQndhUJLw=w229-h164-n-k-no-nu"
-                  : "https://vyvompcoiaizoluuxnzx.supabase.co/storage/v1/object/sign/img/meu_logo.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9lYTFhZWQwNC03M2Y5LTQwODQtOWNiOS04ODBkMTA3MzAwY2UiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJpbWcvbWV1X2xvZ28ucG5nIiwic2NvcGUiOiJkb3dubG9hZCIsImlhdCI6MTc4MTc5NTUxOCwiZXhwIjoxODc2NDAzNTE4fQ.JgHY5piKmwxjB0nfW08joAWsNE-JYRA5kUUkVra9hFI"}
-                alt="GeorgeFctech Logo"
-                className="w-full h-full object-cover"
-              />
+            <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 bg-indigo-50 border border-slate-200 flex items-center justify-center p-0">
+              {userRole === 'colaborador' ? (
+                <ShoppingBag className="w-6 h-6 text-indigo-600" />
+              ) : (
+                <img 
+                  referrerPolicy="no-referrer"
+                  src="https://vyvompcoiaizoluuxnzx.supabase.co/storage/v1/object/sign/img/meu_logo.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9lYTFhZWQwNC03M2Y5LTQwODQtOWNiOS04ODBkMTA3MzAwY2UiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJpbWcvbWV1X2xvZ28ucG5nIiwic2NvcGUiOiJkb3dubG9hZCIsImlhdCI6MTc4MTc5NTUxOCwiZXhwIjoxODc2NDAzNTE4fQ.JgHY5piKmwxjB0nfW08joAWsNE-JYRA5kUUkVra9hFI"
+                  alt="Logo"
+                  className="w-full h-full object-cover"
+                />
+              )}
             </div>
             <div>
               <h2 className="text-xl font-bold text-slate-900">
-                {userRole === 'colaborador' ? 'GeorgeFctech Comercial' : 'GeorgeFctech-3D'}
+                {userRole === 'colaborador' ? (company || 'Empresa Solicitante') : 'GeorgeFctech-3D'}
               </h2>
               <p className="text-[10px] text-slate-500 font-mono">
-                {userRole === 'colaborador' ? 'Gestão Comercial & Planejamento de Compras' : 'Gestão Comercial & Suprimentos de Impressão 3D'}
+                {userRole === 'colaborador' ? 'Planejamento de Compras' : 'Gestão Comercial & Suprimentos de Impressão 3D'}
               </p>
             </div>
           </div>
@@ -1057,7 +1059,7 @@ export default function ShoppingListView({
             {userRole === 'colaborador' ? (
               <>
                 <p className="text-[10px] text-slate-800 font-bold font-mono">Responsável: {requestedBy || 'Colaborador'}</p>
-                <p className="text-[10px] text-slate-800 font-bold font-mono">Empresa: {company || 'GeorgeFctech Comercial'}</p>
+                <p className="text-[10px] text-slate-800 font-bold font-mono">Empresa: {company || 'Empresa Solicitante'}</p>
               </>
             ) : (
               <p className="text-[10px] text-slate-800 font-bold font-mono">Firma Responsável: GeorgeFctech-3D</p>
@@ -1328,7 +1330,7 @@ export default function ShoppingListView({
                 <input
                   type="text"
                   required
-                  placeholder="Ex: FTEX, GeorgeFctech-3D..."
+                  placeholder={userRole === 'colaborador' ? "Ex: FTEX, Empresa Comercial..." : "Ex: FTEX, GeorgeFctech-3D..."}
                   value={company}
                   onChange={(e) => setCompany(e.target.value)}
                   className="w-full text-sm px-4 py-2 border border-indigo-200 rounded-lg focus:outline-none focus:border-indigo-500 text-slate-800 bg-white shadow-xs font-medium"
