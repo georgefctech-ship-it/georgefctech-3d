@@ -1293,14 +1293,14 @@ export default function ShoppingListView({
               {currentSubView === 'calculadoras' && (
                 <>
                   <Calculator className="text-amber-500 dark:text-amber-400 w-8 h-8" />
-                  <span>Calculadoras Oficina</span>
+                  <span>{userRole === 'colaborador' ? 'Cálculos Gerais' : 'Calculadoras Oficina'}</span>
                 </>
               )}
             </h1>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
               {currentSubView === 'baixa' && 'Registre a chegada e baixa de suprimentos solicitados na oficina em tempo real.'}
               {currentSubView === 'compras_efetuadas' && 'Visualize todos os itens de compra que já foram recebidos e auditados.'}
-              {currentSubView === 'calculadoras' && 'Estime o custo de gramas de filamento, comprimentos de rolo e orçamentos rápidos para novos lotes.'}
+              {currentSubView === 'calculadoras' && (userRole === 'colaborador' ? 'Calculadora de bolso integrada para contas rápidas, fechamentos e cálculos gerais.' : 'Estime o custo de gramas de filamento, comprimentos de rolo e orçamentos rápidos para novos lotes.')}
             </p>
           </div>
         </div>
@@ -2559,18 +2559,20 @@ export default function ShoppingListView({
         {/* TAB CONTENT: CALCULADORAS OPERACIONAIS */}
         {colabActiveTab === 'calculadora' && (
           <div className="p-6">
-            <div className="mb-6">
+            <div className="mb-6 bg-slate-50 dark:bg-slate-900/40 p-4 rounded-xl border border-slate-100 dark:border-slate-800">
               <h4 className="font-bold text-slate-800 dark:text-slate-150 text-sm mb-1 flex items-center gap-1.5">
-                <Wrench className="w-4 h-4 text-indigo-500" />
-                <span>🧮 Calculadoras e Utilitários de Impressão & Compras</span>
+                <Wrench className="w-4 h-4 text-indigo-500 animate-spin-slow" />
+                <span>{userRole === 'colaborador' ? '🧮 Cálculos Gerais' : '🧮 Calculadoras e Utilitários de Impressão & Compras'}</span>
               </h4>
-              <p className="text-xs text-slate-450 leading-relaxed">
-                Ferramentas interativas para ajudar colaboradores no planejamento de consumo de insumos de impressão 3D e cálculo de orçamentos rápidos para compras.
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                {userRole === 'colaborador' ? 'Calculadora de bolso integrada para auxiliar colaboradores em contas rápidas de compras, rateio de insumos e fechamento de valores.' : 'Ferramentas interativas para ajudar colaboradores no planejamento de consumo de insumos de impressão 3D e cálculo de orçamentos rápidos para compras.'}
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {/* 1. FILAMENT COST CALCULATOR */}
+            <div className={userRole === 'colaborador' ? "max-w-md mx-auto" : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"}>
+              {userRole !== 'colaborador' && (
+                <>
+                  {/* 1. FILAMENT COST CALCULATOR */}
               <div className="bg-white dark:bg-slate-950 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between">
                 <div>
                   <div className="flex items-center gap-2 mb-3">
@@ -2730,49 +2732,77 @@ export default function ShoppingListView({
                   </strong>
                 </div>
               </div>
+                </>
+              )}
 
               {/* 4. DIGITAL POCKET CALCULATOR */}
-              <div className="bg-slate-900 dark:bg-slate-950 text-white p-5 rounded-2xl border border-slate-800 flex flex-col justify-between shadow-lg relative overflow-hidden select-none">
-                {/* Visual solar panel detail for realistic feel */}
-                <div className="absolute top-2 right-4 flex items-center gap-1.5 opacity-65">
-                  <span className="text-[7px] font-mono tracking-wider text-slate-450 uppercase">Solar Cell</span>
-                  <div className="flex gap-0.5">
-                    <span className="w-2.5 h-1.5 bg-amber-800/85 rounded-[1px]" />
-                    <span className="w-2.5 h-1.5 bg-amber-800/85 rounded-[1px]" />
-                    <span className="w-2.5 h-1.5 bg-amber-800/85 rounded-[1px]" />
+              <div className="bg-gradient-to-b from-[#24282e] to-[#121417] text-white p-6 rounded-[24px] border-4 border-[#3a3f47] flex flex-col justify-between shadow-[0_20px_40px_rgba(0,0,0,0.6),inset_0_2px_4px_rgba(255,255,255,0.15)] relative overflow-hidden select-none max-w-sm mx-auto w-full">
+                {/* Visual glass sheen across the entire calculator */}
+                <div className="absolute top-0 left-0 right-0 h-[40%] bg-gradient-to-b from-white/5 to-white/0 pointer-events-none skew-y-6 origin-top-left" />
+
+                {/* Brand Header */}
+                <div className="flex items-center justify-between mb-4 pb-2 border-b border-[#2d323b] relative z-10">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-mono tracking-widest text-slate-300 font-extrabold uppercase">
+                      GeorgeFctech
+                    </span>
+                    <span className="text-[7px] font-mono tracking-wider text-slate-500 uppercase -mt-0.5">
+                      ELECTRONIC GT-1200X
+                    </span>
+                  </div>
+
+                  {/* SOLAR CELL PANEL */}
+                  <div className="bg-gradient-to-r from-[#201008] via-[#4d2512] to-[#201008] rounded border border-black flex gap-0.5 p-0.5 h-5 w-14 shadow-[inset_0_1px_3px_rgba(0,0,0,0.8)] relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none" />
+                    <span className="w-full bg-[#3c1e0f]/80 rounded-[1px] border-r border-[#1a0c06]" />
+                    <span className="w-full bg-[#3c1e0f]/80 rounded-[1px] border-r border-[#1a0c06]" />
+                    <span className="w-full bg-[#3c1e0f]/80 rounded-[1px] border-r border-[#1a0c06]" />
+                    <span className="w-full bg-[#3c1e0f]/80 rounded-[1px]" />
                   </div>
                 </div>
 
                 <div>
-                  <div className="flex items-center gap-2 mb-3 border-b border-slate-800 pb-2">
-                    <Calculator className="w-4 h-4 text-amber-500" />
-                    <h5 className="font-bold text-xs uppercase tracking-wider text-slate-300">
-                      Calculadora de Bolso
-                    </h5>
-                  </div>
-
                   {/* SCREEN / LCD DISPLAY */}
-                  <div className="bg-emerald-950/40 border border-emerald-900/40 rounded-xl p-3 text-right font-mono relative shadow-inner">
-                    <div className="text-[10px] text-emerald-500/60 min-h-[14px] truncate tracking-wider">
+                  <div 
+                    className="border-3 border-[#0b0c0e] rounded-xl p-3.5 text-right font-mono relative overflow-hidden mb-5 select-text shadow-[inset_0_4px_10px_rgba(0,0,0,0.8),0_1px_2px_rgba(255,255,255,0.1)]"
+                    style={{
+                      backgroundColor: '#9cae8d',
+                      backgroundImage: 'radial-gradient(circle, rgba(156,174,141,1) 0%, rgba(144,161,129,1) 100%)',
+                      boxShadow: 'inset 0 4px 10px rgba(0,0,0,0.8), 0 1px 2px rgba(255,255,255,0.1)',
+                      color: '#1d2618'
+                    }}
+                  >
+                    {/* Retro LCD screen glass glare */}
+                    <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/10 to-transparent pointer-events-none" />
+                    
+                    {/* Faint LCD background numbers to simulate segmented screen */}
+                    <div className="absolute right-3.5 bottom-3 text-2xl font-bold tracking-tight text-[#1d2618]/5 select-none font-mono pointer-events-none">
+                      8888888888
+                    </div>
+
+                    {/* Formula / Sub-display */}
+                    <div className="text-[10px] text-[#1d2618]/60 min-h-[15px] truncate tracking-normal font-bold">
                       {calcSubDisplay || '\u00A0'}
                     </div>
-                    <div className="text-xl font-bold text-emerald-400 truncate tracking-tight mt-0.5 select-all">
+
+                    {/* Main Display value */}
+                    <div className="text-2xl font-black truncate tracking-tight mt-0.5 select-all font-mono drop-shadow-[0.5px_0.5px_0px_rgba(255,255,255,0.4)]">
                       {calcDisplay}
                     </div>
                   </div>
 
-                  {/* BUTTONS GRID */}
-                  <div className="grid grid-cols-4 gap-1.5 text-xs">
+                  {/* BUTTONS GRID WITH REALISTIC 3D MECHANICAL KEY PRESS FEEL */}
+                  <div className="grid grid-cols-4 gap-2.5 text-xs font-mono">
                     {/* Row 1 */}
                     <button
                       onClick={() => handleCalcKeyPress('C')}
-                      className="h-8 font-bold bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 rounded-lg transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center border border-rose-900/30"
+                      className="h-10 font-bold bg-[#df4242] hover:bg-[#eb4e4e] text-white rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center border-b-[3px] border-[#8a2121] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.25)] select-none text-sm"
                     >
                       C
                     </button>
                     <button
                       onClick={() => handleCalcKeyPress('DEL')}
-                      className="h-8 font-bold bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-lg transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center border border-slate-700/30"
+                      className="h-10 font-bold bg-[#e07431] hover:bg-[#ed813e] text-white rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center border-b-[3px] border-[#9c4a16] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.25)] select-none"
                     >
                       DEL
                     </button>
@@ -2783,13 +2813,13 @@ export default function ShoppingListView({
                         setTimeout(() => setToastMessage(null), 2500);
                       }}
                       title="Copiar resultado"
-                      className="h-8 text-[10px] font-bold bg-slate-800 hover:bg-slate-750 text-amber-500 rounded-lg transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center border border-slate-700/30"
+                      className="h-10 text-[9px] font-extrabold bg-[#555d6a] hover:bg-[#626a79] text-[#ffd26a] rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center border-b-[3px] border-[#363b44] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.25)] select-none tracking-tighter"
                     >
                       COPIAR
                     </button>
                     <button
                       onClick={() => handleCalcKeyPress('÷')}
-                      className="h-8 font-extrabold bg-indigo-950 text-indigo-400 rounded-lg hover:bg-indigo-900 transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center text-sm border border-indigo-900/30"
+                      className="h-10 font-extrabold bg-[#47608a] hover:bg-[#5470a1] text-indigo-150 rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center text-sm border-b-[3px] border-[#293a57] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.25)] select-none"
                     >
                       ÷
                     </button>
@@ -2797,25 +2827,25 @@ export default function ShoppingListView({
                     {/* Row 2 */}
                     <button
                       onClick={() => handleCalcKeyPress('7')}
-                      className="h-8 font-semibold bg-slate-800/60 hover:bg-slate-800 text-slate-100 rounded-lg transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center border border-slate-700/20"
+                      className="h-10 font-bold bg-[#373d47] hover:bg-[#434b57] text-white rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center border-b-[3px] border-[#1d2127] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] select-none text-sm"
                     >
                       7
                     </button>
                     <button
                       onClick={() => handleCalcKeyPress('8')}
-                      className="h-8 font-semibold bg-slate-800/60 hover:bg-slate-800 text-slate-100 rounded-lg transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center border border-slate-700/20"
+                      className="h-10 font-bold bg-[#373d47] hover:bg-[#434b57] text-white rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center border-b-[3px] border-[#1d2127] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] select-none text-sm"
                     >
                       8
                     </button>
                     <button
                       onClick={() => handleCalcKeyPress('9')}
-                      className="h-8 font-semibold bg-slate-800/60 hover:bg-slate-800 text-slate-100 rounded-lg transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center border border-slate-700/20"
+                      className="h-10 font-bold bg-[#373d47] hover:bg-[#434b57] text-white rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center border-b-[3px] border-[#1d2127] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] select-none text-sm"
                     >
                       9
                     </button>
                     <button
                       onClick={() => handleCalcKeyPress('×')}
-                      className="h-8 font-extrabold bg-indigo-950 text-indigo-400 rounded-lg hover:bg-indigo-900 transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center text-sm border border-indigo-900/30"
+                      className="h-10 font-extrabold bg-[#47608a] hover:bg-[#5470a1] text-indigo-150 rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center text-sm border-b-[3px] border-[#293a57] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.25)] select-none"
                     >
                       ×
                     </button>
@@ -2823,25 +2853,25 @@ export default function ShoppingListView({
                     {/* Row 3 */}
                     <button
                       onClick={() => handleCalcKeyPress('4')}
-                      className="h-8 font-semibold bg-slate-800/60 hover:bg-slate-800 text-slate-100 rounded-lg transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center border border-slate-700/20"
+                      className="h-10 font-bold bg-[#373d47] hover:bg-[#434b57] text-white rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center border-b-[3px] border-[#1d2127] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] select-none text-sm"
                     >
                       4
                     </button>
                     <button
                       onClick={() => handleCalcKeyPress('5')}
-                      className="h-8 font-semibold bg-slate-800/60 hover:bg-slate-800 text-slate-100 rounded-lg transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center border border-slate-700/20"
+                      className="h-10 font-bold bg-[#373d47] hover:bg-[#434b57] text-white rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center border-b-[3px] border-[#1d2127] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] select-none text-sm"
                     >
                       5
                     </button>
                     <button
                       onClick={() => handleCalcKeyPress('6')}
-                      className="h-8 font-semibold bg-slate-800/60 hover:bg-slate-800 text-slate-100 rounded-lg transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center border border-slate-700/20"
+                      className="h-10 font-bold bg-[#373d47] hover:bg-[#434b57] text-white rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center border-b-[3px] border-[#1d2127] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] select-none text-sm"
                     >
                       6
                     </button>
                     <button
                       onClick={() => handleCalcKeyPress('-')}
-                      className="h-8 font-extrabold bg-indigo-950 text-indigo-400 rounded-lg hover:bg-indigo-900 transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center text-sm border border-indigo-900/30"
+                      className="h-10 font-extrabold bg-[#47608a] hover:bg-[#5470a1] text-indigo-150 rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center text-sm border-b-[3px] border-[#293a57] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.25)] select-none"
                     >
                       -
                     </button>
@@ -2849,25 +2879,25 @@ export default function ShoppingListView({
                     {/* Row 4 */}
                     <button
                       onClick={() => handleCalcKeyPress('1')}
-                      className="h-8 font-semibold bg-slate-800/60 hover:bg-slate-800 text-slate-100 rounded-lg transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center border border-slate-700/20"
+                      className="h-10 font-bold bg-[#373d47] hover:bg-[#434b57] text-white rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center border-b-[3px] border-[#1d2127] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] select-none text-sm"
                     >
                       1
                     </button>
                     <button
                       onClick={() => handleCalcKeyPress('2')}
-                      className="h-8 font-semibold bg-slate-800/60 hover:bg-slate-800 text-slate-100 rounded-lg transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center border border-slate-700/20"
+                      className="h-10 font-bold bg-[#373d47] hover:bg-[#434b57] text-white rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center border-b-[3px] border-[#1d2127] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] select-none text-sm"
                     >
                       2
                     </button>
                     <button
                       onClick={() => handleCalcKeyPress('3')}
-                      className="h-8 font-semibold bg-slate-800/60 hover:bg-slate-800 text-slate-100 rounded-lg transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center border border-slate-700/20"
+                      className="h-10 font-bold bg-[#373d47] hover:bg-[#434b57] text-white rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center border-b-[3px] border-[#1d2127] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] select-none text-sm"
                     >
                       3
                     </button>
                     <button
                       onClick={() => handleCalcKeyPress('+')}
-                      className="h-8 font-extrabold bg-indigo-950 text-indigo-400 rounded-lg hover:bg-indigo-900 transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center text-sm border border-indigo-900/30"
+                      className="h-10 font-extrabold bg-[#47608a] hover:bg-[#5470a1] text-indigo-150 rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center text-sm border-b-[3px] border-[#293a57] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.25)] select-none"
                     >
                       +
                     </button>
@@ -2875,27 +2905,27 @@ export default function ShoppingListView({
                     {/* Row 5 */}
                     <button
                       onClick={() => handleCalcKeyPress('0')}
-                      className="h-8 font-semibold bg-slate-800/60 hover:bg-slate-800 text-slate-100 rounded-lg col-span-2 transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center border border-slate-700/20"
+                      className="h-10 font-bold bg-[#373d47] hover:bg-[#434b57] text-white rounded-lg col-span-2 transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center border-b-[3px] border-[#1d2127] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] select-none text-sm"
                     >
                       0
                     </button>
                     <button
                       onClick={() => handleCalcKeyPress('.')}
-                      className="h-8 font-semibold bg-slate-800/60 hover:bg-slate-800 text-slate-100 rounded-lg transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center border border-slate-700/20"
+                      className="h-10 font-bold bg-[#373d47] hover:bg-[#434b57] text-white rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center border-b-[3px] border-[#1d2127] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] select-none text-sm"
                     >
                       .
                     </button>
                     <button
                       onClick={() => handleCalcKeyPress('=')}
-                      className="h-8 font-extrabold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center text-base shadow-sm shadow-emerald-950/50"
+                      className="h-10 font-extrabold bg-[#1e8f54] hover:bg-[#25ad67] text-white rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center text-base border-b-[3px] border-[#0f5430] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.25)] select-none"
                     >
                       =
                     </button>
                   </div>
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-slate-800 text-[9px] text-center text-slate-500 font-mono tracking-wide">
-                  Calculadora Comercial Integrada
+                <div className="mt-5 pt-3.5 border-t border-[#22252c] text-[8px] text-center text-slate-500 font-mono tracking-widest uppercase">
+                  Pocket Calculator GT-1200
                 </div>
               </div>
             </div>
