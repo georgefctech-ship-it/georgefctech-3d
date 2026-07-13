@@ -152,11 +152,45 @@ export default function ShoppingListView({
   });
   const [notes, setNotes] = useState('');
   const [requestedBy, setRequestedBy] = useState(() => {
-    return sessionStorage.getItem('g3d_username') || sessionStorage.getItem('g3d_user_email') || '';
+    const username = sessionStorage.getItem('g3d_username') || '';
+    const email = sessionStorage.getItem('g3d_user_email') || '';
+    if (username.toLowerCase() === 'ftex' || username.toLowerCase() === 'ftéx') {
+      if (email && !email.toLowerCase().includes('ftex') && !email.toLowerCase().includes('ftéx')) {
+        const prefix = email.split('@')[0];
+        return prefix.charAt(0).toUpperCase() + prefix.slice(1);
+      }
+      return '';
+    }
+    return username || email || '';
   });
   const [department, setDepartment] = useState('');
-  const [company, setCompany] = useState('');
+  const [company, setCompany] = useState(() => {
+    return userRole === 'colaborador' ? 'Ftéx' : '';
+  });
   const [barcode, setBarcode] = useState('');
+
+  // Automatically pre-fill company and requestedBy for colaboradores
+  useEffect(() => {
+    if (userRole === 'colaborador') {
+      if (!company) {
+        setCompany('Ftéx');
+      }
+      const username = sessionStorage.getItem('g3d_username') || '';
+      const email = sessionStorage.getItem('g3d_user_email') || '';
+      let defaultUser = username;
+      if (username.toLowerCase() === 'ftex' || username.toLowerCase() === 'ftéx') {
+        if (email && !email.toLowerCase().includes('ftex') && !email.toLowerCase().includes('ftéx')) {
+          const prefix = email.split('@')[0];
+          defaultUser = prefix.charAt(0).toUpperCase() + prefix.slice(1);
+        } else {
+          defaultUser = '';
+        }
+      }
+      if (defaultUser && !requestedBy) {
+        setRequestedBy(defaultUser);
+      }
+    }
+  }, [userRole, formOpen]);
 
   // Filtering states
   const [searchQuery, setSearchQuery] = useState('');
@@ -239,9 +273,20 @@ export default function ShoppingListView({
     setPurchaseLink('');
     setCategory(userRole === 'colaborador' ? 'Acessórios/Insumos' : 'Filamento');
     setNotes('');
-    setRequestedBy(sessionStorage.getItem('g3d_username') || sessionStorage.getItem('g3d_user_email') || '');
+    const username = sessionStorage.getItem('g3d_username') || '';
+    const email = sessionStorage.getItem('g3d_user_email') || '';
+    let defaultUser = username;
+    if (username.toLowerCase() === 'ftex' || username.toLowerCase() === 'ftéx') {
+      if (email && !email.toLowerCase().includes('ftex') && !email.toLowerCase().includes('ftéx')) {
+        const prefix = email.split('@')[0];
+        defaultUser = prefix.charAt(0).toUpperCase() + prefix.slice(1);
+      } else {
+        defaultUser = '';
+      }
+    }
+    setRequestedBy(defaultUser);
     setDepartment('');
-    setCompany('');
+    setCompany(userRole === 'colaborador' ? 'Ftéx' : '');
     setBarcode('');
     setFormOpen(false);
   };
@@ -414,9 +459,11 @@ export default function ShoppingListView({
       <!-- 1. HEADER BANNER ROW -->
       <tr style="height: 100pt;">
         <td colspan="7" class="title-banner" style="background-color: #0f172a; color: #ffffff; padding: 25px 30px; border-radius: 12px; border: 1px solid #0f172a; height: 100pt; vertical-align: middle;">
+          ${userRole === 'colaborador' ? '' : `
           <div style="font-size: 10pt; font-weight: bold; letter-spacing: 0.1em; text-transform: uppercase; color: #818cf8; margin-bottom: 6px;">
-            ${userRole === 'colaborador' ? 'GeorgeFctech Comercial &bull; Pedidos' : 'GeorgeFctech 3D &bull; Gestão de Insumos'}
+            GeorgeFctech 3D &bull; Gestão de Insumos
           </div>
+          `}
           <div style="font-size: 20pt; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 10px; color: #ffffff;">
             ${userRole === 'colaborador' ? 'Pedido de Compras Comercial' : reportTitle}
           </div>
@@ -425,7 +472,7 @@ export default function ShoppingListView({
             &nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;&nbsp;&nbsp;&nbsp;
             <span>👤 Responsável: <strong style="color: #cbd5e1;">${requestedBy || 'Colaborador'}</strong></span>
             &nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;&nbsp;&nbsp;&nbsp;
-            <span>🏢 Empresa: <strong style="color: #cbd5e1;">${userRole === 'colaborador' ? (company || 'GeorgeFctech Comercial') : selectedCompany}</strong></span>
+            <span>🏢 Empresa: <strong style="color: #cbd5e1;">${userRole === 'colaborador' ? (company || 'Empresa Solicitante') : selectedCompany}</strong></span>
           </div>
         </td>
       </tr>
@@ -1211,17 +1258,19 @@ export default function ShoppingListView({
               <div className="md:col-span-2">
                 <div className="flex justify-between items-center mb-1.5">
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Nome do Material ou Insumo *</label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setScannerMode('create');
-                      setScannerOpen(true);
-                    }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-indigo-700 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900 border border-indigo-200 dark:border-indigo-800 rounded-lg transition-all duration-150 cursor-pointer"
-                  >
-                    <QrCode className="w-3.5 h-3.5" />
-                    <span>Escanear Código (Barras/QR)</span>
-                  </button>
+                  {userRole !== 'colaborador' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScannerMode('create');
+                        setScannerOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-indigo-700 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900 border border-indigo-200 dark:border-indigo-800 rounded-lg transition-all duration-150 cursor-pointer"
+                    >
+                      <QrCode className="w-3.5 h-3.5" />
+                      <span>Escanear Código (Barras/QR)</span>
+                    </button>
+                  )}
                 </div>
                 <input
                   type="text"
