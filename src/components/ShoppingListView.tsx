@@ -224,6 +224,45 @@ export default function ShoppingListView({
   // Inventory Registration Success Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Validation and baixa states
+  const [validatingItem, setValidatingItem] = useState<ShoppingItem | null>(null);
+  const [autoPushToStock, setAutoPushToStock] = useState<boolean>(true);
+
+  const handleToggleOrValidate = (item: ShoppingItem) => {
+    if (item.checked) {
+      // If already checked, toggle back to unchecked (pending)
+      onToggleShoppingItemChecked(item.id);
+    } else {
+      // If unchecked, open validation modal to offer the baixa option!
+      setValidatingItem(item);
+      setAutoPushToStock(true);
+    }
+  };
+
+  const handleConfirmValidation = () => {
+    if (!validatingItem) return;
+
+    // 1. Mark as checked (Completed) in the database & state
+    onToggleShoppingItemChecked(validatingItem.id);
+
+    // 2. If autoPushToStock is checked, add to active inventory (estoque)
+    if (autoPushToStock) {
+      onAddInventoryItem({
+        material: validatingItem.materialName.replace(" (Reposição)", ""),
+        qty: validatingItem.qtyNeeded,
+        unitCost: validatingItem.estUnitCost,
+        purchaseLink: validatingItem.purchaseLink
+      });
+      setToastMessage(`Compra Validada! "${validatingItem.materialName}" marcada como COMPRADA e enviada para o estoque ativo.`);
+    } else {
+      setToastMessage(`Compra Validada! "${validatingItem.materialName}" marcada como COMPRADA.`);
+    }
+
+    // Reset state & close modal
+    setValidatingItem(null);
+    setTimeout(() => setToastMessage(null), 5005);
+  };
+
   // --- COLLABORATOR EXTENDED MENUS AND CALCULATOR STATES ---
   const [colabActiveTab, setColabActiveTab] = useState<'baixa' | 'compras' | 'calculadora'>('baixa');
 
@@ -1635,14 +1674,8 @@ export default function ShoppingListView({
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  // Import Purchased Filament directly to Active Inventory
+  // Import Purchased items directly to Active Inventory (Dar Baixa)
   const handleImportToStock = (item: ShoppingItem) => {
-    if (item.category !== 'Filamento') {
-      setToastMessage("Apenas itens da categoria 'Filamento' podem ser importados para o estoque de insumos.");
-      setTimeout(() => setToastMessage(null), 4000);
-      return;
-    }
-
     onAddInventoryItem({
       material: item.materialName.replace(" (Reposição)", ""),
       qty: item.qtyNeeded,
@@ -1650,8 +1683,8 @@ export default function ShoppingListView({
       purchaseLink: item.purchaseLink
     });
 
-    setToastMessage(`Sucesso! ${item.qtyNeeded} rolo(s) de "${item.materialName}" foram lançados no estoque ativo!`);
-    setTimeout(() => setToastMessage(null), 5000);
+    setToastMessage(`Sucesso! ${item.qtyNeeded} unidade(s) de "${item.materialName}" foram lançados no estoque ativo (Baixa Efetuada)!`);
+    setTimeout(() => setToastMessage(null), 5005);
   };
 
   // Calculations
@@ -2334,7 +2367,7 @@ export default function ShoppingListView({
                       {/* Checkbox Status */}
                       <td className="py-3 px-5 text-center no-print">
                         <button
-                          onClick={() => onToggleShoppingItemChecked(item.id)}
+                          onClick={() => handleToggleOrValidate(item)}
                           className={`mx-auto h-5 w-5 rounded border flex items-center justify-center transition cursor-pointer select-none ${
                             item.checked 
                               ? 'bg-emerald-600 border-emerald-600 text-white' 
@@ -2562,15 +2595,26 @@ export default function ShoppingListView({
                             </div>
                           ) : (
                             <div className="flex items-center justify-center gap-2">
-                              {/* Import to Stock Filament (Only Filament & Checked) */}
-                              {item.category === 'Filamento' && item.checked && userRole !== 'colaborador' && (
+                              {/* Import to Stock (Any category & Checked) */}
+                              {item.checked && userRole !== 'colaborador' && (
                                 <button
                                   onClick={() => handleImportToStock(item)}
-                                  title="Enviar peças faturadas ao estoque ativo de Filamentos"
+                                  title="Dar baixa no estoque ativo de suprimentos"
                                   className="p-1 px-2 rounded-lg bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 flex items-center gap-1 text-[10px] font-bold uppercase cursor-pointer transition-all duration-150"
                                 >
                                   <ArchiveRestore className="w-3.5 h-3.5" />
                                   +Estoque
+                                </button>
+                              )}
+
+                              {!item.checked && (
+                                <button
+                                  onClick={() => handleToggleOrValidate(item)}
+                                  title="Validar compra e dar baixa"
+                                  className="p-1 px-2 rounded-lg bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 flex items-center gap-1 text-[10px] font-bold uppercase cursor-pointer transition-all duration-150"
+                                >
+                                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                  Validar
                                 </button>
                               )}
 
@@ -2615,7 +2659,7 @@ export default function ShoppingListView({
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3 w-full">
                       <button
-                        onClick={() => onToggleShoppingItemChecked(item.id)}
+                        onClick={() => handleToggleOrValidate(item)}
                         className={`mt-1.5 h-6 w-6 rounded border flex items-center justify-center transition cursor-pointer no-print shrink-0 ${
                           item.checked 
                             ? 'bg-emerald-600 border-emerald-600 text-white' 
@@ -2780,12 +2824,20 @@ export default function ShoppingListView({
                       </div>
 
                       <div className="flex items-center gap-1 no-print">
-                        {item.category === 'Filamento' && item.checked && userRole !== 'colaborador' && (
+                        {item.checked && userRole !== 'colaborador' && (
                           <button
                             onClick={() => handleImportToStock(item)}
                             className="p-1 px-2 rounded-md bg-indigo-50 border border-indigo-100 text-indigo-700 flex items-center gap-1 text-[10px] font-bold uppercase cursor-pointer"
                           >
                             +Estoque
+                          </button>
+                        )}
+                        {!item.checked && (
+                          <button
+                            onClick={() => handleToggleOrValidate(item)}
+                            className="p-1 px-2 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center gap-1 text-[10px] font-bold uppercase cursor-pointer hover:bg-emerald-100"
+                          >
+                            Validar
                           </button>
                         )}
                         <button
@@ -2948,19 +3000,12 @@ export default function ShoppingListView({
 
                         <div className="flex gap-1.5">
                           <button
-                            onClick={() => handleDirectBaixa(item, false)}
-                            className="px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-[10px] font-bold uppercase tracking-wider transition cursor-pointer"
-                            title="Apenas marcar como comprado"
+                            onClick={() => handleToggleOrValidate(item)}
+                            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition shadow-3xs cursor-pointer"
+                            title="Validar compra e dar baixa no estoque"
                           >
-                            Dar Baixa
-                          </button>
-                          <button
-                            onClick={() => handleDirectBaixa(item, true)}
-                            className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 transition shadow-3xs cursor-pointer"
-                            title="Marcar como comprado e enviar para o estoque ativo de suprimentos"
-                          >
-                            <PlusCircle className="w-3.5 h-3.5" />
-                            Estoque
+                            <CheckCircle className="w-3.5 h-3.5" />
+                            Validar & Baixar
                           </button>
                         </div>
                       </div>
@@ -3485,6 +3530,112 @@ export default function ShoppingListView({
       {toastMessage && (
         <div className="fixed bottom-5 right-5 z-50 bg-indigo-600 text-white font-bold text-xs px-4 py-3 rounded-lg shadow-xl uppercase tracking-wider animate-bounce no-print">
           {toastMessage}
+        </div>
+      )}
+
+      {/* VALIDATION MODAL */}
+      {validatingItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in no-print">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-emerald-50/30 dark:bg-slate-950/20">
+              <div className="flex items-center gap-2">
+                <CheckSquare className="w-5 h-5 text-emerald-600 dark:text-emerald-400 animate-pulse" />
+                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800 dark:text-white">
+                  Validar Compra Efetuada
+                </h3>
+              </div>
+              <button 
+                onClick={() => setValidatingItem(null)}
+                className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-white transition duration-150 cursor-pointer text-xl font-bold"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-4">
+              <div className="space-y-1">
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 uppercase">
+                  {validatingItem.category}
+                </span>
+                <h4 className="font-bold text-slate-800 dark:text-slate-100 text-base leading-snug">
+                  {validatingItem.materialName}
+                </h4>
+                {validatingItem.barcode && (
+                  <p className="text-[10px] font-mono font-bold text-slate-400">
+                    Código de Barras / SKU: {validatingItem.barcode}
+                  </p>
+                )}
+              </div>
+
+              {/* Purchase Details Card */}
+              <div className="bg-slate-50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-850 rounded-xl p-3.5 space-y-2 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Solicitante:</span>
+                  <span className="font-bold text-slate-700 dark:text-slate-200">{validatingItem.requestedBy || 'Ftéx'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Empresa Responsável:</span>
+                  <span className="font-bold text-slate-700 dark:text-slate-200">{validatingItem.company || 'Ftéx'}</span>
+                </div>
+                {validatingItem.department && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Setor do Pedido:</span>
+                    <span className="font-bold text-slate-700 dark:text-slate-200">{validatingItem.department}</span>
+                  </div>
+                )}
+                <div className="border-t border-slate-200/60 dark:border-slate-800/60 my-2 pt-2 flex justify-between font-mono">
+                  <span className="text-slate-400">Quantidade x Unitário:</span>
+                  <span className="text-slate-600 dark:text-slate-300">{validatingItem.qtyNeeded}x R$ {validatingItem.estUnitCost.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between font-mono text-sm pt-1">
+                  <span className="text-slate-500 font-bold">Total a Pagar:</span>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                    R$ {(validatingItem.qtyNeeded * validatingItem.estUnitCost).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+
+              {/* Option to give Baixa to Stock */}
+              <div className="bg-emerald-50/20 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-950/30 rounded-xl p-4 flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="autoPushToStock"
+                  checked={autoPushToStock}
+                  onChange={(e) => setAutoPushToStock(e.target.checked)}
+                  className="mt-1 h-4.5 w-4.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                />
+                <div className="space-y-0.5">
+                  <label htmlFor="autoPushToStock" className="text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer select-none">
+                    Dar Baixa Automática no Estoque Ativo
+                  </label>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-normal">
+                    Se marcado, adicionará automaticamente esta quantidade ({validatingItem.qtyNeeded} un) ao seu estoque atual de suprimentos sem necessidade de reinserção de dados.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/20 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setValidatingItem(null)}
+                className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-slate-700 dark:hover:text-white bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg duration-150 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmValidation}
+                className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg duration-150 shadow-sm flex items-center gap-1.5 cursor-pointer"
+              >
+                <Check className="w-4 h-4 stroke-[3]" />
+                Confirmar e Salvar
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
