@@ -1100,6 +1100,541 @@ export default function ShoppingListView({
     setTimeout(() => setToastMessage(null), 4000);
   };
 
+  const downloadCompletedPurchasesHtmlReport = () => {
+    const completedPurchases = shopping.filter(item => item.checked);
+
+    if (completedPurchases.length === 0) {
+      setToastMessage("Aviso: Nenhuma compra efetuada encontrada para gerar o relatório.");
+      setTimeout(() => setToastMessage(null), 4000);
+      return;
+    }
+
+    // Extrator de mês/ano baseado na nota (formato DD/MM/YYYY) ou fallback para o mês atual
+    const getMonthYearFromItem = (item: ShoppingItem): string => {
+      if (item.notes) {
+        const dateRegex = /(\d{2})\/(\d{2})\/(\d{4}|\d{2})/;
+        const match = item.notes.match(dateRegex);
+        if (match) {
+          const monthNum = parseInt(match[2], 10);
+          const months = [
+            'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+            'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+          ];
+          if (monthNum >= 1 && monthNum <= 12) {
+            let year = match[3];
+            if (year.length === 2) year = `20${year}`;
+            return `${months[monthNum - 1]} de ${year}`;
+          }
+        }
+      }
+      const currentDate = new Date();
+      const months = [
+        'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+      ];
+      return `${months[currentDate.getMonth()]} de ${currentDate.getFullYear()}`;
+    };
+
+    // Estrutura de agrupamento: Mês -> Setor | Responsável
+    const groups: {
+      [month: string]: {
+        [sectorAndResponsible: string]: {
+          sector: string;
+          responsible: string;
+          items: ShoppingItem[];
+          subtotal: number;
+        }
+      }
+    } = {};
+
+    completedPurchases.forEach(item => {
+      const month = getMonthYearFromItem(item);
+      const sector = item.department || 'Geral';
+      const responsible = item.requestedBy || 'Administração';
+      const key = `${sector} | ${responsible}`;
+
+      if (!groups[month]) {
+        groups[month] = {};
+      }
+
+      if (!groups[month][key]) {
+        groups[month][key] = {
+          sector,
+          responsible,
+          items: [],
+          subtotal: 0
+        };
+      }
+
+      groups[month][key].items.push(item);
+      groups[month][key].subtotal += item.qtyNeeded * item.estUnitCost;
+    });
+
+    const totalValueCompleted = completedPurchases.reduce((sum, item) => sum + (item.qtyNeeded * item.estUnitCost), 0);
+    const dateFormatted = new Date().toLocaleDateString('pt-BR');
+    const timeFormatted = new Date().toLocaleTimeString('pt-BR');
+
+    // Build HTML template
+    let htmlContent = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Relatório Mensal de Compras Efetuadas</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      margin: 0;
+      padding: 40px 20px;
+      background-color: #f1f5f9;
+      color: #1e293b;
+    }
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 16px;
+      padding: 40px;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+    }
+    .header-banner {
+      background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+      color: #ffffff;
+      padding: 35px;
+      border-radius: 12px;
+      margin-bottom: 35px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    .header-left h1 {
+      margin: 0 0 8px 0;
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+    }
+    .header-left p {
+      margin: 0;
+      font-size: 14px;
+      color: #c7d2fe;
+    }
+    .header-right {
+      text-align: right;
+    }
+    .header-right h2 {
+      margin: 0 0 5px 0;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: #818cf8;
+    }
+    .header-right p {
+      margin: 0;
+      font-size: 12px;
+      color: #cbd5e1;
+      font-family: monospace;
+    }
+    .stats-summary {
+      display: grid;
+      grid-template-cols: repeat(3, 1fr);
+      gap: 20px;
+      margin-bottom: 35px;
+    }
+    .stat-card {
+      background-color: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+    }
+    .stat-card h3 {
+      margin: 0 0 6px 0;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #64748b;
+      font-weight: 700;
+    }
+    .stat-card p {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 800;
+      color: #0f172a;
+      font-family: monospace;
+    }
+    .stat-card.accent p {
+      color: #10b981;
+    }
+    .month-container {
+      margin-bottom: 45px;
+    }
+    .month-header {
+      background-color: #f8fafc;
+      border-left: 6px solid #4f46e5;
+      padding: 12px 20px;
+      margin-bottom: 25px;
+      border-radius: 0 8px 8px 0;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+    .month-header h2 {
+      margin: 0;
+      font-size: 18px;
+      color: #1e1b4b;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 800;
+    }
+    .group-wrapper {
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      margin-bottom: 30px;
+      overflow: hidden;
+      background-color: #ffffff;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
+    }
+    .group-banner {
+      background-color: #f1f5f9;
+      padding: 16px 24px;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .group-title h3 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 800;
+      color: #1e293b;
+    }
+    .group-title p {
+      margin: 4px 0 0 0;
+      font-size: 12px;
+      color: #475569;
+    }
+    .group-subtotal {
+      font-size: 15px;
+      font-weight: 800;
+      color: #047857;
+      background-color: #d1fae5;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-family: monospace;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th {
+      background-color: #fafafb;
+      color: #475569;
+      font-weight: 700;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 14px 24px;
+      border-bottom: 1px solid #e2e8f0;
+      text-align: left;
+    }
+    td {
+      padding: 14px 24px;
+      border-bottom: 1px solid #f1f5f9;
+      font-size: 13px;
+      color: #334155;
+    }
+    tr:last-child td {
+      border-bottom: none;
+    }
+    tr:hover td {
+      background-color: #fafbfc;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge-filamento { background-color: #eef2ff; color: #4338ca; }
+    .badge-pecas { background-color: #fef2f2; color: #b91c1c; }
+    .badge-acessorios { background-color: #f0fdfa; color: #0d9488; }
+    .badge-outros { background-color: #f1f5f9; color: #475569; }
+
+    .price {
+      font-family: monospace;
+      font-weight: bold;
+    }
+    .link-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background-color: #e0f2fe;
+      color: #0369a1;
+      text-decoration: none;
+      font-weight: 700;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      transition: all 0.15s ease;
+      border: 1px solid #bae6fd;
+    }
+    .link-btn:hover {
+      background-color: #0284c7;
+      color: #ffffff;
+      border-color: #0284c7;
+    }
+    .barcode {
+      font-family: monospace;
+      font-size: 10px;
+      color: #4f46e5;
+      font-weight: bold;
+      background-color: #eef2ff;
+      padding: 2px 6px;
+      border-radius: 4px;
+      display: inline-block;
+      margin-top: 4px;
+    }
+    .no-link {
+      font-size: 11px;
+      color: #94a3b8;
+      font-style: italic;
+    }
+    .footer {
+      border-top: 1px dashed #cbd5e1;
+      padding-top: 30px;
+      margin-top: 40px;
+      display: grid;
+      grid-template-cols: 1fr 1fr;
+      gap: 40px;
+    }
+    .signature-box {
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 24px;
+      text-align: center;
+      background-color: #f8fafc;
+    }
+    .signature-line {
+      border-top: 1px solid #cbd5e1;
+      margin-top: 45px;
+      padding-top: 8px;
+      font-size: 12px;
+      color: #475569;
+      font-weight: 700;
+    }
+    @media print {
+      body {
+        background-color: #ffffff;
+        padding: 0;
+      }
+      .container {
+        border: none;
+        box-shadow: none;
+        padding: 0;
+      }
+      .header-banner {
+        background: #ffffff !important;
+        color: #000000 !important;
+        border-bottom: 3px solid #000000;
+        padding: 10px 0;
+        margin-bottom: 25px;
+        box-shadow: none;
+      }
+      .header-left p {
+        color: #334155 !important;
+      }
+      .header-right h2, .header-right p {
+        color: #000000 !important;
+      }
+      .stat-card {
+        border: 1px solid #cbd5e1 !important;
+        background-color: #ffffff !important;
+      }
+      .group-banner {
+        background-color: #f1f5f9 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .group-subtotal {
+        background-color: #e2e8f0 !important;
+        color: #000000 !important;
+        border: 1px solid #cbd5e1;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .link-btn {
+        border: 1px solid #000000 !important;
+        color: #000000 !important;
+        background: none !important;
+      }
+      .group-wrapper {
+        page-break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-banner">
+      <div class="header-left">
+        <h1>Relatório de Compras Efetuadas</h1>
+        <p>Histórico Consolidado de Suprimentos Recebidos e Auditados</p>
+      </div>
+      <div class="header-right">
+        <h2 style="margin: 0; font-size: 16px; font-weight: 800; color: #ffffff; text-transform: uppercase; letter-spacing: 0.05em;">
+          ${company || 'Ftéx'}
+        </h2>
+        <p style="margin: 4px 0 0 0; font-size: 12px; color: #cbd5e1;">
+          <strong>Responsável:</strong> ${requestedBy || 'ftex'}
+        </p>
+        <p style="margin: 2px 0 0 0; font-size: 11px; color: #a5b4fc; font-family: monospace;">
+          <strong>Setor:</strong> ${department || 'Setor Responsável'}
+        </p>
+        <p style="margin: 6px 0 0 0; font-size: 10px; color: #94a3b8; font-family: monospace; border-top: 1px solid #312e81; padding-top: 4px;">
+          Gerado em: ${dateFormatted} às ${timeFormatted}
+        </p>
+      </div>
+    </div>
+
+    <div class="stats-summary">
+      <div class="stat-card">
+        <h3>Total Investido</h3>
+        <p>R$ ${totalValueCompleted.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+      </div>
+      <div class="stat-card accent">
+        <h3>Total de Itens</h3>
+        <p>${completedPurchases.length} finalizados</p>
+      </div>
+      <div class="stat-card">
+        <h3>Meses Ativos</h3>
+        <p>${Object.keys(groups).length}</p>
+      </div>
+    </div>
+`;
+
+    // Loop through each Month
+    Object.keys(groups).sort((a, b) => {
+      return b.localeCompare(a); // recent months first
+    }).forEach(month => {
+      htmlContent += `
+    <div class="month-section">
+      <div class="month-header">
+        <h2>${month}</h2>
+      </div>
+      `;
+
+      // Loop through Sector & Responsible groups in this Month
+      const monthGroups = groups[month];
+      Object.keys(monthGroups).sort().forEach(groupKey => {
+        const { sector, responsible, items, subtotal } = monthGroups[groupKey];
+        
+        htmlContent += `
+      <div class="group-wrapper">
+        <div class="group-banner">
+          <div class="group-title">
+            <h3>Setor: ${sector}</h3>
+            <p>Responsável Técnico: <strong>${responsible}</strong></p>
+          </div>
+          <div class="group-subtotal">
+            Subtotal: R$ ${subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 35%;">Item de Compra</th>
+              <th style="width: 15%;">Categoria</th>
+              <th style="width: 10%; text-align: center;">Qtd</th>
+              <th style="width: 15%; text-align: right;">Unitário</th>
+              <th style="width: 15%; text-align: right;">Total Pago</th>
+              <th style="width: 10%; text-align: center;">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+        `;
+
+        items.forEach(item => {
+          const itemTotal = item.qtyNeeded * item.estUnitCost;
+          const absoluteUrl = ensureAbsoluteUrl(item.purchaseLink, item.materialName);
+          const hasLink = item.purchaseLink && item.purchaseLink.trim() !== '';
+
+          let catClass = 'badge-outros';
+          if (item.category === 'Filamento') catClass = 'badge-filamento';
+          else if (item.category === 'Peças de Reposição') catClass = 'badge-pecas';
+          else if (item.category === 'Acessórios/Insumos') catClass = 'badge-acessorios';
+
+          htmlContent += `
+            <tr>
+              <td>
+                <div style="font-weight: bold; color: #0f172a;">${item.materialName}</div>
+                ${item.barcode ? `<div class="barcode">Cód: ${item.barcode}</div>` : ''}
+                ${item.notes ? `<div class="notes">Obs: ${item.notes}</div>` : ''}
+              </td>
+              <td>
+                <span class="badge ${catClass}">${item.category || 'Outros'}</span>
+              </td>
+              <td style="text-align: center; font-weight: 700; color: #1e293b;">
+                ${item.qtyNeeded}
+              </td>
+              <td class="price" style="text-align: right; color: #475569;">
+                R$ ${item.estUnitCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </td>
+              <td class="price" style="text-align: right; color: #0f172a; font-weight: 800;">
+                R$ ${itemTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </td>
+              <td style="text-align: center;">
+                ${hasLink ? `
+                  <a href="${absoluteUrl}" class="link-btn" target="_blank" rel="noreferrer" title="Acessar fornecedor">
+                    Comprar 🔗
+                  </a>
+                ` : `
+                  <span class="no-link">Sem link</span>
+                `}
+              </td>
+            </tr>
+          `;
+        });
+
+        htmlContent += `
+          </tbody>
+        </table>
+      </div>
+        `;
+      });
+
+      htmlContent += `
+    </div>
+      `;
+    });
+
+    htmlContent += `
+    <div class="footer">
+      <div class="signature-box">
+        <p style="margin: 0 0 10px 0; font-size: 12px; color: #64748b; text-align: left;">Assinatura do Conferente Técnico:</p>
+        <div class="signature-line">Gestão de Oficina & Estoque</div>
+      </div>
+      <div class="signature-box">
+        <p style="margin: 0 0 10px 0; font-size: 12px; color: #64748b; text-align: left;">Liberação e Homologação de Custos:</p>
+        <div class="signature-line">Diretoria Executiva / Comercial</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    // Download compiled HTML Document
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', url);
+    downloadAnchor.setAttribute('download', `Relatorio_Compras_Efetuadas_Mensal_${new Date().toISOString().split('T')[0]}.html`);
+    downloadAnchor.click();
+    
+    setToastMessage("Sucesso! O relatório mensal de compras efetuadas foi gerado em HTML.");
+    setTimeout(() => setToastMessage(null), 4000);
+  };
+
   // Import Purchased Filament directly to Active Inventory
   const handleImportToStock = (item: ShoppingItem) => {
     if (item.category !== 'Filamento') {
@@ -1231,12 +1766,12 @@ export default function ShoppingListView({
       </div>
 
       {/* SECTOR & RESPONSIBLE EDITABLE INFO FOR PRINT */}
-      {userRole === 'colaborador' && (
+      {(userRole === 'colaborador' || currentSubView === 'compras_efetuadas') && (
         <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 mb-6 shadow-3xs no-print flex flex-col lg:flex-row items-center gap-4">
           <div className="flex-1">
-            <span className="block text-[10px] uppercase font-bold text-indigo-600 dark:text-indigo-400 mb-1">Identificação Comercial (Topo do Relatório)</span>
+            <span className="block text-[10px] uppercase font-bold text-indigo-600 dark:text-indigo-400 mb-1">Identificação do Relatório (Topo do Impresso)</span>
             <p className="text-xs text-slate-500">
-              Preencha os campos abaixo para definir o funcionário e setor que serão impressos no cabeçalho do pedido comercial, independente de quem estiver logado.
+              Preencha os campos abaixo para definir a empresa, funcionário responsável e setor que serão impressos no cabeçalho do relatório.
             </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full lg:w-auto lg:min-w-[55%]">
@@ -1358,16 +1893,16 @@ export default function ShoppingListView({
           </button>
 
           <button
-            onClick={() => window.print()}
-            disabled={shopping.length === 0}
+            onClick={downloadCompletedPurchasesHtmlReport}
+            disabled={shopping.filter(i => i.checked).length === 0}
             className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg border font-bold text-xs uppercase tracking-wider shadow-sm transition-all duration-200 ${
-              shopping.length === 0 
+              shopping.filter(i => i.checked).length === 0 
                 ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
                 : 'bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50 hover:text-indigo-800 hover:scale-102 cursor-pointer'
             }`}
           >
             <Printer className="w-4 h-4" />
-            IMPRIMIR TABELA COMERCIAL
+            IMPRIMIR COMPRAS EFETUADAS
           </button>
         </div>
       </div>
