@@ -265,6 +265,42 @@ export default function ShoppingListView({
 
   // --- COLLABORATOR EXTENDED MENUS AND CALCULATOR STATES ---
   const [colabActiveTab, setColabActiveTab] = useState<'baixa' | 'compras' | 'calculadora'>('baixa');
+  const [completedPeriodFilter, setCompletedPeriodFilter] = useState<'todos' | 'hoje' | 'semana' | 'mes'>('todos');
+
+  // Função para obter a data de compra de um item baseado no notes ou data atual
+  const getPurchasedDate = (item: ShoppingItem): Date => {
+    if (item.notes) {
+      const dateRegex = /(\d{2})\/(\d{2})\/(\d{4}|\d{2})/;
+      const match = item.notes.match(dateRegex);
+      if (match) {
+        const day = parseInt(match[1], 10);
+        const month = parseInt(match[2], 10) - 1;
+        let year = parseInt(match[3], 10);
+        if (year < 100) year += 2000;
+        return new Date(year, month, day);
+      }
+    }
+    return new Date();
+  };
+
+  const isToday = (date: Date): boolean => {
+    const today = new Date();
+    return date.getDate() === today.getDate() &&
+           date.getMonth() === today.getMonth() &&
+           date.getFullYear() === today.getFullYear();
+  };
+
+  const isThisWeek = (date: Date): boolean => {
+    const today = new Date();
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(today.getDate() - 7);
+    return date >= sevenDaysAgo && date <= today;
+  };
+
+  const isThisMonth = (date: Date): boolean => {
+    const today = new Date();
+    return date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
+  };
 
   // Sync colabActiveTab with currentSubView if navigated from sidebar
   useEffect(() => {
@@ -1140,10 +1176,19 @@ export default function ShoppingListView({
   };
 
   const downloadCompletedPurchasesHtmlReport = () => {
-    const completedPurchases = shopping.filter(item => item.checked);
+    let completedPurchases = shopping.filter(item => item.checked);
+
+    // Filtrar pelo período selecionado no histórico
+    if (completedPeriodFilter === 'hoje') {
+      completedPurchases = completedPurchases.filter(item => isToday(getPurchasedDate(item)));
+    } else if (completedPeriodFilter === 'semana') {
+      completedPurchases = completedPurchases.filter(item => isThisWeek(getPurchasedDate(item)));
+    } else if (completedPeriodFilter === 'mes') {
+      completedPurchases = completedPurchases.filter(item => isThisMonth(getPurchasedDate(item)));
+    }
 
     if (completedPurchases.length === 0) {
-      setToastMessage("Aviso: Nenhuma compra efetuada encontrada para gerar o relatório.");
+      setToastMessage("Aviso: Nenhuma compra encontrada para o período selecionado para gerar o relatório.");
       setTimeout(() => setToastMessage(null), 4000);
       return;
     }
@@ -2618,21 +2663,25 @@ export default function ShoppingListView({
                                 </button>
                               )}
 
-                              <button
-                                onClick={() => handleStartEdit(item)}
-                                title="Editar entrada técnico comercial"
-                                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition cursor-pointer"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </button>
-                              
-                              <button
-                                onClick={() => onDeleteShoppingItem(item.id)}
-                                title="Remover do cronograma"
-                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                              {(!item.checked || userRole !== 'colaborador') && (
+                                <>
+                                  <button
+                                    onClick={() => handleStartEdit(item)}
+                                    title="Editar entrada técnico comercial"
+                                    className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+                                  >
+                                    <Edit2 className="w-4 h-4" />
+                                  </button>
+                                  
+                                  <button
+                                    onClick={() => onDeleteShoppingItem(item.id)}
+                                    title="Remover do cronograma"
+                                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </>
+                              )}
                             </div>
                           )}
                         </td>
@@ -2840,18 +2889,22 @@ export default function ShoppingListView({
                             Validar
                           </button>
                         )}
-                        <button
-                          onClick={() => handleStartEdit(item)}
-                          className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded transition cursor-pointer"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => onDeleteShoppingItem(item.id)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {(!item.checked || userRole !== 'colaborador') && (
+                          <>
+                            <button
+                              onClick={() => handleStartEdit(item)}
+                              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded transition cursor-pointer"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => onDeleteShoppingItem(item.id)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   )}
@@ -3030,47 +3083,81 @@ export default function ShoppingListView({
                 </p>
               </div>
 
-              {/* Search Input for Completed Purchases */}
-              <div className="relative w-full md:w-72">
-                <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                  <Search className="w-3.5 h-3.5" />
-                </span>
-                <input
-                  type="text"
-                  value={completedSearchQuery}
-                  onChange={(e) => setCompletedSearchQuery(e.target.value)}
-                  placeholder="Pesquisar histórico..."
-                  className="w-full pl-9 pr-4 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
-                />
+              {/* Filtros de Período & Busca */}
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-1 bg-slate-150 dark:bg-slate-900 p-1 rounded-xl border border-slate-250 dark:border-slate-800">
+                  <button
+                    onClick={() => setCompletedPeriodFilter('todos')}
+                    className={`px-3 py-1 text-[10px] uppercase font-bold rounded-lg transition-all cursor-pointer ${
+                      completedPeriodFilter === 'todos'
+                        ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-3xs'
+                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+                    }`}
+                  >
+                    Todos
+                  </button>
+                  <button
+                    onClick={() => setCompletedPeriodFilter('hoje')}
+                    className={`px-3 py-1 text-[10px] uppercase font-bold rounded-lg transition-all cursor-pointer ${
+                      completedPeriodFilter === 'hoje'
+                        ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-3xs'
+                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+                    }`}
+                  >
+                    Hoje
+                  </button>
+                  <button
+                    onClick={() => setCompletedPeriodFilter('semana')}
+                    className={`px-3 py-1 text-[10px] uppercase font-bold rounded-lg transition-all cursor-pointer ${
+                      completedPeriodFilter === 'semana'
+                        ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-3xs'
+                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+                    }`}
+                  >
+                    Semanal
+                  </button>
+                  <button
+                    onClick={() => setCompletedPeriodFilter('mes')}
+                    className={`px-3 py-1 text-[10px] uppercase font-bold rounded-lg transition-all cursor-pointer ${
+                      completedPeriodFilter === 'mes'
+                        ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-3xs'
+                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+                    }`}
+                  >
+                    Mensal
+                  </button>
+                </div>
+
+                {/* Search Input for Completed Purchases */}
+                <div className="relative w-full md:w-56">
+                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <Search className="w-3.5 h-3.5" />
+                  </span>
+                  <input
+                    type="text"
+                    value={completedSearchQuery}
+                    onChange={(e) => setCompletedSearchQuery(e.target.value)}
+                    placeholder="Pesquisar histórico..."
+                    className="w-full pl-9 pr-4 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Cost Statistics Card for History */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-              <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900 rounded-xl p-4 flex flex-col">
-                <span className="text-[10px] font-bold uppercase text-emerald-600 font-mono mb-1">Total Economizado / Investido</span>
-                <strong className="text-xl font-bold font-mono text-emerald-700 dark:text-emerald-400">
-                  R$ {shopping.filter(i => i.checked).reduce((acc, i) => acc + (i.qtyNeeded * i.estUnitCost), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </strong>
-              </div>
-              <div className="bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-900 rounded-xl p-4 flex flex-col">
-                <span className="text-[10px] font-bold uppercase text-indigo-600 font-mono mb-1">Total de Itens Recebidos</span>
-                <strong className="text-xl font-bold font-mono text-indigo-700 dark:text-indigo-400">
-                  {shopping.filter(i => i.checked).length} itens
-                </strong>
-              </div>
-              <div className="bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-xl p-4 flex flex-col">
-                <span className="text-[10px] font-bold uppercase text-slate-500 font-mono mb-1">Custo Médio por Unidade</span>
-                <strong className="text-xl font-bold font-mono text-slate-700 dark:text-slate-300">
-                  R$ {(shopping.filter(i => i.checked).reduce((acc, i) => acc + i.estUnitCost, 0) / (shopping.filter(i => i.checked).length || 1)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </strong>
-              </div>
-            </div>
-
-            {/* List matching completed items */}
             {(() => {
-              const completedItems = shopping.filter(item => {
-                if (!item.checked) return false;
+              let baseCompletedItems = shopping.filter(item => item.checked);
+
+              // Aplicar filtro de período
+              if (completedPeriodFilter === 'hoje') {
+                baseCompletedItems = baseCompletedItems.filter(item => isToday(getPurchasedDate(item)));
+              } else if (completedPeriodFilter === 'semana') {
+                baseCompletedItems = baseCompletedItems.filter(item => isThisWeek(getPurchasedDate(item)));
+              } else if (completedPeriodFilter === 'mes') {
+                baseCompletedItems = baseCompletedItems.filter(item => isThisMonth(getPurchasedDate(item)));
+              }
+
+              // Aplicar busca
+              const completedItems = baseCompletedItems.filter(item => {
                 if (!completedSearchQuery) return true;
                 return (
                   item.materialName.toLowerCase().includes(completedSearchQuery.toLowerCase()) ||
@@ -3080,57 +3167,107 @@ export default function ShoppingListView({
                 );
               });
 
-              if (completedItems.length === 0) {
-                return (
-                  <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-8 text-center text-slate-400">
-                    <ClipboardList className="w-8 h-8 mx-auto mb-2 opacity-55" />
-                    <p className="text-xs">Nenhum item encontrado no histórico para os filtros ativos.</p>
-                  </div>
-                );
-              }
+              // Estatísticas calculadas dinamicamente com baseCompletedItems
+              const totalSpent = baseCompletedItems.reduce((acc, i) => acc + (i.qtyNeeded * i.estUnitCost), 0);
+              const itemsCount = baseCompletedItems.length;
+              const avgUnitCost = baseCompletedItems.reduce((acc, i) => acc + i.estUnitCost, 0) / (itemsCount || 1);
 
               return (
-                <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50 dark:bg-slate-905 border-b border-slate-200 dark:border-slate-800 select-none text-[10px] font-mono text-slate-500 uppercase">
-                        <th className="p-3">Item / Especificação</th>
-                        <th className="p-3">Categoria</th>
-                        <th className="p-3">Empresa</th>
-                        <th className="p-3">Qtd</th>
-                        <th className="p-3 text-right">Unitário</th>
-                        <th className="p-3 text-right">Total Pago</th>
-                        <th className="p-3 text-center">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
-                      {completedItems.map(item => (
-                        <tr key={item.id} className="hover:bg-slate-50/55 dark:hover:bg-slate-800/30 transition">
-                          <td className="p-3">
-                            <span className="font-bold text-slate-800 dark:text-slate-100 block">{item.materialName}</span>
-                            {item.barcode && <span className="text-[10px] text-slate-400 font-mono">Código: {item.barcode}</span>}
-                          </td>
-                          <td className="p-3">
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold">
-                              {item.category}
-                            </span>
-                          </td>
-                          <td className="p-3 text-slate-500 dark:text-slate-400">{item.company || 'Ftéx'}</td>
-                          <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{item.qtyNeeded}x</td>
-                          <td className="p-3 text-right font-mono text-slate-600 dark:text-slate-400">R$ {item.estUnitCost.toFixed(2)}</td>
-                          <td className="p-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                            R$ {(item.qtyNeeded * item.estUnitCost).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="p-3 text-center">
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-400 px-2 py-0.5 rounded">
-                              <Check className="w-3 h-3 stroke-[3]" /> Recebido
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <>
+                  {/* Cost Statistics Card for History */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                    <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900 rounded-xl p-4 flex flex-col">
+                      <span className="text-[10px] font-bold uppercase text-emerald-600 font-mono mb-1">
+                        Total Economizado / Investido ({completedPeriodFilter === 'todos' ? 'Geral' : completedPeriodFilter === 'hoje' ? 'Hoje' : completedPeriodFilter === 'semana' ? 'Esta Semana' : 'Este Mês'})
+                      </span>
+                      <strong className="text-xl font-bold font-mono text-emerald-700 dark:text-emerald-400">
+                        R$ {totalSpent.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </strong>
+                    </div>
+                    <div className="bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-900 rounded-xl p-4 flex flex-col">
+                      <span className="text-[10px] font-bold uppercase text-indigo-600 font-mono mb-1">Total de Itens Recebidos</span>
+                      <strong className="text-xl font-bold font-mono text-indigo-700 dark:text-indigo-400">
+                        {itemsCount} itens
+                      </strong>
+                    </div>
+                    <div className="bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-xl p-4 flex flex-col">
+                      <span className="text-[10px] font-bold uppercase text-slate-500 font-mono mb-1">Custo Médio por Unidade</span>
+                      <strong className="text-xl font-bold font-mono text-slate-700 dark:text-slate-300">
+                        R$ {avgUnitCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {completedItems.length === 0 ? (
+                    <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-8 text-center text-slate-400">
+                      <ClipboardList className="w-8 h-8 mx-auto mb-2 opacity-55" />
+                      <p className="text-xs">Nenhum item encontrado no histórico para os filtros ativos.</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-50 dark:bg-slate-905 border-b border-slate-200 dark:border-slate-800 select-none text-[10px] font-mono text-slate-500 uppercase">
+                            <th className="p-3">Item / Especificação</th>
+                            <th className="p-3">Categoria</th>
+                            <th className="p-3">Empresa</th>
+                            <th className="p-3">Qtd</th>
+                            <th className="p-3 text-right">Unitário</th>
+                            <th className="p-3 text-right">Total Pago</th>
+                            <th className="p-3 text-center">Status</th>
+                            {userRole !== 'colaborador' && <th className="p-3 text-center">Ações</th>}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                          {completedItems.map(item => (
+                            <tr key={item.id} className="hover:bg-slate-50/55 dark:hover:bg-slate-800/30 transition">
+                              <td className="p-3">
+                                <span className="font-bold text-slate-800 dark:text-slate-100 block">{item.materialName}</span>
+                                {item.barcode && <span className="text-[10px] text-slate-400 font-mono">Código: {item.barcode}</span>}
+                              </td>
+                              <td className="p-3">
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold">
+                                  {item.category}
+                                </span>
+                              </td>
+                              <td className="p-3 text-slate-500 dark:text-slate-400">{item.company || 'Ftéx'}</td>
+                              <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{item.qtyNeeded}x</td>
+                              <td className="p-3 text-right font-mono text-slate-600 dark:text-slate-400">R$ {item.estUnitCost.toFixed(2)}</td>
+                              <td className="p-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                                R$ {(item.qtyNeeded * item.estUnitCost).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </td>
+                              <td className="p-3 text-center">
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-400 px-2 py-0.5 rounded">
+                                  <Check className="w-3 h-3 stroke-[3]" /> Recebido
+                                </span>
+                              </td>
+                              {userRole !== 'colaborador' && (
+                                <td className="p-3 text-center">
+                                  <div className="flex items-center justify-center gap-1.5">
+                                    <button
+                                      onClick={() => handleStartEdit(item)}
+                                      title="Editar registro do histórico"
+                                      className="p-1 text-slate-400 hover:text-slate-755 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      onClick={() => onDeleteShoppingItem(item.id)}
+                                      title="Remover do histórico"
+                                      className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </td>
+                              )}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
               );
             })()}
           </div>

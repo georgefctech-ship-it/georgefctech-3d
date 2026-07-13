@@ -479,7 +479,16 @@ export function use3DState() {
   const toggleShoppingItemChecked = async (id: string) => {
     const updated = shopping.map(item => {
       if (item.id === id) {
-        return { ...item, checked: !item.checked };
+        const isChecking = !item.checked;
+        let notes = item.notes || '';
+        // Se estiver marcando como comprado/recebido (checked) e não tiver uma data no notes, adicionamos automaticamente
+        if (isChecking) {
+          const dateStr = new Date().toLocaleDateString('pt-BR');
+          if (!notes.includes('/') || !/\d{2}\/\d{2}\/\d{4}/.test(notes)) {
+            notes = notes ? `${notes} (Baixa: ${dateStr})` : `Baixa: ${dateStr}`;
+          }
+        }
+        return { ...item, checked: isChecking, notes: notes || undefined };
       }
       return item;
     });
