@@ -32,7 +32,10 @@ import {
   Camera,
   ScanLine,
   FileText,
-  Barcode
+  Barcode,
+  CheckSquare,
+  FileClock,
+  Calculator
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { ShoppingItem, InventoryItem } from '../types';
@@ -126,6 +129,7 @@ interface ShoppingListViewProps {
   onToggleShoppingItemChecked: (id: string) => void;
   onAddInventoryItem: (item: Omit<InventoryItem, 'id' | 'gramCost' | 'status'>) => void;
   userRole?: string;
+  currentSubView?: string;
 }
 
 export default function ShoppingListView({
@@ -136,7 +140,8 @@ export default function ShoppingListView({
   onUpdateShoppingItem,
   onToggleShoppingItemChecked,
   onAddInventoryItem,
-  userRole
+  userRole,
+  currentSubView
 }: ShoppingListViewProps) {
   const [formOpen, setFormOpen] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -218,6 +223,112 @@ export default function ShoppingListView({
 
   // Inventory Registration Success Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // --- COLLABORATOR EXTENDED MENUS AND CALCULATOR STATES ---
+  const [colabActiveTab, setColabActiveTab] = useState<'baixa' | 'compras' | 'calculadora'>('baixa');
+
+  // Sync colabActiveTab with currentSubView if navigated from sidebar
+  useEffect(() => {
+    if (currentSubView === 'baixa') {
+      setColabActiveTab('baixa');
+    } else if (currentSubView === 'compras_efetuadas') {
+      setColabActiveTab('compras');
+    } else if (currentSubView === 'calculadoras') {
+      setColabActiveTab('calculadora');
+    }
+  }, [currentSubView]);
+
+  // Screen Simulated Calculator States
+  const [calcDisplay, setCalcDisplay] = useState('0');
+  const [calcSubDisplay, setCalcSubDisplay] = useState('');
+  const [calcResetOnNextKey, setCalcResetOnNextKey] = useState(false);
+
+  const handleCalcKeyPress = (key: string) => {
+    if (key === 'C') {
+      setCalcDisplay('0');
+      setCalcSubDisplay('');
+      setCalcResetOnNextKey(false);
+    } else if (key === 'DEL') {
+      if (calcDisplay.length > 1) {
+        setCalcDisplay(calcDisplay.slice(0, -1));
+      } else {
+        setCalcDisplay('0');
+      }
+    } else if (key === '=') {
+      try {
+        const cleanExpression = calcDisplay.replace(/×/g, '*').replace(/÷/g, '/');
+        if (/^[0-9.+\-*/\s()]+$/.test(cleanExpression)) {
+          // eslint-disable-next-line no-eval
+          const result = eval(cleanExpression);
+          setCalcSubDisplay(calcDisplay + ' =');
+          setCalcDisplay(String(Number(result.toFixed(6))));
+          setCalcResetOnNextKey(true);
+        } else {
+          setCalcDisplay('Erro');
+        }
+      } catch (err) {
+        setCalcDisplay('Erro');
+      }
+    } else if (['+', '-', '×', '÷'].includes(key)) {
+      setCalcResetOnNextKey(false);
+      const lastChar = calcDisplay.slice(-1);
+      if (['+', '-', '×', '÷'].includes(lastChar)) {
+        setCalcDisplay(calcDisplay.slice(0, -1) + key);
+      } else {
+        setCalcDisplay(calcDisplay + key);
+      }
+    } else {
+      if (calcDisplay === '0' || calcDisplay === 'Erro' || calcResetOnNextKey) {
+        setCalcDisplay(key === '.' ? '0.' : key);
+        setCalcResetOnNextKey(false);
+      } else {
+        if (key === '.') {
+          const parts = calcDisplay.split(/[+\-×÷]/);
+          const lastPart = parts[parts.length - 1];
+          if (lastPart.includes('.')) return;
+        }
+        setCalcDisplay(calcDisplay + key);
+      }
+    }
+  };
+  
+  // Compras Efetuadas Search State
+  const [completedSearchQuery, setCompletedSearchQuery] = useState('');
+
+  // Filament Gram Cost Calculator States
+  const [calcFilPrice, setCalcFilPrice] = useState<number>(150);
+  const [calcFilWeight, setCalcFilWeight] = useState<number>(1000);
+
+  // Batch Budget Calculator States
+  const [calcQty, setCalcQty] = useState<number>(5);
+  const [calcUnitPrice, setCalcUnitPrice] = useState<number>(35);
+  const [calcShipping, setCalcShipping] = useState<number>(15);
+
+  // Filament Length/Volumetric States
+  const [calcFilType, setCalcFilType] = useState<'PLA' | 'PETG' | 'ABS'>('PLA');
+  const [calcFilTotalWeight, setCalcFilTotalWeight] = useState<number>(1); // in kg
+
+  const handleDirectBaixa = (item: ShoppingItem, pushToStock: boolean) => {
+    // 1. Toggle checked status to true
+    if (!item.checked) {
+      onToggleShoppingItemChecked(item.id);
+    }
+    
+    // 2. If pushToStock is selected, add to inventory
+    if (pushToStock) {
+      onAddInventoryItem({
+        material: item.materialName.replace(" (Reposição)", ""),
+        qty: item.qtyNeeded,
+        unitCost: item.estUnitCost,
+        purchaseLink: item.purchaseLink
+      });
+      setToastMessage(`Baixa Realizada! "${item.materialName}" foi marcado como COMPRADO e enviado ao estoque ativo!`);
+    } else {
+      setToastMessage(`Baixa Realizada! "${item.materialName}" marcado como COMPRADO.`);
+    }
+
+    setTimeout(() => setToastMessage(null), 5000);
+  };
 
   const handleScanSuccess = (code: string, matchedProduct?: any) => {
     if (scannerMode === 'search') {
@@ -471,6 +582,8 @@ export default function ShoppingListView({
             <span>🕒 Gerado em: <strong style="color: #cbd5e1;">${dateFormatted} às ${timeFormatted}</strong></span>
             &nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;&nbsp;&nbsp;&nbsp;
             <span>👤 Responsável: <strong style="color: #cbd5e1;">${requestedBy || 'Colaborador'}</strong></span>
+            &nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;&nbsp;&nbsp;&nbsp;
+            <span>🏷️ Setor Responsável: <strong style="color: #cbd5e1;">${department || 'Geral'}</strong></span>
             &nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;&nbsp;&nbsp;&nbsp;
             <span>🏢 Empresa: <strong style="color: #cbd5e1;">${userRole === 'colaborador' ? (company || 'Empresa Solicitante') : selectedCompany}</strong></span>
           </div>
@@ -864,7 +977,7 @@ export default function ShoppingListView({
         <h1>${userRole === 'colaborador' ? 'Pedido de Compras Comercial' : 'GeorgeFctech 3D &bull; Gestão de Insumos'}</h1>
         <p>${userRole === 'colaborador' ? 'Gestão de Insumos e Pedidos' : 'Relatório de Planejamento de Compras Comerciais'}</p>
         ${userRole === 'colaborador' ? `
-        <p style="margin-top: 6px; font-size: 11px; color: #cbd5e1; font-weight: bold;">Responsável: ${requestedBy || 'Colaborador'} &bull; Empresa: ${company || 'Empresa Solicitante'}</p>
+        <p style="margin-top: 6px; font-size: 11px; color: #cbd5e1; font-weight: bold;">Responsável: ${requestedBy || 'Colaborador'} &bull; Setor Responsável: ${department || 'Geral'} &bull; Empresa: ${company || 'Empresa Solicitante'}</p>
         ` : `
         <p style="margin-top: 6px; font-size: 11px; color: #cbd5e1; font-weight: bold;">Firma Responsável: GeorgeFctech-3D</p>
         `}
@@ -1106,6 +1219,7 @@ export default function ShoppingListView({
             {userRole === 'colaborador' ? (
               <>
                 <p className="text-[10px] text-slate-800 font-bold font-mono">Responsável: {requestedBy || 'Colaborador'}</p>
+                <p className="text-[10px] text-slate-800 font-bold font-mono">Setor Responsável: {department || 'Geral'}</p>
                 <p className="text-[10px] text-slate-800 font-bold font-mono">Empresa: {company || 'Empresa Solicitante'}</p>
               </>
             ) : (
@@ -1115,9 +1229,87 @@ export default function ShoppingListView({
           </div>
         </div>
       </div>
-      
-      {/* HEADER WITH INDUSTRIAL ACTIONS */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 pb-5 border-b border-slate-200 no-print">
+
+      {/* SECTOR & RESPONSIBLE EDITABLE INFO FOR PRINT */}
+      {userRole === 'colaborador' && (
+        <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 mb-6 shadow-3xs no-print flex flex-col lg:flex-row items-center gap-4">
+          <div className="flex-1">
+            <span className="block text-[10px] uppercase font-bold text-indigo-600 dark:text-indigo-400 mb-1">Identificação Comercial (Topo do Relatório)</span>
+            <p className="text-xs text-slate-500">
+              Preencha os campos abaixo para definir o funcionário e setor que serão impressos no cabeçalho do pedido comercial, independente de quem estiver logado.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full lg:w-auto lg:min-w-[55%]">
+            <div>
+              <label className="block text-[9px] uppercase font-bold text-slate-450 dark:text-slate-500 mb-1">Empresa</label>
+              <input
+                type="text"
+                placeholder="Empresa"
+                value={company}
+                onChange={(e) => setCompany(e.target.value)}
+                className="w-full text-xs font-semibold px-3 py-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 rounded-lg focus:border-indigo-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-[9px] uppercase font-bold text-slate-450 dark:text-slate-500 mb-1">Funcionário Responsável</label>
+              <input
+                type="text"
+                placeholder="Nome do Funcionário"
+                value={requestedBy}
+                onChange={(e) => setRequestedBy(e.target.value)}
+                className="w-full text-xs font-semibold px-3 py-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 rounded-lg focus:border-indigo-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-[9px] uppercase font-bold text-slate-450 dark:text-slate-500 mb-1">Setor Responsável</label>
+              <input
+                type="text"
+                placeholder="Setor"
+                value={department}
+                onChange={(e) => setDepartment(e.target.value)}
+                className="w-full text-xs font-semibold px-3 py-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 rounded-lg focus:border-indigo-500 focus:outline-none"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {currentSubView && (
+        <div className="mb-6 pb-4 border-b border-slate-200 dark:border-slate-800 no-print flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-extrabold font-display tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-2">
+              {currentSubView === 'baixa' && (
+                <>
+                  <CheckSquare className="text-indigo-600 dark:text-indigo-400 w-8 h-8" />
+                  <span>Baixa de Compras (Recebimento)</span>
+                </>
+              )}
+              {currentSubView === 'compras_efetuadas' && (
+                <>
+                  <FileClock className="text-emerald-600 dark:text-emerald-400 w-8 h-8" />
+                  <span>Histórico de Compras Efetuadas</span>
+                </>
+              )}
+              {currentSubView === 'calculadoras' && (
+                <>
+                  <Calculator className="text-amber-500 dark:text-amber-400 w-8 h-8" />
+                  <span>Calculadoras Oficina</span>
+                </>
+              )}
+            </h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              {currentSubView === 'baixa' && 'Registre a chegada e baixa de suprimentos solicitados na oficina em tempo real.'}
+              {currentSubView === 'compras_efetuadas' && 'Visualize todos os itens de compra que já foram recebidos e auditados.'}
+              {currentSubView === 'calculadoras' && 'Estime o custo de gramas de filamento, comprimentos de rolo e orçamentos rápidos para novos lotes.'}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {!currentSubView && (
+        <>
+          {/* HEADER WITH INDUSTRIAL ACTIONS */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 pb-5 border-b border-slate-200 no-print">
         <div>
           <h1 className="text-3xl font-bold font-display tracking-tight text-slate-950 mb-1">
             {userRole === 'colaborador' ? 'Fazer Pedido de Compras' : 'Planejamento de Compras & Suprimentos'}
@@ -2087,6 +2279,629 @@ export default function ShoppingListView({
           </div>
         </div>
       )}
+      </>
+      )}
+
+      {/* HUB OPERACIONAL DO COLABORADOR */}
+      <div className={`${currentSubView ? 'bg-transparent border-none' : 'mt-12 mb-8 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden no-print'}`}>
+        {/* Tab headers */}
+        {!currentSubView && (
+          <div className="bg-slate-100 dark:bg-slate-950 p-4 border-b border-slate-200 dark:border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-lg">
+              <Layers className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100 uppercase tracking-wider">
+                Central de Operações do Colaborador
+              </h3>
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">
+                Controles rápidos de recebimento, histórico de auditoria e utilitários
+              </p>
+            </div>
+          </div>
+
+          {/* Tabs list with beautiful icons */}
+          <div className="flex flex-wrap gap-1 bg-slate-200 dark:bg-slate-900 p-1 rounded-xl">
+            <button
+              onClick={() => setColabActiveTab('baixa')}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition duration-150 cursor-pointer ${
+                colabActiveTab === 'baixa'
+                  ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-3xs'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              <CheckCircle className="w-4 h-4" />
+              Baixa de Compras
+            </button>
+            <button
+              onClick={() => setColabActiveTab('compras')}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition duration-150 cursor-pointer ${
+                colabActiveTab === 'compras'
+                  ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-3xs'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              Compras Efetuadas
+            </button>
+            <button
+              onClick={() => setColabActiveTab('calculadora')}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition duration-150 cursor-pointer ${
+                colabActiveTab === 'calculadora'
+                  ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-3xs'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              <Wrench className="w-4 h-4" />
+              Calculadoras
+            </button>
+          </div>
+        </div>
+        )}
+
+        {/* TAB CONTENT: BAIXA DE COMPRAS */}
+        {colabActiveTab === 'baixa' && (
+          <div className="p-6">
+            <div className="flex flex-col md:flex-row items-start justify-between gap-4 mb-6">
+              <div>
+                <h4 className="font-bold text-slate-800 dark:text-slate-150 text-sm mb-1 flex items-center gap-2">
+                  <span>📦 Recebimento e Baixa Rápida de Suprimentos</span>
+                </h4>
+                <p className="text-xs text-slate-450 leading-relaxed">
+                  Os itens listados abaixo foram solicitados pela empresa e estão pendentes. Ao chegarem na oficina, dê a baixa para que o setor comercial saiba que já estão disponíveis.
+                </p>
+              </div>
+              
+              <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-xl p-3 text-right">
+                <span className="block text-[10px] font-bold uppercase text-amber-600 font-mono">Pedidos Pendentes</span>
+                <span className="text-xl font-bold font-mono text-amber-700 dark:text-amber-400">
+                  {shopping.filter(i => !i.checked).length} itens
+                </span>
+              </div>
+            </div>
+
+            {shopping.filter(i => !i.checked).length === 0 ? (
+              <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-8 text-center">
+                <CheckCircle className="w-10 h-10 text-emerald-500 mx-auto mb-3" />
+                <h5 className="font-bold text-slate-700 dark:text-slate-300 text-sm mb-1">Tudo Recebido!</h5>
+                <p className="text-xs text-slate-400">Nenhum pedido de compra pendente na fila no momento.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {shopping.filter(i => !i.checked).map(item => {
+                  const costValue = item.qtyNeeded * item.estUnitCost;
+                  return (
+                    <div 
+                      key={item.id} 
+                      className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-xl p-4 flex flex-col justify-between hover:border-indigo-400 dark:hover:border-indigo-900 transition-all duration-200"
+                    >
+                      <div>
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400">
+                            {item.category}
+                          </span>
+                          <span className="font-mono text-[10px] text-slate-400">
+                            Qtd: <strong className="text-slate-700 dark:text-slate-300 font-bold">{item.qtyNeeded} un</strong>
+                          </span>
+                        </div>
+                        
+                        <h5 className="font-bold text-slate-850 dark:text-slate-100 text-sm line-clamp-1 mb-1">
+                          {item.materialName}
+                        </h5>
+                        
+                        {item.barcode && (
+                          <p className="text-[10px] font-mono font-bold text-slate-400 mb-1">
+                            Cód: {item.barcode}
+                          </p>
+                        )}
+
+                        <div className="flex flex-wrap items-center gap-2 mb-3 text-[10px] text-slate-400">
+                          <span>Solicitante: <strong>{item.requestedBy || 'Ftéx'}</strong></span>
+                          <span>•</span>
+                          <span>Empresa: <strong>{item.company || 'Ftéx'}</strong></span>
+                        </div>
+                      </div>
+
+                      <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                        <div className="font-mono text-xs">
+                          <span className="text-slate-400 text-[10px] block">Estimativa:</span>
+                          <strong className="text-slate-700 dark:text-slate-200 font-bold">
+                            R$ {costValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </strong>
+                        </div>
+
+                        <div className="flex gap-1.5">
+                          <button
+                            onClick={() => handleDirectBaixa(item, false)}
+                            className="px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-[10px] font-bold uppercase tracking-wider transition cursor-pointer"
+                            title="Apenas marcar como comprado"
+                          >
+                            Dar Baixa
+                          </button>
+                          <button
+                            onClick={() => handleDirectBaixa(item, true)}
+                            className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 transition shadow-3xs cursor-pointer"
+                            title="Marcar como comprado e enviar para o estoque ativo de suprimentos"
+                          >
+                            <PlusCircle className="w-3.5 h-3.5" />
+                            Estoque
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB CONTENT: COMPRAS EFETUADAS (HISTORICO) */}
+        {colabActiveTab === 'compras' && (
+          <div className="p-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+              <div>
+                <h4 className="font-bold text-slate-800 dark:text-slate-150 text-sm mb-1 flex items-center gap-2">
+                  <span>📜 Histórico de Compras Efetuadas (Entregues)</span>
+                </h4>
+                <p className="text-xs text-slate-450 leading-relaxed">
+                  Histórico consolidado dos itens de compras que já foram adquiridos e receberam baixa pela equipe da empresa.
+                </p>
+              </div>
+
+              {/* Search Input for Completed Purchases */}
+              <div className="relative w-full md:w-72">
+                <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                  <Search className="w-3.5 h-3.5" />
+                </span>
+                <input
+                  type="text"
+                  value={completedSearchQuery}
+                  onChange={(e) => setCompletedSearchQuery(e.target.value)}
+                  placeholder="Pesquisar histórico..."
+                  className="w-full pl-9 pr-4 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+            </div>
+
+            {/* Cost Statistics Card for History */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+              <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900 rounded-xl p-4 flex flex-col">
+                <span className="text-[10px] font-bold uppercase text-emerald-600 font-mono mb-1">Total Economizado / Investido</span>
+                <strong className="text-xl font-bold font-mono text-emerald-700 dark:text-emerald-400">
+                  R$ {shopping.filter(i => i.checked).reduce((acc, i) => acc + (i.qtyNeeded * i.estUnitCost), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </strong>
+              </div>
+              <div className="bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-900 rounded-xl p-4 flex flex-col">
+                <span className="text-[10px] font-bold uppercase text-indigo-600 font-mono mb-1">Total de Itens Recebidos</span>
+                <strong className="text-xl font-bold font-mono text-indigo-700 dark:text-indigo-400">
+                  {shopping.filter(i => i.checked).length} itens
+                </strong>
+              </div>
+              <div className="bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-xl p-4 flex flex-col">
+                <span className="text-[10px] font-bold uppercase text-slate-500 font-mono mb-1">Custo Médio por Unidade</span>
+                <strong className="text-xl font-bold font-mono text-slate-700 dark:text-slate-300">
+                  R$ {(shopping.filter(i => i.checked).reduce((acc, i) => acc + i.estUnitCost, 0) / (shopping.filter(i => i.checked).length || 1)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </strong>
+              </div>
+            </div>
+
+            {/* List matching completed items */}
+            {(() => {
+              const completedItems = shopping.filter(item => {
+                if (!item.checked) return false;
+                if (!completedSearchQuery) return true;
+                return (
+                  item.materialName.toLowerCase().includes(completedSearchQuery.toLowerCase()) ||
+                  (item.barcode && item.barcode.toLowerCase().includes(completedSearchQuery.toLowerCase())) ||
+                  (item.company && item.company.toLowerCase().includes(completedSearchQuery.toLowerCase())) ||
+                  (item.requestedBy && item.requestedBy.toLowerCase().includes(completedSearchQuery.toLowerCase()))
+                );
+              });
+
+              if (completedItems.length === 0) {
+                return (
+                  <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-8 text-center text-slate-400">
+                    <ClipboardList className="w-8 h-8 mx-auto mb-2 opacity-55" />
+                    <p className="text-xs">Nenhum item encontrado no histórico para os filtros ativos.</p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 dark:bg-slate-905 border-b border-slate-200 dark:border-slate-800 select-none text-[10px] font-mono text-slate-500 uppercase">
+                        <th className="p-3">Item / Especificação</th>
+                        <th className="p-3">Categoria</th>
+                        <th className="p-3">Empresa</th>
+                        <th className="p-3">Qtd</th>
+                        <th className="p-3 text-right">Unitário</th>
+                        <th className="p-3 text-right">Total Pago</th>
+                        <th className="p-3 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                      {completedItems.map(item => (
+                        <tr key={item.id} className="hover:bg-slate-50/55 dark:hover:bg-slate-800/30 transition">
+                          <td className="p-3">
+                            <span className="font-bold text-slate-800 dark:text-slate-100 block">{item.materialName}</span>
+                            {item.barcode && <span className="text-[10px] text-slate-400 font-mono">Código: {item.barcode}</span>}
+                          </td>
+                          <td className="p-3">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold">
+                              {item.category}
+                            </span>
+                          </td>
+                          <td className="p-3 text-slate-500 dark:text-slate-400">{item.company || 'Ftéx'}</td>
+                          <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{item.qtyNeeded}x</td>
+                          <td className="p-3 text-right font-mono text-slate-600 dark:text-slate-400">R$ {item.estUnitCost.toFixed(2)}</td>
+                          <td className="p-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                            R$ {(item.qtyNeeded * item.estUnitCost).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="p-3 text-center">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-400 px-2 py-0.5 rounded">
+                              <Check className="w-3 h-3 stroke-[3]" /> Recebido
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* TAB CONTENT: CALCULADORAS OPERACIONAIS */}
+        {colabActiveTab === 'calculadora' && (
+          <div className="p-6">
+            <div className="mb-6">
+              <h4 className="font-bold text-slate-800 dark:text-slate-150 text-sm mb-1 flex items-center gap-1.5">
+                <Wrench className="w-4 h-4 text-indigo-500" />
+                <span>🧮 Calculadoras e Utilitários de Impressão & Compras</span>
+              </h4>
+              <p className="text-xs text-slate-450 leading-relaxed">
+                Ferramentas interativas para ajudar colaboradores no planejamento de consumo de insumos de impressão 3D e cálculo de orçamentos rápidos para compras.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {/* 1. FILAMENT COST CALCULATOR */}
+              <div className="bg-white dark:bg-slate-950 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Layers className="w-4 h-4 text-indigo-500" />
+                    <h5 className="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                      Custo por Grama (Filamentos)
+                    </h5>
+                  </div>
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-4 leading-relaxed">
+                    Descubra o custo por grama com base no preço do rolo. Crucial para faturar peças impressas em 3D.
+                  </p>
+
+                  <div className="space-y-3.5">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Preço do Rolo (R$)</label>
+                      <input
+                        type="number"
+                        value={calcFilPrice === 0 ? '' : calcFilPrice}
+                        onChange={(e) => setCalcFilPrice(parseFloat(e.target.value) || 0)}
+                        className="w-full text-xs font-mono font-bold px-3 py-1.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 rounded-lg focus:border-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Peso do Rolo (Gramas)</label>
+                      <div className="flex gap-1.5">
+                        <input
+                          type="number"
+                          value={calcFilWeight === 0 ? '' : calcFilWeight}
+                          onChange={(e) => setCalcFilWeight(parseInt(e.target.value) || 0)}
+                          className="w-full text-xs font-mono font-bold px-3 py-1.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 rounded-lg focus:border-indigo-500"
+                        />
+                        <button
+                          onClick={() => setCalcFilWeight(1000)}
+                          className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[10px] font-bold rounded duration-100 cursor-pointer text-slate-700 dark:text-slate-300"
+                        >
+                          1kg
+                        </button>
+                        <button
+                          onClick={() => setCalcFilWeight(500)}
+                          className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[10px] font-bold rounded duration-100 cursor-pointer text-slate-700 dark:text-slate-300"
+                        >
+                          500g
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 text-center">
+                  <span className="block text-[10px] text-slate-400 uppercase tracking-wider mb-0.5">Custo Estimado por Grama</span>
+                  <strong className="text-xl font-bold font-mono text-indigo-650 dark:text-indigo-400">
+                    R$ {(calcFilPrice / (calcFilWeight || 1)).toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
+                  </strong>
+                </div>
+              </div>
+
+              {/* 2. BATCH BUDGET ESTIMATOR */}
+              <div className="bg-white dark:bg-slate-950 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <ShoppingBag className="w-4 h-4 text-emerald-500" />
+                    <h5 className="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                      Orçamento de Lote de Compras
+                    </h5>
+                  </div>
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-4 leading-relaxed">
+                    Consolide preços com cálculo rápido de quantidade, frete e tarifas para compras comerciais rápidas.
+                  </p>
+
+                  <div className="space-y-3.5">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Quantidade</label>
+                        <input
+                          type="number"
+                          value={calcQty === 0 ? '' : calcQty}
+                          onChange={(e) => setCalcQty(parseInt(e.target.value) || 0)}
+                          className="w-full text-xs font-mono font-bold px-3 py-1.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 rounded-lg focus:border-indigo-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Custo Unit. (R$)</label>
+                        <input
+                          type="number"
+                          value={calcUnitPrice === 0 ? '' : calcUnitPrice}
+                          onChange={(e) => setCalcUnitPrice(parseFloat(e.target.value) || 0)}
+                          className="w-full text-xs font-mono font-bold px-3 py-1.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 rounded-lg focus:border-indigo-500"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Frete / Custos Extras (R$)</label>
+                      <input
+                        type="number"
+                        value={calcShipping === 0 ? '' : calcShipping}
+                        onChange={(e) => setCalcShipping(parseFloat(e.target.value) || 0)}
+                        className="w-full text-xs font-mono font-bold px-3 py-1.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 rounded-lg focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 text-center">
+                  <span className="block text-[10px] text-slate-400 uppercase tracking-wider mb-0.5">Custo Total de Aquisição</span>
+                  <strong className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                    R$ {((calcQty * calcUnitPrice) + calcShipping).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </strong>
+                </div>
+              </div>
+
+              {/* 3. FILAMENT LENGTH CALCULATOR */}
+              <div className="bg-white dark:bg-slate-950 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Layers className="w-4 h-4 text-rose-500" />
+                    <h5 className="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                      Conversor de Comprimento (1.75mm)
+                    </h5>
+                  </div>
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-4 leading-relaxed">
+                    Estime o comprimento total em metros disponível em um rolo com base no seu peso e material.
+                  </p>
+
+                  <div className="space-y-3.5">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Material do Insumo</label>
+                      <select
+                        value={calcFilType}
+                        onChange={(e) => setCalcFilType(e.target.value as any)}
+                        className="w-full text-xs font-bold px-3 py-1.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 rounded-lg focus:border-indigo-500"
+                      >
+                        <option value="PLA">PLA (Densidade ~1.24 g/cm³)</option>
+                        <option value="PETG">PETG (Densidade ~1.27 g/cm³)</option>
+                        <option value="ABS">ABS (Densidade ~1.04 g/cm³)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Peso Total (Kg)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={calcFilTotalWeight === 0 ? '' : calcFilTotalWeight}
+                        onChange={(e) => setCalcFilTotalWeight(parseFloat(e.target.value) || 0)}
+                        className="w-full text-xs font-mono font-bold px-3 py-1.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 rounded-lg focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 text-center">
+                  <span className="block text-[10px] text-slate-400 uppercase tracking-wider mb-0.5">Comprimento Estimado</span>
+                  <strong className="text-xl font-bold font-mono text-rose-600 dark:text-rose-500">
+                    {(() => {
+                      const metersPerKg = calcFilType === 'PLA' ? 330 : calcFilType === 'PETG' ? 310 : 400;
+                      return `${(calcFilTotalWeight * metersPerKg).toFixed(0)} metros`;
+                    })()}
+                  </strong>
+                </div>
+              </div>
+
+              {/* 4. DIGITAL POCKET CALCULATOR */}
+              <div className="bg-slate-900 dark:bg-slate-950 text-white p-5 rounded-2xl border border-slate-800 flex flex-col justify-between shadow-lg relative overflow-hidden select-none">
+                {/* Visual solar panel detail for realistic feel */}
+                <div className="absolute top-2 right-4 flex items-center gap-1.5 opacity-65">
+                  <span className="text-[7px] font-mono tracking-wider text-slate-450 uppercase">Solar Cell</span>
+                  <div className="flex gap-0.5">
+                    <span className="w-2.5 h-1.5 bg-amber-800/85 rounded-[1px]" />
+                    <span className="w-2.5 h-1.5 bg-amber-800/85 rounded-[1px]" />
+                    <span className="w-2.5 h-1.5 bg-amber-800/85 rounded-[1px]" />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center gap-2 mb-3 border-b border-slate-800 pb-2">
+                    <Calculator className="w-4 h-4 text-amber-500" />
+                    <h5 className="font-bold text-xs uppercase tracking-wider text-slate-300">
+                      Calculadora de Bolso
+                    </h5>
+                  </div>
+
+                  {/* SCREEN / LCD DISPLAY */}
+                  <div className="bg-emerald-950/40 border border-emerald-900/40 rounded-xl p-3 text-right font-mono relative shadow-inner">
+                    <div className="text-[10px] text-emerald-500/60 min-h-[14px] truncate tracking-wider">
+                      {calcSubDisplay || '\u00A0'}
+                    </div>
+                    <div className="text-xl font-bold text-emerald-400 truncate tracking-tight mt-0.5 select-all">
+                      {calcDisplay}
+                    </div>
+                  </div>
+
+                  {/* BUTTONS GRID */}
+                  <div className="grid grid-cols-4 gap-1.5 text-xs">
+                    {/* Row 1 */}
+                    <button
+                      onClick={() => handleCalcKeyPress('C')}
+                      className="h-8 font-bold bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 rounded-lg transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center border border-rose-900/30"
+                    >
+                      C
+                    </button>
+                    <button
+                      onClick={() => handleCalcKeyPress('DEL')}
+                      className="h-8 font-bold bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-lg transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center border border-slate-700/30"
+                    >
+                      DEL
+                    </button>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(calcDisplay);
+                        setToastMessage("Valor copiado!");
+                        setTimeout(() => setToastMessage(null), 2500);
+                      }}
+                      title="Copiar resultado"
+                      className="h-8 text-[10px] font-bold bg-slate-800 hover:bg-slate-750 text-amber-500 rounded-lg transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center border border-slate-700/30"
+                    >
+                      COPIAR
+                    </button>
+                    <button
+                      onClick={() => handleCalcKeyPress('÷')}
+                      className="h-8 font-extrabold bg-indigo-950 text-indigo-400 rounded-lg hover:bg-indigo-900 transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center text-sm border border-indigo-900/30"
+                    >
+                      ÷
+                    </button>
+
+                    {/* Row 2 */}
+                    <button
+                      onClick={() => handleCalcKeyPress('7')}
+                      className="h-8 font-semibold bg-slate-800/60 hover:bg-slate-800 text-slate-100 rounded-lg transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center border border-slate-700/20"
+                    >
+                      7
+                    </button>
+                    <button
+                      onClick={() => handleCalcKeyPress('8')}
+                      className="h-8 font-semibold bg-slate-800/60 hover:bg-slate-800 text-slate-100 rounded-lg transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center border border-slate-700/20"
+                    >
+                      8
+                    </button>
+                    <button
+                      onClick={() => handleCalcKeyPress('9')}
+                      className="h-8 font-semibold bg-slate-800/60 hover:bg-slate-800 text-slate-100 rounded-lg transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center border border-slate-700/20"
+                    >
+                      9
+                    </button>
+                    <button
+                      onClick={() => handleCalcKeyPress('×')}
+                      className="h-8 font-extrabold bg-indigo-950 text-indigo-400 rounded-lg hover:bg-indigo-900 transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center text-sm border border-indigo-900/30"
+                    >
+                      ×
+                    </button>
+
+                    {/* Row 3 */}
+                    <button
+                      onClick={() => handleCalcKeyPress('4')}
+                      className="h-8 font-semibold bg-slate-800/60 hover:bg-slate-800 text-slate-100 rounded-lg transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center border border-slate-700/20"
+                    >
+                      4
+                    </button>
+                    <button
+                      onClick={() => handleCalcKeyPress('5')}
+                      className="h-8 font-semibold bg-slate-800/60 hover:bg-slate-800 text-slate-100 rounded-lg transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center border border-slate-700/20"
+                    >
+                      5
+                    </button>
+                    <button
+                      onClick={() => handleCalcKeyPress('6')}
+                      className="h-8 font-semibold bg-slate-800/60 hover:bg-slate-800 text-slate-100 rounded-lg transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center border border-slate-700/20"
+                    >
+                      6
+                    </button>
+                    <button
+                      onClick={() => handleCalcKeyPress('-')}
+                      className="h-8 font-extrabold bg-indigo-950 text-indigo-400 rounded-lg hover:bg-indigo-900 transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center text-sm border border-indigo-900/30"
+                    >
+                      -
+                    </button>
+
+                    {/* Row 4 */}
+                    <button
+                      onClick={() => handleCalcKeyPress('1')}
+                      className="h-8 font-semibold bg-slate-800/60 hover:bg-slate-800 text-slate-100 rounded-lg transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center border border-slate-700/20"
+                    >
+                      1
+                    </button>
+                    <button
+                      onClick={() => handleCalcKeyPress('2')}
+                      className="h-8 font-semibold bg-slate-800/60 hover:bg-slate-800 text-slate-100 rounded-lg transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center border border-slate-700/20"
+                    >
+                      2
+                    </button>
+                    <button
+                      onClick={() => handleCalcKeyPress('3')}
+                      className="h-8 font-semibold bg-slate-800/60 hover:bg-slate-800 text-slate-100 rounded-lg transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center border border-slate-700/20"
+                    >
+                      3
+                    </button>
+                    <button
+                      onClick={() => handleCalcKeyPress('+')}
+                      className="h-8 font-extrabold bg-indigo-950 text-indigo-400 rounded-lg hover:bg-indigo-900 transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center text-sm border border-indigo-900/30"
+                    >
+                      +
+                    </button>
+
+                    {/* Row 5 */}
+                    <button
+                      onClick={() => handleCalcKeyPress('0')}
+                      className="h-8 font-semibold bg-slate-800/60 hover:bg-slate-800 text-slate-100 rounded-lg col-span-2 transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center border border-slate-700/20"
+                    >
+                      0
+                    </button>
+                    <button
+                      onClick={() => handleCalcKeyPress('.')}
+                      className="h-8 font-semibold bg-slate-800/60 hover:bg-slate-800 text-slate-100 rounded-lg transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center border border-slate-700/20"
+                    >
+                      .
+                    </button>
+                    <button
+                      onClick={() => handleCalcKeyPress('=')}
+                      className="h-8 font-extrabold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition duration-100 cursor-pointer active:scale-95 flex items-center justify-center text-base shadow-sm shadow-emerald-950/50"
+                    >
+                      =
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-slate-800 text-[9px] text-center text-slate-500 font-mono tracking-wide">
+                  Calculadora Comercial Integrada
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* FOOTER TIPS CARD */}
       {userRole !== 'colaborador' && (

@@ -20,7 +20,10 @@ import {
   Linkedin,
   Facebook,
   Github,
-  MessageCircle
+  MessageCircle,
+  CheckSquare,
+  FileClock,
+  Calculator
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -36,6 +39,9 @@ export default function Sidebar({ currentView, onViewChange, onLogout, userRole 
     { id: 'pecas', label: 'Registrar Ordem 3D', icon: Layers, adminOnly: true },
     { id: 'suprimentos', label: 'Insumos & Custos', icon: Database, adminOnly: true },
     { id: 'compras', label: 'Lista de Compras', icon: ShoppingCart },
+    { id: 'baixa_compras', label: 'Baixa de Compras', icon: CheckSquare },
+    { id: 'compras_efetuadas', label: 'Compras Efetuadas', icon: FileClock },
+    { id: 'calculadoras', label: 'Calculadoras Oficina', icon: Calculator },
     { id: 'relatorio', label: 'Fechamento Mensal', icon: FileText, adminOnly: true },
     { id: 'configuracoes', label: 'Configurações', icon: Settings, adminOnly: true },
     { id: 'vercel', label: 'Guia de Deploy Vercel', icon: CloudLightning, highlight: true, adminOnly: true }

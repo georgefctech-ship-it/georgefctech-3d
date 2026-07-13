@@ -164,6 +164,48 @@ export default function App() {
             userRole={userRole}
           />
         );
+      case 'baixa_compras':
+        return (
+          <ShoppingListView
+            shopping={shopping}
+            inventory={inventory}
+            onAddShoppingItem={addShoppingItem}
+            onDeleteShoppingItem={deleteShoppingItem}
+            onUpdateShoppingItem={updateShoppingItem}
+            onToggleShoppingItemChecked={toggleShoppingItemChecked}
+            onAddInventoryItem={addInventoryItem}
+            userRole={userRole}
+            currentSubView="baixa"
+          />
+        );
+      case 'compras_efetuadas':
+        return (
+          <ShoppingListView
+            shopping={shopping}
+            inventory={inventory}
+            onAddShoppingItem={addShoppingItem}
+            onDeleteShoppingItem={deleteShoppingItem}
+            onUpdateShoppingItem={updateShoppingItem}
+            onToggleShoppingItemChecked={toggleShoppingItemChecked}
+            onAddInventoryItem={addInventoryItem}
+            userRole={userRole}
+            currentSubView="compras_efetuadas"
+          />
+        );
+      case 'calculadoras':
+        return (
+          <ShoppingListView
+            shopping={shopping}
+            inventory={inventory}
+            onAddShoppingItem={addShoppingItem}
+            onDeleteShoppingItem={deleteShoppingItem}
+            onUpdateShoppingItem={updateShoppingItem}
+            onToggleShoppingItemChecked={toggleShoppingItemChecked}
+            onAddInventoryItem={addInventoryItem}
+            userRole={userRole}
+            currentSubView="calculadoras"
+          />
+        );
       case 'relatorio':
         return <ReportView projects={projects} />;
       case 'vercel':
