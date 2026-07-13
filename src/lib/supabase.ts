@@ -96,7 +96,8 @@ CREATE TABLE IF NOT EXISTS g3d_shopping (
 CREATE TABLE IF NOT EXISTS g3d_user_roles (
   email TEXT PRIMARY KEY,
   role TEXT NOT NULL DEFAULT 'colaborador', -- 'admin' ou 'colaborador'
-  username TEXT UNIQUE
+  username TEXT UNIQUE,
+  password TEXT
 );
 
 -- Habilitar leitura pública ou autenticada de todos os registros
