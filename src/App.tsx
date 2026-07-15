@@ -148,6 +148,7 @@ export default function App() {
             onDeleteInventoryItem={deleteInventoryItem}
             onUpdateQty={updateInventoryQty}
             onEditInventoryItem={editInventoryItem}
+            onAddShoppingItem={addShoppingItem}
             userRole={userRole}
           />
         );

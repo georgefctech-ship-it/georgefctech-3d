@@ -28,7 +28,7 @@ import {
   Search,
   Sparkles
 } from 'lucide-react';
-import { InventoryItem } from '../types';
+import { InventoryItem, ShoppingItem } from '../types';
 import { Html5Qrcode } from 'html5-qrcode';
 
 const ensureAbsoluteUrl = (url: string | undefined): string => {
@@ -46,6 +46,7 @@ interface InventoryViewProps {
   onDeleteInventoryItem: (id: string) => void;
   onUpdateQty: (id: string, newQty: number) => void;
   onEditInventoryItem?: (id: string, updatedFields: Partial<InventoryItem>) => void;
+  onAddShoppingItem?: (item: Omit<ShoppingItem, 'id' | 'checked'>) => void;
   userRole?: string;
 }
 
@@ -55,6 +56,7 @@ export default function InventoryView({
   onDeleteInventoryItem,
   onUpdateQty,
   onEditInventoryItem,
+  onAddShoppingItem,
   userRole
 }: InventoryViewProps) {
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
@@ -159,6 +161,42 @@ export default function InventoryView({
   const [errorMsg, setErrorMsg] = useState('');
   const [success, setSuccess] = useState(false);
   const [zoomImage, setZoomImage] = useState<string | null>(null);
+
+  // Purchase / Add to shopping states
+  const [purchasingItem, setPurchasingItem] = useState<InventoryItem | null>(null);
+  const [purchaseQty, setPurchaseQty] = useState<number>(1);
+  const [purchaseNotes, setPurchaseNotes] = useState<string>('');
+  const [purchaseSuccessMsg, setPurchaseSuccessMsg] = useState<string>('');
+
+  const handleAddToShopping = () => {
+    if (!purchasingItem) return;
+    
+    if (onAddShoppingItem) {
+      onAddShoppingItem({
+        materialName: purchasingItem.material,
+        qtyNeeded: purchaseQty,
+        estUnitCost: purchasingItem.unitCost,
+        purchaseLink: purchasingItem.purchaseLink || '',
+        category: 'Filamento',
+        notes: purchaseNotes ? `Solicitado via inventário. Obs: ${purchaseNotes}` : 'Solicitado via inventário.',
+        requestedBy: userRole === 'colaborador' ? 'Colaborador' : 'Administrador',
+        company: userRole === 'colaborador' ? 'Ftéx' : 'GeorgeFctech-3D'
+      });
+    }
+
+    if (purchasingItem.purchaseLink) {
+      window.open(ensureAbsoluteUrl(purchasingItem.purchaseLink), '_blank', 'noreferrer,noopener');
+    }
+
+    setPurchaseSuccessMsg(`Item "${purchasingItem.material}" adicionado à lista de compras com sucesso (Quantidade: ${purchaseQty})!`);
+    setPurchasingItem(null);
+    setPurchaseQty(1);
+    setPurchaseNotes('');
+
+    setTimeout(() => {
+      setPurchaseSuccessMsg('');
+    }, 4500);
+  };
 
   const presetColors = [
     { name: 'Preto Técnico', color: '#1e293b', url: 'https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?w=300&q=80' },
@@ -340,6 +378,13 @@ export default function InventoryView({
       {success && (
         <div className="mb-6 p-4 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm shadow-sm">
           Filamento cadastrado com sucesso com fotos e link de compra!
+        </div>
+      )}
+
+      {purchaseSuccessMsg && (
+        <div className="mb-6 p-4 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm flex items-center gap-2 shadow-sm font-semibold">
+          <Check className="w-4 h-4 text-emerald-600 stroke-[3]" />
+          {purchaseSuccessMsg}
         </div>
       )}
 
@@ -632,16 +677,17 @@ export default function InventoryView({
                       {/* Card Buttons */}
                       <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
                         {item.purchaseLink ? (
-                          <a
-                            href={ensureAbsoluteUrl(item.purchaseLink)}
-                            target="_blank"
-                            referrerPolicy="no-referrer"
-                            rel="noreferrer"
-                            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 text-indigo-700 text-xs font-bold rounded-lg transition"
+                          <button
+                            onClick={() => {
+                              setPurchasingItem(item);
+                              setPurchaseQty(1);
+                              setPurchaseNotes('');
+                            }}
+                            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 text-indigo-700 text-xs font-bold rounded-lg transition cursor-pointer"
                           >
                             <ExternalLink className="w-3 h-3" />
                             Link de Compra
-                          </a>
+                          </button>
                         ) : (
                           <span className="flex-1 text-[11px] text-slate-400 italic text-center py-2">Sem Link Cadastrado</span>
                         )}
@@ -756,15 +802,17 @@ export default function InventoryView({
                         </td>
                         <td className="py-3 px-4 whitespace-nowrap text-center">
                           {item.purchaseLink ? (
-                            <a
-                              href={ensureAbsoluteUrl(item.purchaseLink)}
-                              target="_blank"
-                              referrerPolicy="no-referrer"
-                              rel="noreferrer"
-                              className="inline-flex p-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded"
+                            <button
+                              onClick={() => {
+                                setPurchasingItem(item);
+                                setPurchaseQty(1);
+                                setPurchaseNotes('');
+                              }}
+                              className="inline-flex p-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded cursor-pointer"
+                              title="Adicionar à lista de compras e ver link"
                             >
                               <ExternalLink className="w-3.5 h-3.5" />
-                            </a>
+                            </button>
                           ) : (
                             <span className="text-slate-400 text-xs">-</span>
                           )}
@@ -1128,6 +1176,101 @@ export default function InventoryView({
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* ADD TO SHOPPING LIST / PURCHASE DIALOG */}
+      {purchasingItem && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-md w-full border border-slate-200 dark:border-slate-850 overflow-hidden animate-scale-up">
+            <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-55 dark:bg-slate-905">
+              <h3 className="font-bold text-slate-850 dark:text-slate-100 text-sm flex items-center gap-2 uppercase tracking-wide">
+                <Plus className="w-4 h-4 text-indigo-500" />
+                Planejar Compra de Insumo
+              </h3>
+              <button 
+                onClick={() => setPurchasingItem(null)} 
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-5">
+              <div className="bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100/50 dark:border-indigo-900/40 rounded-xl p-4 space-y-2">
+                <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider block font-mono">Produto Identificado</span>
+                <h4 className="font-bold text-slate-900 dark:text-slate-150 text-sm leading-snug">{purchasingItem.material}</h4>
+                <div className="flex justify-between items-center text-xs font-mono pt-1 text-slate-500 dark:text-slate-400">
+                  <span>Custo Unitário Estimado:</span>
+                  <span className="font-bold text-slate-850 dark:text-slate-205">{formatBRL(purchasingItem.unitCost)}</span>
+                </div>
+              </div>
+
+              {/* Quantity input with custom design */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-450 uppercase tracking-wider">Quantidade Necessária</label>
+                <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-2.5 rounded-xl justify-between">
+                  <span className="text-xs text-slate-500 dark:text-slate-400">Quantos rolos deseja pedir?</span>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setPurchaseQty(prev => Math.max(1, prev - 1))}
+                      className="w-8 h-8 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-750 dark:text-slate-250 font-bold hover:bg-slate-100 dark:hover:bg-slate-850 flex items-center justify-center transition cursor-pointer"
+                    >
+                      <Minus className="w-3.5 h-3.5" />
+                    </button>
+                    <span className="font-mono font-bold text-base text-slate-800 dark:text-slate-150 w-8 text-center">
+                      {purchaseQty}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPurchaseQty(prev => prev + 1)}
+                      className="w-8 h-8 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-750 dark:text-slate-250 font-bold hover:bg-slate-100 dark:hover:bg-slate-850 flex items-center justify-center transition cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Total projection */}
+              <div className="flex justify-between items-center bg-emerald-50/40 dark:bg-emerald-950/10 border border-emerald-100/40 dark:border-emerald-900/30 p-3 rounded-xl text-xs">
+                <span className="text-slate-600 dark:text-slate-400 font-medium">Investimento Estimado Total:</span>
+                <strong className="font-mono font-extrabold text-sm text-emerald-650 dark:text-emerald-400">
+                  {formatBRL(purchasingItem.unitCost * purchaseQty)}
+                </strong>
+              </div>
+
+              {/* Optional notes */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-450 uppercase tracking-wider">Observações do Pedido (Opcional)</label>
+                <textarea
+                  value={purchaseNotes}
+                  onChange={(e) => setPurchaseNotes(e.target.value)}
+                  placeholder="Ex: Pedido urgente, reposição de estoque crítico..."
+                  className="w-full text-xs px-3.5 py-2.5 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-800 dark:text-slate-205 bg-white dark:bg-slate-950 focus:outline-none focus:border-indigo-500 h-16 resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 dark:bg-slate-905 border-t border-slate-100 dark:border-slate-850 flex flex-col sm:flex-row gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setPurchasingItem(null)}
+                className="px-5 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-750 dark:text-slate-300 text-xs font-bold uppercase tracking-wider rounded-lg hover:bg-slate-50 dark:hover:bg-slate-850 transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleAddToShopping}
+                className="px-5 py-2.5 bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-bold uppercase tracking-wider rounded-lg transition shadow-md hover:shadow-lg flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Check className="w-4 h-4 stroke-[3]" />
+                Confirmar & Ir para Loja
+              </button>
+            </div>
           </div>
         </div>
       )}
