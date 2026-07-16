@@ -1760,6 +1760,133 @@ export default function ShoppingListView({
     setTimeout(() => setToastMessage(null), 4000);
   };
 
+  // Export Completed purchases as Excel spreadsheet (XLS)
+  const generateCompletedPurchasesExcelReport = () => {
+    let completedPurchases = shopping.filter(item => item.checked);
+
+    // Filtrar pelo período selecionado no histórico
+    if (completedPeriodFilter === 'hoje') {
+      completedPurchases = completedPurchases.filter(item => isToday(getPurchasedDate(item)));
+    } else if (completedPeriodFilter === 'semana') {
+      completedPurchases = completedPurchases.filter(item => isThisWeek(getPurchasedDate(item)));
+    } else if (completedPeriodFilter === 'mes') {
+      completedPurchases = completedPurchases.filter(item => isThisMonth(getPurchasedDate(item)));
+    }
+
+    if (completedPurchases.length === 0) {
+      setToastMessage("Aviso: Nenhuma compra encontrada para o período selecionado para gerar a planilha.");
+      setTimeout(() => setToastMessage(null), 4000);
+      return;
+    }
+
+    const dateFormatted = new Date().toLocaleDateString('pt-BR');
+    const timeFormatted = new Date().toLocaleTimeString('pt-BR');
+    const totalSpent = completedPurchases.reduce((acc, i) => acc + (i.qtyNeeded * i.estUnitCost), 0);
+
+    const excelContent = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:x="urn:schemas-microsoft-com:office:excel"
+      xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+  <meta charset="UTF-8">
+  <!--[if gte mso 9]>
+  <xml>
+    <x:ExcelWorkbook>
+      <x:ExcelWorksheets>
+        <x:ExcelWorksheet>
+          <x:Name>Histórico de Compras</x:Name>
+          <x:WorksheetOptions>
+            <x:DisplayGridlines/>
+          </x:WorksheetOptions>
+        </x:ExcelWorksheet>
+      </x:ExcelWorksheets>
+    </x:ExcelWorkbook>
+  </xml>
+  <![endif]-->
+  <style>
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      margin: 0;
+      padding: 30px;
+    }
+    table {
+      width: 1000px;
+      border-collapse: collapse;
+    }
+    th {
+      background-color: #0f172a;
+      color: #ffffff;
+      font-weight: bold;
+      border: 1px solid #cbd5e1;
+      text-align: left;
+      padding: 12px 10px;
+    }
+    td {
+      border: 1px solid #cbd5e1;
+      padding: 12px 10px;
+    }
+    .title-banner {
+      background-color: #1e1b4b;
+      color: #ffffff;
+      padding: 20px;
+      font-weight: bold;
+      font-size: 16pt;
+    }
+  </style>
+</head>
+<body>
+  <table>
+    <tr>
+      <td colspan="7" class="title-banner" style="background-color: #1e1b4b; color: #ffffff; padding: 20px; font-weight: bold; font-size: 16pt;">
+        HISTÓRICO DE COMPRAS EFETUADAS - ${userRole === 'colaborador' ? 'Ftéx' : 'GeorgeFctech 3D'}
+        <div style="font-size: 10pt; color: #cbd5e1; font-weight: normal; margin-top: 4px;">
+          Gerado em: ${dateFormatted} às ${timeFormatted} &bull; Período: ${completedPeriodFilter.toUpperCase()}
+        </div>
+      </td>
+    </tr>
+    <tr style="height: 10px;"><td colspan="7" style="border: none;"></td></tr>
+    <tr>
+      <th style="width: 250px;">Material / Produto</th>
+      <th style="width: 120px;">Categoria</th>
+      <th style="width: 120px;">Empresa</th>
+      <th style="width: 120px;">Solicitante / Setor</th>
+      <th style="width: 60px; text-align: center;">Qtd</th>
+      <th style="width: 120px; text-align: right;">Unitário</th>
+      <th style="width: 120px; text-align: right;">Total Pago</th>
+    </tr>
+    ${completedPurchases.map(item => {
+      const itemTotal = item.qtyNeeded * item.estUnitCost;
+      return `
+        <tr>
+          <td style="font-weight: bold;">
+            ${item.materialName}
+            ${item.barcode ? `<br/><span style="font-size: 8.5pt; color: #4338ca;">Cód: ${item.barcode}</span>` : ''}
+            ${item.notes ? `<br/><span style="font-size: 8.5pt; color: #64748b; font-style: italic;">Obs: ${item.notes}</span>` : ''}
+          </td>
+          <td>${item.category || 'Outros'}</td>
+          <td>${item.company || 'Ftéx'}</td>
+          <td>${item.requestedBy || 'Colaborador'}${item.department ? ` - ${item.department}` : ''}</td>
+          <td style="text-align: center;">${item.qtyNeeded}</td>
+          <td style="text-align: right; font-family: Courier New, monospace;">R$ ${item.estUnitCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          <td style="text-align: right; font-family: Courier New, monospace; font-weight: bold; color: #059669;">R$ ${itemTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+        </tr>
+      `;
+    }).join('')}
+    <tr style="background-color: #f1f5f9; font-weight: bold;">
+      <td colspan="6" style="text-align: right;">VALOR TOTAL PAGO:</td>
+      <td style="text-align: right; font-family: Courier New, monospace; font-weight: bold; color: #047857;">R$ ${totalSpent.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+    const blob = new Blob([excelContent], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', url);
+    downloadAnchor.setAttribute('download', `Historico_Compras_Excel_${new Date().toISOString().split('T')[0]}.xls`);
+    downloadAnchor.click();
+  };
+
   // Import Purchased items directly to Active Inventory (Dar Baixa)
   const handleImportToStock = (item: ShoppingItem) => {
     onAddInventoryItem({
@@ -3170,7 +3297,7 @@ export default function ShoppingListView({
                 </div>
 
                 {/* Search Input for Completed Purchases */}
-                <div className="relative w-full md:w-56">
+                <div className="relative w-full md:w-48">
                   <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
                     <Search className="w-3.5 h-3.5" />
                   </span>
@@ -3182,6 +3309,25 @@ export default function ShoppingListView({
                     className="w-full pl-9 pr-4 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
                   />
                 </div>
+
+                {/* Relatórios e Pedidos Buttons */}
+                <button
+                  onClick={downloadCompletedPurchasesHtmlReport}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 font-bold text-[10px] uppercase tracking-wider hover:bg-indigo-100 transition duration-150 cursor-pointer"
+                  title="Gerar Relatório Comercial das Compras Efetuadas"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Gerar Relatório HTML</span>
+                </button>
+
+                <button
+                  onClick={generateCompletedPurchasesExcelReport}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 font-bold text-[10px] uppercase tracking-wider hover:bg-emerald-100 transition duration-150 cursor-pointer"
+                  title="Exportar Compras Efetuadas para Planilha Excel"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Exportar Planilha Excel</span>
+                </button>
               </div>
             </div>
 
