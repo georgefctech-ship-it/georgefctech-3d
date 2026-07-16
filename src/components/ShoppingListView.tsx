@@ -146,8 +146,10 @@ export default function ShoppingListView({
   const currentUserEmail = useMemo(() => sessionStorage.getItem('g3d_user_email') || '', []);
   const currentUsername = useMemo(() => sessionStorage.getItem('g3d_username') || '', []);
 
+  const [filterOnlyMine, setFilterOnlyMine] = useState(false);
+
   const shopping = useMemo(() => {
-    if (userRole === 'colaborador') {
+    if (userRole === 'colaborador' && filterOnlyMine) {
       return allShopping.filter(item => {
         const reqBy = (item.requestedBy || '').toLowerCase().trim();
         const myEmail = currentUserEmail.toLowerCase().trim();
@@ -165,7 +167,7 @@ export default function ShoppingListView({
       });
     }
     return allShopping;
-  }, [allShopping, userRole, currentUserEmail, currentUsername]);
+  }, [allShopping, userRole, currentUserEmail, currentUsername, filterOnlyMine]);
 
   const [formOpen, setFormOpen] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -1943,9 +1945,7 @@ export default function ShoppingListView({
   });
 
   // Calculate stats per category
-  const categoriesList = userRole === 'colaborador'
-    ? ['Acessórios/Insumos', 'Outros']
-    : ['Filamento', 'Peças de Reposição', 'Acessórios/Insumos', 'Outros'];
+  const categoriesList = ['Filamento', 'Peças de Reposição', 'Acessórios/Insumos', 'Outros'];
   const getCategoryStats = (cat: string) => {
     const items = shopping.filter(i => i.category === cat);
     const count = items.length;
@@ -2507,6 +2507,22 @@ export default function ShoppingListView({
             </button>
           ))}
         </div>
+
+        {/* Toggle Apenas Minhas Solicitações if colaborador */}
+        {userRole === 'colaborador' && (
+          <button
+            type="button"
+            onClick={() => setFilterOnlyMine(!filterOnlyMine)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition flex items-center gap-1.5 cursor-pointer ${
+              filterOnlyMine
+                ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 font-bold shadow-3xs'
+                : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-650 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900'
+            }`}
+          >
+            <CheckSquare className="w-3.5 h-3.5" />
+            <span>Apenas Minhas Solicitações</span>
+          </button>
+        )}
 
         {/* Company filter dropdown */}
         <div className="flex items-center gap-1.5 bg-slate-150 p-1 rounded-lg">
