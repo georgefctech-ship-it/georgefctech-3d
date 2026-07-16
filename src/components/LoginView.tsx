@@ -346,24 +346,47 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     const supabase = getSupabaseClient();
     if (supabase && hasSupabaseConfigured()) {
       try {
-        const { data: dbUser, error: queryErr } = await supabase
+        const normalizedIdentifier = inputEmailOrUser.toLowerCase();
+        let dbUser: any = null;
+
+        const { data: dbUserByEmail, error: emailErr } = await supabase
           .from('g3d_user_roles')
           .select('*')
-          .or(`email.eq.${inputEmailOrUser},username.eq.${inputEmailOrUser}`)
+          .eq('email', normalizedIdentifier)
           .maybeSingle();
 
-        if (queryErr) throw queryErr;
+        if (emailErr) throw emailErr;
+        dbUser = dbUserByEmail;
+
+        if (!dbUser) {
+          const { data: dbUserByUsername, error: usernameErr } = await supabase
+            .from('g3d_user_roles')
+            .select('*')
+            .eq('username', normalizedIdentifier)
+            .maybeSingle();
+
+          if (usernameErr) throw usernameErr;
+          dbUser = dbUserByUsername;
+        }
 
         if (dbUser) {
           const storedRemotePassword = String(dbUser.password ?? '').trim();
-          if (storedRemotePassword === inputPassword) {
+          const { data: masterRow } = await supabase
+            .from('g3d_user_roles')
+            .select('role')
+            .eq('email', 'system_master_password')
+            .maybeSingle();
+          const masterPassword = String(masterRow?.role ?? savedMasterPassword ?? '').trim();
+          const passwordMatches = (storedRemotePassword && storedRemotePassword === inputPassword) || (!storedRemotePassword && masterPassword && inputPassword === masterPassword);
+
+          if (passwordMatches) {
             const normalizedRole = dbUser.role === 'admin' || dbUser.role === 'colaborador' ? dbUser.role : 'colaborador';
 
             const updatedLocalUsers = localUsers.filter(u => u.email !== dbUser.email);
             updatedLocalUsers.push({
               email: dbUser.email,
               username: dbUser.username,
-              password: dbUser.password,
+              password: storedRemotePassword || inputPassword,
               role: normalizedRole
             });
             localStorage.setItem('g3d_local_users', JSON.stringify(updatedLocalUsers));
@@ -382,7 +405,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
           }
         }
       } catch (err: any) {
-        console.error("Erro ao validar login no Supabase:", err);
+        console.error('Erro ao validar login no Supabase:', err);
       }
     }
 
