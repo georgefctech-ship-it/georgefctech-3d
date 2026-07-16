@@ -136,15 +136,26 @@ export default function SettingsView({
       localUsers = JSON.parse(localUsersStr);
     } catch (e) {}
     
-    const targetUser = localUsers.find(u => u.email?.toLowerCase() === email.toLowerCase());
-    const nextRole = getApprovalRole(targetUser?.role);
+    const targetCollab = collaborators.find(u => u.email?.toLowerCase() === email.toLowerCase()) || 
+                         localUsers.find(u => u.email?.toLowerCase() === email.toLowerCase());
+    const nextRole = getApprovalRole(targetCollab?.role);
 
-    localUsers = localUsers.map(u => {
-      if (u.email?.toLowerCase() === email.toLowerCase()) {
-        return { ...u, role: nextRole };
-      }
-      return u;
-    });
+    const existsInLocal = localUsers.some(u => u.email?.toLowerCase() === email.toLowerCase());
+    if (existsInLocal) {
+      localUsers = localUsers.map(u => {
+        if (u.email?.toLowerCase() === email.toLowerCase()) {
+          return { ...u, role: nextRole };
+        }
+        return u;
+      });
+    } else if (targetCollab) {
+      localUsers.push({
+        email: targetCollab.email,
+        username: targetCollab.username || email.split('@')[0],
+        password: targetCollab.password || '123',
+        role: nextRole
+      });
+    }
     localStorage.setItem('g3d_local_users', JSON.stringify(localUsers));
 
     // 2. Update in Supabase
@@ -178,15 +189,26 @@ export default function SettingsView({
       localUsers = JSON.parse(localUsersStr);
     } catch (e) {}
 
-    const targetUser = localUsers.find(u => u.email?.toLowerCase() === email.toLowerCase());
-    const nextRole = targetUser?.role?.toLowerCase().includes('admin') ? 'admin_pendente' : 'colaborador_pendente';
+    const targetCollab = collaborators.find(u => u.email?.toLowerCase() === email.toLowerCase()) || 
+                         localUsers.find(u => u.email?.toLowerCase() === email.toLowerCase());
+    const nextRole = targetCollab?.role?.toLowerCase().includes('admin') ? 'admin_pendente' : 'colaborador_pendente';
 
-    localUsers = localUsers.map(u => {
-      if (u.email?.toLowerCase() === email.toLowerCase()) {
-        return { ...u, role: nextRole };
-      }
-      return u;
-    });
+    const existsInLocal = localUsers.some(u => u.email?.toLowerCase() === email.toLowerCase());
+    if (existsInLocal) {
+      localUsers = localUsers.map(u => {
+        if (u.email?.toLowerCase() === email.toLowerCase()) {
+          return { ...u, role: nextRole };
+        }
+        return u;
+      });
+    } else if (targetCollab) {
+      localUsers.push({
+        email: targetCollab.email,
+        username: targetCollab.username || email.split('@')[0],
+        password: targetCollab.password || '123',
+        role: nextRole
+      });
+    }
     localStorage.setItem('g3d_local_users', JSON.stringify(localUsers));
 
     // 2. Update in Supabase

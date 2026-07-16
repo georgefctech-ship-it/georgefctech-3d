@@ -311,8 +311,109 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       return;
     }
 
-    // 1. Legacy Fallback: Master Password check
+    // Load local users
+    const localUsersStr = localStorage.getItem('g3d_local_users') || '[]';
+    let localUsers: any[] = [];
+    try {
+      localUsers = JSON.parse(localUsersStr);
+    } catch (err) {
+      localUsers = [];
+    }
+
     const savedMasterPassword = localStorage.getItem('g3d_master_password')?.trim();
+
+    // 1. Check Remote Supabase FIRST if configured
+    const supabase = getSupabaseClient();
+    if (supabase && hasSupabaseConfigured()) {
+      try {
+        const normalizedIdentifier = inputEmailOrUser.toLowerCase().trim();
+
+        // 1a. Check master password on Supabase
+        const { data: masterRow } = await supabase
+          .from('g3d_user_roles')
+          .select('role')
+          .eq('email', 'system_master_password')
+          .maybeSingle();
+        const globalMasterPassword = String(masterRow?.role ?? '').trim();
+
+        if (globalMasterPassword && inputPassword === globalMasterPassword) {
+          // Save locally as cache
+          localStorage.setItem('g3d_master_password', globalMasterPassword);
+          sessionStorage.setItem('g3d_authenticated', 'true');
+          sessionStorage.setItem('g3d_user_role', selectedRole); // use the role selected in the screen (admin or colaborador)
+          sessionStorage.setItem('g3d_username', inputEmailOrUser || (selectedRole === 'admin' ? 'Administrador' : 'Colaborador'));
+          sessionStorage.setItem('g3d_user_email', inputEmailOrUser.includes('@') ? inputEmailOrUser : 'admin@master.com');
+          setLoading(false);
+          onLoginSuccess();
+          return;
+        }
+
+        // 1b. Check case-insensitive registered user by email
+        let dbUser: any = null;
+        const { data: dbUserByEmail, error: emailErr } = await supabase
+          .from('g3d_user_roles')
+          .select('*')
+          .ilike('email', normalizedIdentifier)
+          .maybeSingle();
+
+        if (emailErr) throw emailErr;
+        dbUser = dbUserByEmail;
+
+        // 1c. Check case-insensitive registered user by username
+        if (!dbUser) {
+          const { data: dbUserByUsername, error: usernameErr } = await supabase
+            .from('g3d_user_roles')
+            .select('*')
+            .ilike('username', normalizedIdentifier)
+            .maybeSingle();
+
+          if (usernameErr) throw usernameErr;
+          dbUser = dbUserByUsername;
+        }
+
+        if (dbUser) {
+          const storedRemotePassword = String(dbUser.password ?? '').trim();
+          const passwordMatches = (storedRemotePassword && storedRemotePassword === inputPassword) || (!storedRemotePassword && globalMasterPassword && inputPassword === globalMasterPassword);
+
+          if (passwordMatches) {
+            if (isPendingRole(dbUser.role)) {
+              setError('Acesso bloqueado. Seu cadastro está pendente de liberação pelo administrador.');
+              setLoading(false);
+              return;
+            }
+
+            const normalizedRole = getApprovedRole(dbUser.role);
+
+            // Update local users cache to keep it in sync and unblocked!
+            const updatedLocalUsers = localUsers.filter(u => u.email?.toLowerCase() !== dbUser.email?.toLowerCase());
+            updatedLocalUsers.push({
+              email: dbUser.email,
+              username: dbUser.username,
+              password: storedRemotePassword || inputPassword,
+              role: normalizedRole
+            });
+            localStorage.setItem('g3d_local_users', JSON.stringify(updatedLocalUsers));
+
+            sessionStorage.setItem('g3d_authenticated', 'true');
+            sessionStorage.setItem('g3d_user_role', normalizedRole);
+            sessionStorage.setItem('g3d_username', dbUser.username || inputEmailOrUser);
+            sessionStorage.setItem('g3d_user_email', dbUser.email || inputEmailOrUser);
+            setLoading(false);
+            onLoginSuccess();
+            return;
+          } else {
+            setError('Senha incorreta para o usuário especificado.');
+            setLoading(false);
+            return;
+          }
+        }
+      } catch (err: any) {
+        console.error('Erro ao validar login no Supabase, caindo para local:', err);
+      }
+    }
+
+    // 2. Local Fallback (runs if Supabase is offline, not configured, or returned no user)
+    // 2a. Check local master password
     if (savedMasterPassword && inputPassword === savedMasterPassword) {
       sessionStorage.setItem('g3d_authenticated', 'true');
       sessionStorage.setItem('g3d_user_role', selectedRole);
@@ -323,15 +424,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       return;
     }
 
-    // 2. Local database check
-    const localUsersStr = localStorage.getItem('g3d_local_users') || '[]';
-    let localUsers: any[] = [];
-    try {
-      localUsers = JSON.parse(localUsersStr);
-    } catch (err) {
-      localUsers = [];
-    }
-
+    // 2b. Check local users
     const matchedLocalUser = localUsers.find(
       u => u.email?.toLowerCase() === inputEmailOrUser.toLowerCase() || u.username?.toLowerCase() === inputEmailOrUser.toLowerCase()
     );
@@ -356,79 +449,6 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
         setError('Senha incorreta para o usuário especificado.');
         setLoading(false);
         return;
-      }
-    }
-
-    // 3. Remote Supabase check
-    const supabase = getSupabaseClient();
-    if (supabase && hasSupabaseConfigured()) {
-      try {
-        const normalizedIdentifier = inputEmailOrUser.toLowerCase();
-        let dbUser: any = null;
-
-        const { data: dbUserByEmail, error: emailErr } = await supabase
-          .from('g3d_user_roles')
-          .select('*')
-          .eq('email', normalizedIdentifier)
-          .maybeSingle();
-
-        if (emailErr) throw emailErr;
-        dbUser = dbUserByEmail;
-
-        if (!dbUser) {
-          const { data: dbUserByUsername, error: usernameErr } = await supabase
-            .from('g3d_user_roles')
-            .select('*')
-            .eq('username', normalizedIdentifier)
-            .maybeSingle();
-
-          if (usernameErr) throw usernameErr;
-          dbUser = dbUserByUsername;
-        }
-
-        if (dbUser) {
-          const storedRemotePassword = String(dbUser.password ?? '').trim();
-          const { data: masterRow } = await supabase
-            .from('g3d_user_roles')
-            .select('role')
-            .eq('email', 'system_master_password')
-            .maybeSingle();
-          const masterPassword = String(masterRow?.role ?? savedMasterPassword ?? '').trim();
-          const passwordMatches = (storedRemotePassword && storedRemotePassword === inputPassword) || (!storedRemotePassword && masterPassword && inputPassword === masterPassword);
-
-          if (passwordMatches) {
-            if (isPendingRole(dbUser.role)) {
-              setError('Acesso bloqueado. Seu cadastro está pendente de liberação pelo administrador.');
-              setLoading(false);
-              return;
-            }
-
-            const normalizedRole = getApprovedRole(dbUser.role);
-
-            const updatedLocalUsers = localUsers.filter(u => u.email !== dbUser.email);
-            updatedLocalUsers.push({
-              email: dbUser.email,
-              username: dbUser.username,
-              password: storedRemotePassword || inputPassword,
-              role: normalizedRole
-            });
-            localStorage.setItem('g3d_local_users', JSON.stringify(updatedLocalUsers));
-
-            sessionStorage.setItem('g3d_authenticated', 'true');
-            sessionStorage.setItem('g3d_user_role', normalizedRole);
-            sessionStorage.setItem('g3d_username', dbUser.username || inputEmailOrUser);
-            sessionStorage.setItem('g3d_user_email', dbUser.email || inputEmailOrUser);
-            setLoading(false);
-            onLoginSuccess();
-            return;
-          } else {
-            setError('Senha incorreta para o usuário especificado.');
-            setLoading(false);
-            return;
-          }
-        }
-      } catch (err: any) {
-        console.error('Erro ao validar login no Supabase:', err);
       }
     }
 

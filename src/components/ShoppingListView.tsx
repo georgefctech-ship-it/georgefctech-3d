@@ -133,7 +133,7 @@ interface ShoppingListViewProps {
 }
 
 export default function ShoppingListView({
-  shopping,
+  shopping: allShopping,
   inventory,
   onAddShoppingItem,
   onDeleteShoppingItem,
@@ -143,6 +143,30 @@ export default function ShoppingListView({
   userRole,
   currentSubView
 }: ShoppingListViewProps) {
+  const currentUserEmail = useMemo(() => sessionStorage.getItem('g3d_user_email') || '', []);
+  const currentUsername = useMemo(() => sessionStorage.getItem('g3d_username') || '', []);
+
+  const shopping = useMemo(() => {
+    if (userRole === 'colaborador') {
+      return allShopping.filter(item => {
+        const reqBy = (item.requestedBy || '').toLowerCase().trim();
+        const myEmail = currentUserEmail.toLowerCase().trim();
+        const myName = currentUsername.toLowerCase().trim();
+        
+        if (!reqBy) return false;
+        
+        return (
+          reqBy === myEmail ||
+          reqBy === myName ||
+          (myEmail && reqBy.includes(myEmail)) ||
+          (myName && reqBy.includes(myName)) ||
+          (myEmail && myEmail.split('@')[0] === reqBy)
+        );
+      });
+    }
+    return allShopping;
+  }, [allShopping, userRole, currentUserEmail, currentUsername]);
+
   const [formOpen, setFormOpen] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerMode, setScannerMode] = useState<'create' | 'search'>('create');

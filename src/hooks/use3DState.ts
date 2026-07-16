@@ -291,39 +291,58 @@ export function use3DState() {
         const remoteInventory = (dbInventory || []).map(mapDbInventory);
         const remoteShopping = (dbShopping || []).map(mapDbShopping);
 
-        if (remoteProjects.length > 0) {
-          setProjects(remoteProjects);
-        } else if (storedProjects) {
-          const parsedProjects = JSON.parse(storedProjects);
-          setProjects(parsedProjects);
-          await syncLocalBackupToSupabase(parsedProjects, [], []);
-        } else {
-          setProjects(DEFAULT_PROJECTS);
-          localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(DEFAULT_PROJECTS));
+        // Helper to merge local offline-only items into the remote array
+        const mergeData = <T extends { id: string }>(remote: T[], localStr: string | null): { merged: T[], toUpload: T[] } => {
+          if (!localStr) return { merged: remote, toUpload: [] };
+          try {
+            const local: T[] = JSON.parse(localStr);
+            const mergedMap = new Map<string, T>();
+            
+            // Populate remote items first
+            remote.forEach(item => mergedMap.set(item.id, item));
+            
+            const toUpload: T[] = [];
+            // Merge any local item that doesn't exist on remote
+            local.forEach(item => {
+              if (item && item.id && !mergedMap.has(item.id)) {
+                mergedMap.set(item.id, item);
+                toUpload.push(item);
+              }
+            });
+            
+            return {
+              merged: Array.from(mergedMap.values()),
+              toUpload
+            };
+          } catch (e) {
+            console.error('Failed to merge local and remote data:', e);
+            return { merged: remote, toUpload: [] };
+          }
+        };
+
+        // Merge and Cache Projects
+        const mergedProjs = mergeData(remoteProjects, storedProjects);
+        setProjects(mergedProjs.merged);
+        localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(mergedProjs.merged));
+
+        // Merge and Cache Inventory
+        const mergedInv = mergeData(remoteInventory, storedInventory);
+        setInventory(mergedInv.merged);
+        localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify(mergedInv.merged));
+
+        // Merge and Cache Shopping
+        const mergedShop = mergeData(remoteShopping, storedShopping);
+        setShopping(mergedShop.merged);
+        localStorage.setItem(STORAGE_KEYS.SHOPPING, JSON.stringify(mergedShop.merged));
+
+        // If there are any offline items, upload them immediately to Supabase
+        if (mergedProjs.toUpload.length > 0 || mergedInv.toUpload.length > 0 || mergedShop.toUpload.length > 0) {
+          await syncLocalBackupToSupabase(mergedProjs.toUpload, mergedInv.toUpload, mergedShop.toUpload);
         }
 
-        if (remoteInventory.length > 0) {
-          setInventory(remoteInventory);
-        } else if (storedInventory) {
-          const parsedInventory = JSON.parse(storedInventory);
-          setInventory(parsedInventory);
-          await syncLocalBackupToSupabase([], parsedInventory, []);
-        } else {
-          setInventory(DEFAULT_INVENTORY);
-          localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify(DEFAULT_INVENTORY));
+        if (storedSettings) {
+          setSettings(JSON.parse(storedSettings));
         }
-
-        if (remoteShopping.length > 0) {
-          setShopping(remoteShopping);
-        } else if (storedShopping) {
-          const parsedShopping = JSON.parse(storedShopping);
-          setShopping(parsedShopping);
-          await syncLocalBackupToSupabase([], [], parsedShopping);
-        } else {
-          setShopping(DEFAULT_SHOPPING);
-          localStorage.setItem(STORAGE_KEYS.SHOPPING, JSON.stringify(DEFAULT_SHOPPING));
-        }
-        if (storedSettings) setSettings(JSON.parse(storedSettings));
 
         setSupabaseConnected(true);
       } catch (err: any) {
