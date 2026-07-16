@@ -516,6 +516,13 @@ export default function ShoppingListView({
   };
 
   const handleSaveEdit = (id: string) => {
+    const targetItem = allShopping.find(i => i.id === id);
+    if (targetItem && targetItem.checked && userRole === 'colaborador') {
+      setToastMessage("Erro: Colaboradores não podem editar compras já concluídas!");
+      setTimeout(() => setToastMessage(null), 4000);
+      return;
+    }
+
     onUpdateShoppingItem(id, {
       materialName: editName.trim(),
       qtyNeeded: editQty,
@@ -529,6 +536,16 @@ export default function ShoppingListView({
       barcode: editBarcode.trim() || undefined
     });
     setEditingId(null);
+  };
+
+  const handleDeleteShoppingItem = (id: string) => {
+    const targetItem = allShopping.find(i => i.id === id);
+    if (targetItem && targetItem.checked && userRole === 'colaborador') {
+      setToastMessage("Erro: Colaboradores não podem excluir compras já concluídas!");
+      setTimeout(() => setToastMessage(null), 4000);
+      return;
+    }
+    onDeleteShoppingItem(id);
   };
 
   // Automated item replenishment from inventory warnings
@@ -2698,7 +2715,7 @@ export default function ShoppingListView({
                                   </button>
                                   
                                   <button
-                                    onClick={() => onDeleteShoppingItem(item.id)}
+                                    onClick={() => handleDeleteShoppingItem(item.id)}
                                     title="Remover do cronograma"
                                     className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
                                   >
@@ -2922,7 +2939,7 @@ export default function ShoppingListView({
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
                             <button
-                              onClick={() => onDeleteShoppingItem(item.id)}
+                              onClick={() => handleDeleteShoppingItem(item.id)}
                               className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -3276,7 +3293,7 @@ export default function ShoppingListView({
                                       <Edit2 className="w-3.5 h-3.5" />
                                     </button>
                                     <button
-                                      onClick={() => onDeleteShoppingItem(item.id)}
+                                      onClick={() => handleDeleteShoppingItem(item.id)}
                                       title="Remover do histórico"
                                       className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
                                     >
