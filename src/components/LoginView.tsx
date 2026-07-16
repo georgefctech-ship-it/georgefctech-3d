@@ -73,6 +73,23 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     localStorage.setItem('g3d_dark_mode', nextVal ? 'true' : 'false');
   };
 
+  const getPendingRole = (requestedRole: 'admin' | 'colaborador') => {
+    return requestedRole === 'admin' ? 'admin_pendente' : 'colaborador_pendente';
+  };
+
+  const isPendingRole = (role?: string | null) => {
+    const normalizedRole = String(role ?? '').trim().toLowerCase();
+    return normalizedRole === 'pendente' || normalizedRole === 'colaborador_pendente' || normalizedRole === 'admin_pendente';
+  };
+
+  const getApprovedRole = (role?: string | null) => {
+    const normalizedRole = String(role ?? '').trim().toLowerCase();
+    if (normalizedRole === 'admin' || normalizedRole === 'admin_pendente') {
+      return 'admin';
+    }
+    return 'colaborador';
+  };
+
   useEffect(() => {
     const supabaseConfigured = hasSupabaseConfigured();
     // Check if master password exists in localStorage
@@ -206,7 +223,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       return;
     }
 
-    const finalRole = registerRole === 'admin' ? 'admin' : 'colaborador';
+    const finalRole = getPendingRole(registerRole);
     const localUsersStr = localStorage.getItem('g3d_local_users') || '[]';
     let localUsers: any[] = [];
     try {
@@ -264,7 +281,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     }
 
     setLoading(false);
-    setSuccessMsg('Cadastro realizado com sucesso! Você já pode entrar no sistema.');
+    setSuccessMsg('Cadastro realizado com sucesso! Seu acesso ficará pendente de aprovação pelo administrador.');
 
     // Reset fields
     setRegisterEmail('');
@@ -322,7 +339,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     if (matchedLocalUser) {
       const storedLocalPassword = String(matchedLocalUser.password ?? '').trim();
       if (storedLocalPassword === inputPassword) {
-        if (matchedLocalUser.role.includes('_pendente') || matchedLocalUser.role === 'pendente') {
+        if (isPendingRole(matchedLocalUser.role)) {
           setError('Acesso bloqueado. Seu cadastro está pendente de liberação pelo administrador.');
           setLoading(false);
           return;
@@ -380,7 +397,13 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
           const passwordMatches = (storedRemotePassword && storedRemotePassword === inputPassword) || (!storedRemotePassword && masterPassword && inputPassword === masterPassword);
 
           if (passwordMatches) {
-            const normalizedRole = dbUser.role === 'admin' || dbUser.role === 'colaborador' ? dbUser.role : 'colaborador';
+            if (isPendingRole(dbUser.role)) {
+              setError('Acesso bloqueado. Seu cadastro está pendente de liberação pelo administrador.');
+              setLoading(false);
+              return;
+            }
+
+            const normalizedRole = getApprovedRole(dbUser.role);
 
             const updatedLocalUsers = localUsers.filter(u => u.email !== dbUser.email);
             updatedLocalUsers.push({

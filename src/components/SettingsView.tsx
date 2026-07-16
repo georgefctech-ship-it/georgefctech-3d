@@ -73,6 +73,16 @@ export default function SettingsView({
   const [newCollabEmail, setNewCollabEmail] = useState('');
   const [newCollabRole, setNewCollabRole] = useState('colaborador_pendente');
 
+  const isPendingRole = (role?: string | null) => {
+    const normalizedRole = String(role ?? '').trim().toLowerCase();
+    return normalizedRole === 'pendente' || normalizedRole === 'colaborador_pendente' || normalizedRole === 'admin_pendente';
+  };
+
+  const getApprovalRole = (role?: string | null) => {
+    const normalizedRole = String(role ?? '').trim().toLowerCase();
+    return normalizedRole.includes('admin') ? 'admin' : 'colaborador';
+  };
+
   const fetchCollaborators = async () => {
     setCollabLoading(true);
     setCollabError(null);
@@ -126,9 +136,12 @@ export default function SettingsView({
       localUsers = JSON.parse(localUsersStr);
     } catch (e) {}
     
+    const targetUser = localUsers.find(u => u.email?.toLowerCase() === email.toLowerCase());
+    const nextRole = getApprovalRole(targetUser?.role);
+
     localUsers = localUsers.map(u => {
       if (u.email?.toLowerCase() === email.toLowerCase()) {
-        return { ...u, role: 'colaborador' };
+        return { ...u, role: nextRole };
       }
       return u;
     });
@@ -140,7 +153,7 @@ export default function SettingsView({
       try {
         const { error } = await supabase
           .from('g3d_user_roles')
-          .update({ role: 'colaborador' })
+          .update({ role: nextRole })
           .eq('email', email);
         if (error) throw error;
       } catch (err: any) {
@@ -165,9 +178,12 @@ export default function SettingsView({
       localUsers = JSON.parse(localUsersStr);
     } catch (e) {}
 
+    const targetUser = localUsers.find(u => u.email?.toLowerCase() === email.toLowerCase());
+    const nextRole = targetUser?.role?.toLowerCase().includes('admin') ? 'admin_pendente' : 'colaborador_pendente';
+
     localUsers = localUsers.map(u => {
       if (u.email?.toLowerCase() === email.toLowerCase()) {
-        return { ...u, role: 'colaborador_pendente' };
+        return { ...u, role: nextRole };
       }
       return u;
     });
@@ -179,7 +195,7 @@ export default function SettingsView({
       try {
         const { error } = await supabase
           .from('g3d_user_roles')
-          .update({ role: 'colaborador_pendente' })
+          .update({ role: nextRole })
           .eq('email', email);
         if (error) throw error;
       } catch (err: any) {
@@ -948,9 +964,9 @@ export default function SettingsView({
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {collaborators.map((collab) => {
-                        const isPending = collab.role === 'colaborador_pendente' || collab.role === 'pendente';
-                        const isAdmin = collab.role === 'admin';
-                        const isActive = collab.role === 'colaborador';
+                        const isPending = isPendingRole(collab.role);
+                        const isAdmin = collab.role === 'admin' || collab.role === 'admin_pendente';
+                        const isActive = !isPending && !isAdmin && collab.role === 'colaborador';
                         const isSelf = collab.email?.trim().toLowerCase() === sessionStorage.getItem('g3d_user_email')?.trim().toLowerCase();
 
                         return (
