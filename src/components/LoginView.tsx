@@ -133,20 +133,23 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     setError(null);
     setLoading(true);
 
-    if (password.length < 4) {
+    const trimmedPassword = password.trim();
+    const trimmedConfirmPassword = confirmPassword.trim();
+
+    if (trimmedPassword.length < 4) {
       setError('A senha deve conter pelo menos 4 caracteres.');
       setLoading(false);
       return;
     }
 
-    if (password !== confirmPassword) {
+    if (trimmedPassword !== trimmedConfirmPassword) {
       setError('As senhas digitadas não coincidem.');
       setLoading(false);
       return;
     }
 
     // Save master password configuration locally
-    localStorage.setItem('g3d_master_password', password);
+    localStorage.setItem('g3d_master_password', trimmedPassword);
     setHasMasterPassword(true);
     
     // Save to Supabase globally if active
@@ -155,7 +158,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       try {
         await supabase.from('g3d_user_roles').upsert({
           email: 'system_master_password',
-          role: password
+          role: trimmedPassword
         });
       } catch (upsertErr) {
         console.error("Erro ao salvar senha mestra global no Supabase:", upsertErr);
@@ -182,8 +185,8 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
 
     const emailVal = registerEmail.trim().toLowerCase();
     const usernameVal = registerUsername.trim();
-    const passwordVal = password;
-    const confirmPasswordVal = confirmPassword;
+    const passwordVal = password.trim();
+    const confirmPasswordVal = confirmPassword.trim();
 
     if (!emailVal || !usernameVal || !passwordVal) {
       setError('Por favor, preencha todos os campos obrigatórios.');
@@ -283,7 +286,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     setLoading(true);
 
     const inputEmailOrUser = userName.trim();
-    const inputPassword = password;
+    const inputPassword = password.trim();
 
     if (!inputEmailOrUser || !inputPassword) {
       setError('Por favor, preencha o e-mail/usuário e senha para logar.');
@@ -292,7 +295,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     }
 
     // 1. Legacy Fallback: Master Password check
-    const savedMasterPassword = localStorage.getItem('g3d_master_password');
+    const savedMasterPassword = localStorage.getItem('g3d_master_password')?.trim();
     if (savedMasterPassword && inputPassword === savedMasterPassword) {
       sessionStorage.setItem('g3d_authenticated', 'true');
       sessionStorage.setItem('g3d_user_role', selectedRole);
@@ -317,7 +320,8 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     );
 
     if (matchedLocalUser) {
-      if (matchedLocalUser.password === inputPassword) {
+      const storedLocalPassword = String(matchedLocalUser.password ?? '').trim();
+      if (storedLocalPassword === inputPassword) {
         if (matchedLocalUser.role.includes('_pendente') || matchedLocalUser.role === 'pendente') {
           setError('Acesso bloqueado. Seu cadastro está pendente de liberação pelo administrador.');
           setLoading(false);
@@ -351,7 +355,8 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
         if (queryErr) throw queryErr;
 
         if (dbUser) {
-          if (dbUser.password === inputPassword) {
+          const storedRemotePassword = String(dbUser.password ?? '').trim();
+          if (storedRemotePassword === inputPassword) {
             const normalizedRole = dbUser.role === 'admin' || dbUser.role === 'colaborador' ? dbUser.role : 'colaborador';
 
             const updatedLocalUsers = localUsers.filter(u => u.email !== dbUser.email);
