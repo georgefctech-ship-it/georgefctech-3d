@@ -149,22 +149,32 @@ export default function ShoppingListView({
   const [filterOnlyMine, setFilterOnlyMine] = useState(false);
 
   const shopping = useMemo(() => {
-    if (userRole === 'colaborador' && filterOnlyMine) {
-      return allShopping.filter(item => {
-        const reqBy = (item.requestedBy || '').toLowerCase().trim();
-        const myEmail = currentUserEmail.toLowerCase().trim();
-        const myName = currentUsername.toLowerCase().trim();
-        
-        if (!reqBy) return false;
-        
-        return (
-          reqBy === myEmail ||
-          reqBy === myName ||
-          (myEmail && reqBy.includes(myEmail)) ||
-          (myName && reqBy.includes(myName)) ||
-          (myEmail && myEmail.split('@')[0] === reqBy)
-        );
+    if (userRole === 'colaborador') {
+      // Filtrar para mostrar apenas as compras vinculadas à empresa Ftéx / Ftex (setor de colaboradores)
+      // Exclui completamente as compras do setor administrativo (ex: GeorgeFctech-3D ou vazias)
+      const collaboratorPurchases = allShopping.filter(item => {
+        const itemCompany = (item.company || '').toLowerCase().trim();
+        return itemCompany === 'ftéx' || itemCompany === 'ftex';
       });
+
+      if (filterOnlyMine) {
+        return collaboratorPurchases.filter(item => {
+          const reqBy = (item.requestedBy || '').toLowerCase().trim();
+          const myEmail = currentUserEmail.toLowerCase().trim();
+          const myName = currentUsername.toLowerCase().trim();
+          
+          if (!reqBy) return false;
+          
+          return (
+            reqBy === myEmail ||
+            reqBy === myName ||
+            (myEmail && reqBy.includes(myEmail)) ||
+            (myName && reqBy.includes(myName)) ||
+            (myEmail && myEmail.split('@')[0] === reqBy)
+          );
+        });
+      }
+      return collaboratorPurchases;
     }
     return allShopping;
   }, [allShopping, userRole, currentUserEmail, currentUsername, filterOnlyMine]);
