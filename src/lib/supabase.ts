@@ -9,31 +9,34 @@ import { createClient } from '@supabase/supabase-js';
 // Priority:
 // 1. Environment variables set on Vercel/TrueNAS (VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY)
 // 2. LocalStorage configuration set by the administrator in the Settings menu
+// 3. Safe built-in fallback for the company project so it works across devices and browsers
+const DEFAULT_SUPABASE_URL = 'https://vyvompcoiaizoluuxnzx.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY = 'sb_publishable_TL1zMcymy0YcX0iG_KBU8A_lxzcL-MU';
+
 const getSupabaseConfig = () => {
-  const envUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
-  const envKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
+  const envUrl = (import.meta as any).env?.VITE_SUPABASE_URL?.trim();
+  const envKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY?.trim();
 
   if (envUrl && envKey) {
     return { url: envUrl, key: envKey, source: 'env' };
   }
 
-  const localUrl = localStorage.getItem('g3d_supabase_url');
-  const localKey = localStorage.getItem('g3d_supabase_key');
+  const localUrl = localStorage.getItem('g3d_supabase_url')?.trim();
+  const localKey = localStorage.getItem('g3d_supabase_key')?.trim();
 
   if (localUrl && localKey) {
     return { url: localUrl, key: localKey, source: 'local' };
   }
 
-  return null;
+  return { url: DEFAULT_SUPABASE_URL, key: DEFAULT_SUPABASE_ANON_KEY, source: 'default' };
 };
 
 export const hasSupabaseConfigured = (): boolean => {
-  return getSupabaseConfig() !== null;
+  return Boolean(getSupabaseConfig().url && getSupabaseConfig().key);
 };
 
 export const getSupabaseClient = () => {
   const config = getSupabaseConfig();
-  if (!config) return null;
   return createClient(config.url, config.key, {
     auth: {
       persistSession: true,

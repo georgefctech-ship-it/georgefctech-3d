@@ -203,22 +203,13 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       return;
     }
 
-    // Role defaults to registering status pending
-    let finalRole = registerRole === 'admin' ? 'admin_pendente' : 'colaborador_pendente';
-
-    // Check local users
+    const finalRole = registerRole === 'admin' ? 'admin' : 'colaborador';
     const localUsersStr = localStorage.getItem('g3d_local_users') || '[]';
     let localUsers: any[] = [];
     try {
       localUsers = JSON.parse(localUsersStr);
     } catch (e) {
       localUsers = [];
-    }
-
-    // First user check - if no registered user exists, automatically approve as admin
-    const hasAnyUser = localUsers.length > 0;
-    if (!hasAnyUser && registerRole === 'admin') {
-      finalRole = 'admin';
     }
 
     const newUser = {
@@ -237,25 +228,20 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     localUsers.push(newUser);
     localStorage.setItem('g3d_local_users', JSON.stringify(localUsers));
 
-    // Save to Supabase if active
     const supabase = getSupabaseClient();
     if (supabase && hasSupabaseConfigured()) {
       try {
-        let dbHasAnyApprovedAdmin = false;
-        try {
-          const { data: dbAdmins } = await supabase
-            .from('g3d_user_roles')
-            .select('email')
-            .eq('role', 'admin');
-          if (dbAdmins && dbAdmins.length > 0) {
-            dbHasAnyApprovedAdmin = true;
-          }
-        } catch (adminErr) {
-          console.warn("Erro ao checar administradores remotos:", adminErr);
-        }
+        const { data: existingRemoteUser, error: remoteCheckErr } = await supabase
+          .from('g3d_user_roles')
+          .select('email')
+          .eq('email', emailVal)
+          .maybeSingle();
 
-        if (!dbHasAnyApprovedAdmin && registerRole === 'admin') {
-          newUser.role = 'admin';
+        if (remoteCheckErr) throw remoteCheckErr;
+        if (existingRemoteUser) {
+          setError('Este e-mail já está cadastrado no sistema.');
+          setLoading(false);
+          return;
         }
 
         const { error: upsertErr } = await supabase.from('g3d_user_roles').upsert({
@@ -263,11 +249,11 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
           username: newUser.username,
           password: newUser.password,
           role: newUser.role
-        });
+        }, { onConflict: 'email' });
 
         if (upsertErr) throw upsertErr;
       } catch (upsertErr: any) {
-        console.error("Erro ao salvar no Supabase:", upsertErr);
+        console.error('Erro ao salvar no Supabase:', upsertErr);
         setError(`Cadastro salvo localmente, mas falhou ao sincronizar no Supabase: ${upsertErr.message}`);
         setLoading(false);
         return;
@@ -275,12 +261,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     }
 
     setLoading(false);
-    
-    if (newUser.role.includes('_pendente') || newUser.role === 'pendente') {
-      setSuccessMsg('Cadastro solicitado com sucesso! Peça ao Administrador para liberar seu acesso nas Configurações.');
-    } else {
-      setSuccessMsg('Cadastro de Administrador Master criado e ativado com sucesso!');
-    }
+    setSuccessMsg('Cadastro realizado com sucesso! Você já pode entrar no sistema.');
 
     // Reset fields
     setRegisterEmail('');
@@ -371,26 +352,21 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
 
         if (dbUser) {
           if (dbUser.password === inputPassword) {
-            if (dbUser.role.includes('_pendente') || dbUser.role === 'pendente') {
-              setError('Acesso bloqueado. Seu cadastro está pendente de liberação pelo administrador.');
-              setLoading(false);
-              return;
-            }
+            const normalizedRole = dbUser.role === 'admin' || dbUser.role === 'colaborador' ? dbUser.role : 'colaborador';
 
-            // Sync to local storage for offline use
             const updatedLocalUsers = localUsers.filter(u => u.email !== dbUser.email);
             updatedLocalUsers.push({
               email: dbUser.email,
               username: dbUser.username,
               password: dbUser.password,
-              role: dbUser.role
+              role: normalizedRole
             });
             localStorage.setItem('g3d_local_users', JSON.stringify(updatedLocalUsers));
 
             sessionStorage.setItem('g3d_authenticated', 'true');
-            sessionStorage.setItem('g3d_user_role', dbUser.role);
-            sessionStorage.setItem('g3d_username', dbUser.username);
-            sessionStorage.setItem('g3d_user_email', dbUser.email);
+            sessionStorage.setItem('g3d_user_role', normalizedRole);
+            sessionStorage.setItem('g3d_username', dbUser.username || inputEmailOrUser);
+            sessionStorage.setItem('g3d_user_email', dbUser.email || inputEmailOrUser);
             setLoading(false);
             onLoginSuccess();
             return;

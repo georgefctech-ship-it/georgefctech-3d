@@ -236,27 +236,49 @@ export function use3DState() {
     company: app.company || null
   });
 
+  const syncLocalBackupToSupabase = useCallback(async (projectsToSync: ProjectOrder[], inventoryToSync: InventoryItem[], shoppingToSync: ShoppingItem[]) => {
+    const supabase = getSupabaseClient();
+    if (!supabase || !hasSupabaseConfigured()) return false;
+
+    try {
+      for (const project of projectsToSync) {
+        await supabase.from('g3d_projects').upsert(mapProjectToDb(project), { onConflict: 'id' });
+      }
+      for (const item of inventoryToSync) {
+        await supabase.from('g3d_inventory').upsert(mapInventoryToDb(item), { onConflict: 'id' });
+      }
+      for (const shoppingItem of shoppingToSync) {
+        await supabase.from('g3d_shopping').upsert(mapShoppingToDb(shoppingItem), { onConflict: 'id' });
+      }
+      return true;
+    } catch (err) {
+      console.error('Falha ao sincronizar dados locais com o Supabase:', err);
+      return false;
+    }
+  }, []);
   // Load state (either from Supabase or LocalStorage)
   const loadData = useCallback(async () => {
     setLoading(true);
     setSupabaseErrorMsg(null);
 
     const supabase = getSupabaseClient();
+    const storedProjects = localStorage.getItem(STORAGE_KEYS.PROJECTS);
+    const storedInventory = localStorage.getItem(STORAGE_KEYS.INVENTORY);
+    const storedShopping = localStorage.getItem(STORAGE_KEYS.SHOPPING);
+    const storedSettings = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+
     if (supabase && hasSupabaseConfigured()) {
       try {
-        // Fetch projects
         const { data: dbProjects, error: pError } = await supabase
           .from('g3d_projects')
           .select('*')
           .order('date', { ascending: false });
 
-        // Fetch inventory
         const { data: dbInventory, error: iError } = await supabase
           .from('g3d_inventory')
           .select('*')
           .order('material', { ascending: true });
 
-        // Fetch shopping
         const { data: dbShopping, error: sError } = await supabase
           .from('g3d_shopping')
           .select('*');
@@ -265,12 +287,42 @@ export function use3DState() {
           throw new Error('As tabelas do Supabase podem não estar prontas ou o acesso foi negado.');
         }
 
-        if (dbProjects) setProjects(dbProjects.map(mapDbProject));
-        if (dbInventory) setInventory(dbInventory.map(mapDbInventory));
-        if (dbShopping) setShopping(dbShopping.map(mapDbShopping));
+        const remoteProjects = (dbProjects || []).map(mapDbProject);
+        const remoteInventory = (dbInventory || []).map(mapDbInventory);
+        const remoteShopping = (dbShopping || []).map(mapDbShopping);
 
-        // Settings remains LocalStorage configuration
-        const storedSettings = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+        if (remoteProjects.length > 0) {
+          setProjects(remoteProjects);
+        } else if (storedProjects) {
+          const parsedProjects = JSON.parse(storedProjects);
+          setProjects(parsedProjects);
+          await syncLocalBackupToSupabase(parsedProjects, [], []);
+        } else {
+          setProjects(DEFAULT_PROJECTS);
+          localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(DEFAULT_PROJECTS));
+        }
+
+        if (remoteInventory.length > 0) {
+          setInventory(remoteInventory);
+        } else if (storedInventory) {
+          const parsedInventory = JSON.parse(storedInventory);
+          setInventory(parsedInventory);
+          await syncLocalBackupToSupabase([], parsedInventory, []);
+        } else {
+          setInventory(DEFAULT_INVENTORY);
+          localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify(DEFAULT_INVENTORY));
+        }
+
+        if (remoteShopping.length > 0) {
+          setShopping(remoteShopping);
+        } else if (storedShopping) {
+          const parsedShopping = JSON.parse(storedShopping);
+          setShopping(parsedShopping);
+          await syncLocalBackupToSupabase([], [], parsedShopping);
+        } else {
+          setShopping(DEFAULT_SHOPPING);
+          localStorage.setItem(STORAGE_KEYS.SHOPPING, JSON.stringify(DEFAULT_SHOPPING));
+        }
         if (storedSettings) setSettings(JSON.parse(storedSettings));
 
         setSupabaseConnected(true);
@@ -287,7 +339,7 @@ export function use3DState() {
       loadLocalBackup();
       setLoading(false);
     }
-  }, []);
+  }, [syncLocalBackupToSupabase]);
 
   const loadLocalBackup = () => {
     try {
@@ -342,9 +394,9 @@ export function use3DState() {
 
     try {
       if (action === 'insert') {
-        await supabase.from(table).insert(payload);
+        await supabase.from(table).upsert(payload, { onConflict: 'id' });
       } else if (action === 'update') {
-        await supabase.from(table).update(payload).eq('id', id);
+        await supabase.from(table).upsert({ ...payload, id }, { onConflict: 'id' });
       } else if (action === 'delete') {
         await supabase.from(table).delete().eq('id', id);
       }
