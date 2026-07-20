@@ -371,6 +371,18 @@ export default function SettingsView({
     if (!supabaseUrl.trim() || !supabaseKey.trim()) {
       localStorage.removeItem('g3d_supabase_url');
       localStorage.removeItem('g3d_supabase_key');
+      
+      // Clear on the server as well
+      try {
+        await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: '', key: '' })
+        });
+      } catch (err) {
+        console.error('Erro ao limpar config no servidor:', err);
+      }
+
       setSupabaseConnectionStatus('Chaves de conexão limpas. Reiniciando em modo local...');
       setTimeout(() => window.location.reload(), 1500);
       return;
@@ -389,6 +401,18 @@ export default function SettingsView({
 
       localStorage.setItem('g3d_supabase_url', supabaseUrl.trim());
       localStorage.setItem('g3d_supabase_key', supabaseKey.trim());
+
+      // Save to server
+      try {
+        await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: supabaseUrl.trim(), key: supabaseKey.trim() })
+        });
+      } catch (err) {
+        console.error('Erro ao salvar config no servidor:', err);
+      }
+
       setSupabaseConnectionStatus('Sucesso: Conectado e autenticado! Reiniciando seu console de gestão...');
       setTimeout(() => {
         window.location.reload();
@@ -396,6 +420,18 @@ export default function SettingsView({
     } catch (err: any) {
       localStorage.setItem('g3d_supabase_url', supabaseUrl.trim());
       localStorage.setItem('g3d_supabase_key', supabaseKey.trim());
+
+      // Save to server anyway so it can be preserved
+      try {
+        await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: supabaseUrl.trim(), key: supabaseKey.trim() })
+        });
+      } catch (err) {
+        console.error('Erro ao salvar config no servidor:', err);
+      }
+
       setSupabaseConnectionStatus(`Alerta: Credenciais salvas, mas houve erro no ping. Verifique se você executou o código SQL no console do Supabase para inicializar as tabelas.`);
     }
   };

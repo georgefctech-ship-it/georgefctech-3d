@@ -58,6 +58,8 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     return localStorage.getItem('g3d_dark_mode') === 'true';
   });
 
+
+
   // Sync theme
   useEffect(() => {
     if (localDarkMode) {
@@ -1157,12 +1159,14 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
           )}
         </div>
 
+
+
         {/* SECURITY INFO FOOTER */}
         <div className="mt-6 p-4 rounded-xl bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-850/80 text-center flex items-center justify-center gap-3 shadow-xs">
           <Database className="w-4 h-4 text-slate-400 dark:text-slate-500 flex-shrink-0" />
           <span className="text-[10px] text-slate-500 dark:text-slate-500 leading-relaxed">
             {supabaseActive 
-              ? 'Conectado de forma segura à nuvem Supabase. Dados criptografados ponta a ponta.' 
+              ? 'Conectado de forma segura à nuvem Supabase. Dados sincronizados em tempo real.' 
               : 'Executando em modo local offline. Seus dados cadastrados ficam salvos localmente neste navegador.'}
           </span>
         </div>

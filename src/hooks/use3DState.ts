@@ -261,6 +261,20 @@ export function use3DState() {
     setLoading(true);
     setSupabaseErrorMsg(null);
 
+    // Sincroniza configuração de nuvem com o servidor para acesso multi-dispositivo unificado
+    try {
+      const configRes = await fetch('/api/config');
+      if (configRes.ok) {
+        const configData = await configRes.json();
+        if (configData.url && configData.key) {
+          localStorage.setItem('g3d_supabase_url', configData.url);
+          localStorage.setItem('g3d_supabase_key', configData.key);
+        }
+      }
+    } catch (err) {
+      console.warn('Falha ao obter configuração global do banco:', err);
+    }
+
     const supabase = getSupabaseClient();
     const storedProjects = localStorage.getItem(STORAGE_KEYS.PROJECTS);
     const storedInventory = localStorage.getItem(STORAGE_KEYS.INVENTORY);
