@@ -18,17 +18,15 @@ async function startServer() {
         const raw = fs.readFileSync(CONFIG_FILE, 'utf8');
         const parsed = JSON.parse(raw);
         if (parsed.url && parsed.key) {
-          return res.json(parsed);
+          return res.json({ url: parsed.url, key: parsed.key, isCustom: true });
         }
       }
     } catch (e) {
       console.error("Error reading config file:", e);
     }
 
-    // Fallback to env vars or default values
-    const url = process.env.VITE_SUPABASE_URL || 'https://vyvompcoiaizoluuxnzx.supabase.co';
-    const key = process.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_TL1zMcymy0YcX0iG_KBU8A_lxzcL-MU';
-    return res.json({ url, key });
+    // No custom config yet on the server
+    return res.json({ url: null, key: null, isCustom: false });
   });
 
   // API to update database config

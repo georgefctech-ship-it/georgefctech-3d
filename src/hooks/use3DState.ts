@@ -266,13 +266,24 @@ export function use3DState() {
       const configRes = await fetch('/api/config');
       if (configRes.ok) {
         const configData = await configRes.json();
-        if (configData.url && configData.key) {
+        const localUrl = localStorage.getItem('g3d_supabase_url')?.trim();
+        const localKey = localStorage.getItem('g3d_supabase_key')?.trim();
+
+        if (configData.isCustom && configData.url && configData.key) {
+          // O servidor tem credenciais personalizadas salvas. Sincroniza para o cliente.
           localStorage.setItem('g3d_supabase_url', configData.url);
           localStorage.setItem('g3d_supabase_key', configData.key);
+        } else if (!configData.isCustom && localUrl && localKey) {
+          // O cliente tem credenciais personalizadas, mas o servidor não. Faz o upload para o servidor!
+          await fetch('/api/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: localUrl, key: localKey })
+          });
         }
       }
     } catch (err) {
-      console.warn('Falha ao obter configuração global do banco:', err);
+      console.warn('Falha ao sincronizar configuração global do banco:', err);
     }
 
     const supabase = getSupabaseClient();
