@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { ProjectOrder, InventoryItem, ShoppingItem, SettingsConfig } from '../types';
 import { getSupabaseClient, hasSupabaseConfigured } from '../lib/supabase';
 
@@ -145,6 +145,7 @@ const DEFAULT_SETTINGS: SettingsConfig = {
 };
 
 export function use3DState() {
+  const isMutating = useRef(false);
   const [projects, setProjects] = useState<ProjectOrder[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [shopping, setShopping] = useState<ShoppingItem[]>([]);
@@ -257,8 +258,15 @@ export function use3DState() {
     }
   }, []);
   // Load state (either from Supabase or LocalStorage)
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async (isBackground = false) => {
+    if (isMutating.current) {
+      console.log('Sync de dados omitido porque uma alteração local está em andamento');
+      return;
+    }
+
+    if (!isBackground) {
+      setLoading(true);
+    }
     setSupabaseErrorMsg(null);
 
     // Sincroniza configuração de nuvem com o servidor para acesso multi-dispositivo unificado
@@ -313,6 +321,12 @@ export function use3DState() {
         const remoteInventory = (dbInventory || []).map(mapDbInventory);
         const remoteShopping = (dbShopping || []).map(mapDbShopping);
 
+        // Se uma mutação iniciou durante o fetch assíncrono, aborta a escrita local para não causar sobrescritas indesejadas
+        if (isMutating.current) {
+          console.log('Ignorando atualização do estado local do banco porque uma mutação paralela foi detectada');
+          return;
+        }
+
         // Confia 100% no Banco de Dados (sem misturar com caches antigos do navegador)
         setProjects(remoteProjects);
         setInventory(remoteInventory);
@@ -334,12 +348,16 @@ export function use3DState() {
         setSupabaseConnected(false);
         loadLocalBackup();
       } finally {
-        setLoading(false);
+        if (!isBackground) {
+          setLoading(false);
+        }
       }
     } else {
       setSupabaseConnected(false);
       loadLocalBackup();
-      setLoading(false);
+      if (!isBackground) {
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -381,9 +399,9 @@ export function use3DState() {
   useEffect(() => {
     loadData();
 
-    // Sincronização automática em tempo real ao voltar o foco para a janela/guia do navegador
+    // Sincronização automática em tempo real ao voltar o foco para a janela/guia do navegador (fundo silencioso, sem spinner disruptivo)
     const handleFocus = () => {
-      loadData();
+      loadData(true);
     };
     window.addEventListener('focus', handleFocus);
     return () => {
@@ -425,150 +443,230 @@ export function use3DState() {
 
   // Project managers
   const addProject = async (project: Omit<ProjectOrder, 'id'>) => {
-    const nextId = `PRJ-2026-${String(projects.length + 1).padStart(3, '0')}`;
+    isMutating.current = true;
+    const nextId = `PRJ-2026-${Date.now()}-${Math.floor(Math.random() * 100)}`;
     const fullProject: ProjectOrder = { ...project, id: nextId };
     
-    // Optimistic Update
-    const updated = [fullProject, ...projects];
-    setProjects(updated);
-    backupToLocal(updated, inventory, shopping);
+    try {
+      // Optimistic Update
+      const updated = [fullProject, ...projects];
+      setProjects(updated);
+      backupToLocal(updated, inventory, shopping);
 
-    // Sync
-    await syncOperation('g3d_projects', 'insert', mapProjectToDb(fullProject), nextId);
+      // Sync
+      await syncOperation('g3d_projects', 'insert', mapProjectToDb(fullProject), nextId);
+      await loadData(true);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      isMutating.current = false;
+    }
   };
 
   const deleteProject = async (id: string) => {
-    const updated = projects.filter(p => p.id !== id);
-    setProjects(updated);
-    backupToLocal(updated, inventory, shopping);
+    isMutating.current = true;
+    try {
+      const updated = projects.filter(p => p.id !== id);
+      setProjects(updated);
+      backupToLocal(updated, inventory, shopping);
 
-    await syncOperation('g3d_projects', 'delete', null, id);
+      await syncOperation('g3d_projects', 'delete', null, id);
+      await loadData(true);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      isMutating.current = false;
+    }
   };
 
   // Inventory managers
   const addInventoryItem = async (item: Omit<InventoryItem, 'id' | 'gramCost' | 'status'> & { id?: string }) => {
-    const nextId = item.id || `INV-${String(inventory.length + 1).padStart(3, '0')}`;
+    isMutating.current = true;
+    const nextId = item.id || `INV-${Date.now()}-${Math.floor(Math.random() * 100)}`;
     const gramCost = item.unitCost / 1000;
     const status = item.qty === 0 ? 'Esgotado' : item.qty <= 1 ? 'Poucas Unidades' : 'Em Estoque';
     const fullItem: InventoryItem = { ...item, id: nextId, gramCost, status };
 
-    const updated = [...inventory, fullItem];
-    setInventory(updated);
-    backupToLocal(projects, updated, shopping);
+    try {
+      const updated = [...inventory, fullItem];
+      setInventory(updated);
+      backupToLocal(projects, updated, shopping);
 
-    await syncOperation('g3d_inventory', 'insert', mapInventoryToDb(fullItem), nextId);
+      await syncOperation('g3d_inventory', 'insert', mapInventoryToDb(fullItem), nextId);
+      await loadData(true);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      isMutating.current = false;
+    }
   };
 
   const editInventoryItem = async (id: string, updatedFields: Partial<InventoryItem>) => {
-    const updated = inventory.map(item => {
-      if (item.id === id) {
-        const nextItem = { ...item, ...updatedFields };
-        if (updatedFields.unitCost !== undefined) {
-          nextItem.gramCost = updatedFields.unitCost / 1000;
+    isMutating.current = true;
+    try {
+      const updated = inventory.map(item => {
+        if (item.id === id) {
+          const nextItem = { ...item, ...updatedFields };
+          if (updatedFields.unitCost !== undefined) {
+            nextItem.gramCost = updatedFields.unitCost / 1000;
+          }
+          if (updatedFields.qty !== undefined) {
+            nextItem.status = updatedFields.qty === 0 ? 'Esgotado' : updatedFields.qty <= 1 ? 'Poucas Unidades' : 'Em Estoque';
+          }
+          return nextItem;
         }
-        if (updatedFields.qty !== undefined) {
-          nextItem.status = updatedFields.qty === 0 ? 'Esgotado' : updatedFields.qty <= 1 ? 'Poucas Unidades' : 'Em Estoque';
-        }
-        return nextItem;
+        return item;
+      });
+
+      setInventory(updated);
+      backupToLocal(projects, updated, shopping);
+
+      const editedItem = updated.find(i => i.id === id);
+      if (editedItem) {
+        await syncOperation('g3d_inventory', 'update', mapInventoryToDb(editedItem), id);
       }
-      return item;
-    });
-
-    setInventory(updated);
-    backupToLocal(projects, updated, shopping);
-
-    const editedItem = updated.find(i => i.id === id);
-    if (editedItem) {
-      await syncOperation('g3d_inventory', 'update', mapInventoryToDb(editedItem), id);
+      await loadData(true);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      isMutating.current = false;
     }
   };
 
   const deleteInventoryItem = async (id: string) => {
-    const updated = inventory.filter(i => i.id !== id);
-    setInventory(updated);
-    backupToLocal(projects, updated, shopping);
+    isMutating.current = true;
+    try {
+      const updated = inventory.filter(i => i.id !== id);
+      setInventory(updated);
+      backupToLocal(projects, updated, shopping);
 
-    await syncOperation('g3d_inventory', 'delete', null, id);
+      await syncOperation('g3d_inventory', 'delete', null, id);
+      await loadData(true);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      isMutating.current = false;
+    }
   };
 
   const updateInventoryQty = async (id: string, newQty: number) => {
-    const updated = inventory.map(item => {
-      if (item.id === id) {
-        const status = newQty === 0 ? 'Esgotado' : newQty <= 1 ? 'Poucas Unidades' : 'Em Estoque';
-        return { ...item, qty: newQty, status };
+    isMutating.current = true;
+    try {
+      const updated = inventory.map(item => {
+        if (item.id === id) {
+          const status = newQty === 0 ? 'Esgotado' : newQty <= 1 ? 'Poucas Unidades' : 'Em Estoque';
+          return { ...item, qty: newQty, status };
+        }
+        return item;
+      });
+
+      setInventory(updated);
+      backupToLocal(projects, updated, shopping);
+
+      const targetItem = updated.find(i => i.id === id);
+      if (targetItem) {
+        await syncOperation('g3d_inventory', 'update', mapInventoryToDb(targetItem), id);
       }
-      return item;
-    });
-
-    setInventory(updated);
-    backupToLocal(projects, updated, shopping);
-
-    const targetItem = updated.find(i => i.id === id);
-    if (targetItem) {
-      await syncOperation('g3d_inventory', 'update', mapInventoryToDb(targetItem), id);
+      await loadData(true);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      isMutating.current = false;
     }
   };
 
   // Shopping List managers
   const addShoppingItem = async (item: Omit<ShoppingItem, 'id' | 'checked'>) => {
-    const nextId = `SHOP-${String(shopping.length + 1).padStart(3, '0')}`;
+    isMutating.current = true;
+    const nextId = `SHOP-${Date.now()}-${Math.floor(Math.random() * 100)}`;
     const newItem: ShoppingItem = { ...item, id: nextId, checked: false };
 
-    const updated = [...shopping, newItem];
-    setShopping(updated);
-    backupToLocal(projects, inventory, updated);
+    try {
+      const updated = [...shopping, newItem];
+      setShopping(updated);
+      backupToLocal(projects, inventory, updated);
 
-    await syncOperation('g3d_shopping', 'insert', mapShoppingToDb(newItem), nextId);
+      await syncOperation('g3d_shopping', 'insert', mapShoppingToDb(newItem), nextId);
+      await loadData(true);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      isMutating.current = false;
+    }
   };
 
   const deleteShoppingItem = async (id: string) => {
-    const updated = shopping.filter(s => s.id !== id);
-    setShopping(updated);
-    backupToLocal(projects, inventory, updated);
+    isMutating.current = true;
+    try {
+      const updated = shopping.filter(s => s.id !== id);
+      setShopping(updated);
+      backupToLocal(projects, inventory, updated);
 
-    await syncOperation('g3d_shopping', 'delete', null, id);
+      await syncOperation('g3d_shopping', 'delete', null, id);
+      await loadData(true);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      isMutating.current = false;
+    }
   };
 
   const updateShoppingItem = async (id: string, updatedFields: Partial<ShoppingItem>) => {
-    const updated = shopping.map(item => {
-      if (item.id === id) {
-        return { ...item, ...updatedFields };
+    isMutating.current = true;
+    try {
+      const updated = shopping.map(item => {
+        if (item.id === id) {
+          return { ...item, ...updatedFields };
+        }
+        return item;
+      });
+
+      setShopping(updated);
+      backupToLocal(projects, inventory, updated);
+
+      const targetItem = updated.find(i => i.id === id);
+      if (targetItem) {
+        await syncOperation('g3d_shopping', 'update', mapShoppingToDb(targetItem), id);
       }
-      return item;
-    });
-
-    setShopping(updated);
-    backupToLocal(projects, inventory, updated);
-
-    const targetItem = updated.find(i => i.id === id);
-    if (targetItem) {
-      await syncOperation('g3d_shopping', 'update', mapShoppingToDb(targetItem), id);
+      await loadData(true);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      isMutating.current = false;
     }
   };
 
   const toggleShoppingItemChecked = async (id: string) => {
-    const updated = shopping.map(item => {
-      if (item.id === id) {
-        const isChecking = !item.checked;
-        let notes = item.notes || '';
-        // Se estiver marcando como comprado/recebido (checked) e não tiver uma data no notes, adicionamos automaticamente
-        if (isChecking) {
-          const dateStr = new Date().toLocaleDateString('pt-BR');
-          if (!notes.includes('/') || !/\d{2}\/\d{2}\/\d{4}/.test(notes)) {
-            notes = notes ? `${notes} (Baixa: ${dateStr})` : `Baixa: ${dateStr}`;
+    isMutating.current = true;
+    try {
+      const updated = shopping.map(item => {
+        if (item.id === id) {
+          const isChecking = !item.checked;
+          let notes = item.notes || '';
+          // Se estiver marcando como comprado/recebido (checked) e não tiver uma data no notes, adicionamos automaticamente
+          if (isChecking) {
+            const dateStr = new Date().toLocaleDateString('pt-BR');
+            if (!notes.includes('/') || !/\d{2}\/\d{2}\/\d{4}/.test(notes)) {
+              notes = notes ? `${notes} (Baixa: ${dateStr})` : `Baixa: ${dateStr}`;
+            }
           }
+          return { ...item, checked: isChecking, notes: notes || undefined };
         }
-        return { ...item, checked: isChecking, notes: notes || undefined };
+        return item;
+      });
+
+      setShopping(updated);
+      backupToLocal(projects, inventory, updated);
+
+      const targetItem = updated.find(i => i.id === id);
+      if (targetItem) {
+        await syncOperation('g3d_shopping', 'update', mapShoppingToDb(targetItem), id);
       }
-      return item;
-    });
-
-    setShopping(updated);
-    backupToLocal(projects, inventory, updated);
-
-    const targetItem = updated.find(i => i.id === id);
-    if (targetItem) {
-      await syncOperation('g3d_shopping', 'update', mapShoppingToDb(targetItem), id);
+      await loadData(true);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      isMutating.current = false;
     }
   };
 
