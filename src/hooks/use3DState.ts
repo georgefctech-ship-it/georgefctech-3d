@@ -220,7 +220,8 @@ export function use3DState() {
     checked: !!db.checked,
     requestedBy: db.requested_by || undefined,
     department: db.department || undefined,
-    company: db.company || undefined
+    company: db.company || undefined,
+    barcode: db.barcode || undefined
   });
 
   const mapShoppingToDb = (app: ShoppingItem) => ({
@@ -234,22 +235,99 @@ export function use3DState() {
     checked: !!app.checked,
     requested_by: app.requestedBy || null,
     department: app.department || null,
-    company: app.company || null
+    company: app.company || null,
+    barcode: app.barcode || null
   });
 
-  const syncLocalBackupToSupabase = useCallback(async (projectsToSync: ProjectOrder[], inventoryToSync: InventoryItem[], shoppingToSync: ShoppingItem[]) => {
+  const safeSupabaseOperation = async (
+    table: string,
+    action: 'insert' | 'update' | 'delete',
+    payload: any,
+    id: string
+  ) => {
     const supabase = getSupabaseClient();
-    if (!supabase || !hasSupabaseConfigured()) return false;
+    if (!supabase) throw new Error('Supabase client not initialized');
+
+    let activePayload = payload ? { ...payload } : null;
+
+    for (let attempt = 0; attempt < 6; attempt++) {
+      let res;
+      if (action === 'insert') {
+        res = await supabase.from(table).upsert(activePayload, { onConflict: 'id' });
+      } else if (action === 'update') {
+        res = await supabase.from(table).upsert({ ...activePayload, id }, { onConflict: 'id' });
+      } else if (action === 'delete') {
+        res = await supabase.from(table).delete().eq('id', id);
+      }
+
+      if (res && res.error) {
+        const errMsg = res.error.message || '';
+        console.warn(`Erro na tabela ${table} (${action}) [tentativa ${attempt + 1}]:`, res.error);
+
+        // Check if the error indicates a missing column (code 42703 or specific message)
+        if (
+          errMsg.includes('column') ||
+          errMsg.includes('Could not find') ||
+          errMsg.includes('cache') ||
+          res.error.code === '42703'
+        ) {
+          let columnFound = false;
+          if (activePayload) {
+            const keys = Object.keys(activePayload);
+            for (const key of keys) {
+              if (
+                errMsg.toLowerCase().includes(key.toLowerCase()) ||
+                errMsg.replace(/_/g, '').toLowerCase().includes(key.replace(/_/g, '').toLowerCase())
+              ) {
+                console.warn(`[SafeSync] Removendo coluna ausente '${key}' do payload de ${table}`);
+                delete activePayload[key];
+                columnFound = true;
+              }
+            }
+
+            // Safe preventative fallback for known upgrades
+            if (table === 'g3d_shopping') {
+              for (const col of ['company', 'department', 'requested_by', 'barcode']) {
+                if (col in activePayload) {
+                  console.warn(`[SafeSync] Removendo preventivamente '${col}' devido a erro de schema em g3d_shopping`);
+                  delete activePayload[col];
+                  columnFound = true;
+                }
+              }
+            }
+
+            if (table === 'g3d_inventory') {
+              if ('purchase_link' in activePayload) {
+                console.warn(`[SafeSync] Removendo 'purchase_link' devido a erro de schema em g3d_inventory`);
+                delete activePayload['purchase_link'];
+                columnFound = true;
+              }
+            }
+          }
+
+          if (columnFound && attempt < 5) {
+            continue; // retry
+          }
+        }
+        throw new Error(res.error.message || JSON.stringify(res.error));
+      }
+
+      return res;
+    }
+  };
+
+  const syncLocalBackupToSupabase = useCallback(async (projectsToSync: ProjectOrder[], inventoryToSync: InventoryItem[], shoppingToSync: ShoppingItem[]) => {
+    if (!hasSupabaseConfigured()) return false;
 
     try {
       for (const project of projectsToSync) {
-        await supabase.from('g3d_projects').upsert(mapProjectToDb(project), { onConflict: 'id' });
+        await safeSupabaseOperation('g3d_projects', 'insert', mapProjectToDb(project), project.id);
       }
       for (const item of inventoryToSync) {
-        await supabase.from('g3d_inventory').upsert(mapInventoryToDb(item), { onConflict: 'id' });
+        await safeSupabaseOperation('g3d_inventory', 'insert', mapInventoryToDb(item), item.id);
       }
       for (const shoppingItem of shoppingToSync) {
-        await supabase.from('g3d_shopping').upsert(mapShoppingToDb(shoppingItem), { onConflict: 'id' });
+        await safeSupabaseOperation('g3d_shopping', 'insert', mapShoppingToDb(shoppingItem), shoppingItem.id);
       }
       return true;
     } catch (err) {
@@ -425,23 +503,9 @@ export function use3DState() {
 
   // Sync state mutation helper
   const syncOperation = async (table: string, action: 'insert' | 'update' | 'delete', payload: any, id: string) => {
-    const supabase = getSupabaseClient();
-    if (!supabase || !hasSupabaseConfigured()) return;
-
+    if (!hasSupabaseConfigured()) return;
     try {
-      let res;
-      if (action === 'insert') {
-        res = await supabase.from(table).upsert(payload, { onConflict: 'id' });
-      } else if (action === 'update') {
-        res = await supabase.from(table).upsert({ ...payload, id }, { onConflict: 'id' });
-      } else if (action === 'delete') {
-        res = await supabase.from(table).delete().eq('id', id);
-      }
-      
-      if (res && res.error) {
-        console.error(`Erro retornado pelo Supabase em ${table} (${action}):`, res.error);
-        throw new Error(res.error.message || JSON.stringify(res.error));
-      }
+      await safeSupabaseOperation(table, action, payload, id);
     } catch (err) {
       console.error(`Falha ao sincronizar operação em ${table}:`, err);
     }
@@ -704,17 +768,16 @@ export function use3DState() {
         backupToLocal(parsed.projects, parsed.inventory, parsed.shopping || []);
 
         // Mass insert/merge into supabase if configured
-        const supabase = getSupabaseClient();
-        if (supabase && hasSupabaseConfigured()) {
+        if (hasSupabaseConfigured()) {
           for (const proj of parsed.projects) {
-            await supabase.from('g3d_projects').upsert(mapProjectToDb(proj));
+            await safeSupabaseOperation('g3d_projects', 'insert', mapProjectToDb(proj), proj.id);
           }
           for (const item of parsed.inventory) {
-            await supabase.from('g3d_inventory').upsert(mapInventoryToDb(item));
+            await safeSupabaseOperation('g3d_inventory', 'insert', mapInventoryToDb(item), item.id);
           }
           if (parsed.shopping) {
             for (const s of parsed.shopping) {
-              await supabase.from('g3d_shopping').upsert(mapShoppingToDb(s));
+              await safeSupabaseOperation('g3d_shopping', 'insert', mapShoppingToDb(s), s.id);
             }
           }
         }

@@ -92,7 +92,8 @@ CREATE TABLE IF NOT EXISTS g3d_shopping (
   checked BOOLEAN DEFAULT FALSE,
   requested_by TEXT,
   department TEXT,
-  company TEXT
+  company TEXT,
+  barcode TEXT
 );
 
 -- 4. Tabela de Funções / Cargos por Email (Admin vs Colaborador)
