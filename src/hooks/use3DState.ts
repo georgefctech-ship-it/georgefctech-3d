@@ -287,9 +287,6 @@ export function use3DState() {
     }
 
     const supabase = getSupabaseClient();
-    const storedProjects = localStorage.getItem(STORAGE_KEYS.PROJECTS);
-    const storedInventory = localStorage.getItem(STORAGE_KEYS.INVENTORY);
-    const storedShopping = localStorage.getItem(STORAGE_KEYS.SHOPPING);
     const storedSettings = localStorage.getItem(STORAGE_KEYS.SETTINGS);
 
     if (supabase && hasSupabaseConfigured()) {
@@ -316,54 +313,15 @@ export function use3DState() {
         const remoteInventory = (dbInventory || []).map(mapDbInventory);
         const remoteShopping = (dbShopping || []).map(mapDbShopping);
 
-        // Helper to merge local offline-only items into the remote array
-        const mergeData = <T extends { id: string }>(remote: T[], localStr: string | null): { merged: T[], toUpload: T[] } => {
-          if (!localStr) return { merged: remote, toUpload: [] };
-          try {
-            const local: T[] = JSON.parse(localStr);
-            const mergedMap = new Map<string, T>();
-            
-            // Populate remote items first
-            remote.forEach(item => mergedMap.set(item.id, item));
-            
-            const toUpload: T[] = [];
-            // Merge any local item that doesn't exist on remote
-            local.forEach(item => {
-              if (item && item.id && !mergedMap.has(item.id)) {
-                mergedMap.set(item.id, item);
-                toUpload.push(item);
-              }
-            });
-            
-            return {
-              merged: Array.from(mergedMap.values()),
-              toUpload
-            };
-          } catch (e) {
-            console.error('Failed to merge local and remote data:', e);
-            return { merged: remote, toUpload: [] };
-          }
-        };
+        // Confia 100% no Banco de Dados (sem misturar com caches antigos do navegador)
+        setProjects(remoteProjects);
+        setInventory(remoteInventory);
+        setShopping(remoteShopping);
 
-        // Merge and Cache Projects
-        const mergedProjs = mergeData(remoteProjects, storedProjects);
-        setProjects(mergedProjs.merged);
-        localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(mergedProjs.merged));
-
-        // Merge and Cache Inventory
-        const mergedInv = mergeData(remoteInventory, storedInventory);
-        setInventory(mergedInv.merged);
-        localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify(mergedInv.merged));
-
-        // Merge and Cache Shopping
-        const mergedShop = mergeData(remoteShopping, storedShopping);
-        setShopping(mergedShop.merged);
-        localStorage.setItem(STORAGE_KEYS.SHOPPING, JSON.stringify(mergedShop.merged));
-
-        // If there are any offline items, upload them immediately to Supabase
-        if (mergedProjs.toUpload.length > 0 || mergedInv.toUpload.length > 0 || mergedShop.toUpload.length > 0) {
-          await syncLocalBackupToSupabase(mergedProjs.toUpload, mergedInv.toUpload, mergedShop.toUpload);
-        }
+        // Garante que nenhum dado seja salvo no navegador local
+        localStorage.removeItem(STORAGE_KEYS.PROJECTS);
+        localStorage.removeItem(STORAGE_KEYS.INVENTORY);
+        localStorage.removeItem(STORAGE_KEYS.SHOPPING);
 
         if (storedSettings) {
           setSettings(JSON.parse(storedSettings));
@@ -383,7 +341,7 @@ export function use3DState() {
       loadLocalBackup();
       setLoading(false);
     }
-  }, [syncLocalBackupToSupabase]);
+  }, []);
 
   const loadLocalBackup = () => {
     try {
@@ -422,10 +380,26 @@ export function use3DState() {
 
   useEffect(() => {
     loadData();
+
+    // Sincronização automática em tempo real ao voltar o foco para a janela/guia do navegador
+    const handleFocus = () => {
+      loadData();
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [loadData]);
 
   // Save changes to localStorage (Backup/Fallback always ready)
   const backupToLocal = (projs: ProjectOrder[], inv: InventoryItem[], shop: ShoppingItem[]) => {
+    if (hasSupabaseConfigured()) {
+      // Se houver banco configurado, limpa do navegador para respeitar a privacidade
+      localStorage.removeItem(STORAGE_KEYS.PROJECTS);
+      localStorage.removeItem(STORAGE_KEYS.INVENTORY);
+      localStorage.removeItem(STORAGE_KEYS.SHOPPING);
+      return;
+    }
     localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projs));
     localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify(inv));
     localStorage.setItem(STORAGE_KEYS.SHOPPING, JSON.stringify(shop));
