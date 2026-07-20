@@ -48,6 +48,7 @@ interface InventoryViewProps {
   onEditInventoryItem?: (id: string, updatedFields: Partial<InventoryItem>) => void;
   onAddShoppingItem?: (item: Omit<ShoppingItem, 'id' | 'checked'>) => void;
   userRole?: string;
+  onNavigate?: (view: string) => void;
 }
 
 export default function InventoryView({
@@ -57,7 +58,8 @@ export default function InventoryView({
   onUpdateQty,
   onEditInventoryItem,
   onAddShoppingItem,
-  userRole
+  userRole,
+  onNavigate
 }: InventoryViewProps) {
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   
@@ -192,6 +194,10 @@ export default function InventoryView({
     setPurchasingItem(null);
     setPurchaseQty(1);
     setPurchaseNotes('');
+
+    if (onNavigate) {
+      onNavigate('compras');
+    }
 
     setTimeout(() => {
       setPurchaseSuccessMsg('');

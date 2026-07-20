@@ -214,8 +214,8 @@ export function use3DState() {
     materialName: db.material_name,
     qtyNeeded: Number(db.qty_needed),
     estUnitCost: Number(db.est_unit_cost),
-    purchaseLink: db.purchase_link,
-    category: db.category,
+    purchaseLink: db.purchase_link || '',
+    category: db.category || 'Outros',
     notes: db.notes || undefined,
     checked: !!db.checked,
     requestedBy: db.requested_by || undefined,
@@ -228,10 +228,10 @@ export function use3DState() {
     material_name: app.materialName,
     qty_needed: app.qtyNeeded,
     est_unit_cost: app.estUnitCost,
-    purchase_link: app.purchaseLink,
-    category: app.category,
+    purchase_link: app.purchaseLink || '',
+    category: app.category || 'Outros',
     notes: app.notes || null,
-    checked: app.checked,
+    checked: !!app.checked,
     requested_by: app.requestedBy || null,
     department: app.department || null,
     company: app.company || null
@@ -258,8 +258,8 @@ export function use3DState() {
     }
   }, []);
   // Load state (either from Supabase or LocalStorage)
-  const loadData = useCallback(async (isBackground = false) => {
-    if (isMutating.current) {
+  const loadData = useCallback(async (isBackground = false, force = false) => {
+    if (isMutating.current && !force) {
       console.log('Sync de dados omitido porque uma alteração local está em andamento');
       return;
     }
@@ -429,12 +429,18 @@ export function use3DState() {
     if (!supabase || !hasSupabaseConfigured()) return;
 
     try {
+      let res;
       if (action === 'insert') {
-        await supabase.from(table).upsert(payload, { onConflict: 'id' });
+        res = await supabase.from(table).upsert(payload, { onConflict: 'id' });
       } else if (action === 'update') {
-        await supabase.from(table).upsert({ ...payload, id }, { onConflict: 'id' });
+        res = await supabase.from(table).upsert({ ...payload, id }, { onConflict: 'id' });
       } else if (action === 'delete') {
-        await supabase.from(table).delete().eq('id', id);
+        res = await supabase.from(table).delete().eq('id', id);
+      }
+      
+      if (res && res.error) {
+        console.error(`Erro retornado pelo Supabase em ${table} (${action}):`, res.error);
+        throw new Error(res.error.message || JSON.stringify(res.error));
       }
     } catch (err) {
       console.error(`Falha ao sincronizar operação em ${table}:`, err);
@@ -455,7 +461,7 @@ export function use3DState() {
 
       // Sync
       await syncOperation('g3d_projects', 'insert', mapProjectToDb(fullProject), nextId);
-      await loadData(true);
+      await loadData(true, true);
     } catch (err) {
       console.error(err);
     } finally {
@@ -471,7 +477,7 @@ export function use3DState() {
       backupToLocal(updated, inventory, shopping);
 
       await syncOperation('g3d_projects', 'delete', null, id);
-      await loadData(true);
+      await loadData(true, true);
     } catch (err) {
       console.error(err);
     } finally {
@@ -493,7 +499,7 @@ export function use3DState() {
       backupToLocal(projects, updated, shopping);
 
       await syncOperation('g3d_inventory', 'insert', mapInventoryToDb(fullItem), nextId);
-      await loadData(true);
+      await loadData(true, true);
     } catch (err) {
       console.error(err);
     } finally {
@@ -525,7 +531,7 @@ export function use3DState() {
       if (editedItem) {
         await syncOperation('g3d_inventory', 'update', mapInventoryToDb(editedItem), id);
       }
-      await loadData(true);
+      await loadData(true, true);
     } catch (err) {
       console.error(err);
     } finally {
@@ -541,7 +547,7 @@ export function use3DState() {
       backupToLocal(projects, updated, shopping);
 
       await syncOperation('g3d_inventory', 'delete', null, id);
-      await loadData(true);
+      await loadData(true, true);
     } catch (err) {
       console.error(err);
     } finally {
@@ -567,7 +573,7 @@ export function use3DState() {
       if (targetItem) {
         await syncOperation('g3d_inventory', 'update', mapInventoryToDb(targetItem), id);
       }
-      await loadData(true);
+      await loadData(true, true);
     } catch (err) {
       console.error(err);
     } finally {
@@ -587,7 +593,7 @@ export function use3DState() {
       backupToLocal(projects, inventory, updated);
 
       await syncOperation('g3d_shopping', 'insert', mapShoppingToDb(newItem), nextId);
-      await loadData(true);
+      await loadData(true, true);
     } catch (err) {
       console.error(err);
     } finally {
@@ -603,7 +609,7 @@ export function use3DState() {
       backupToLocal(projects, inventory, updated);
 
       await syncOperation('g3d_shopping', 'delete', null, id);
-      await loadData(true);
+      await loadData(true, true);
     } catch (err) {
       console.error(err);
     } finally {
@@ -628,7 +634,7 @@ export function use3DState() {
       if (targetItem) {
         await syncOperation('g3d_shopping', 'update', mapShoppingToDb(targetItem), id);
       }
-      await loadData(true);
+      await loadData(true, true);
     } catch (err) {
       console.error(err);
     } finally {
@@ -662,7 +668,7 @@ export function use3DState() {
       if (targetItem) {
         await syncOperation('g3d_shopping', 'update', mapShoppingToDb(targetItem), id);
       }
-      await loadData(true);
+      await loadData(true, true);
     } catch (err) {
       console.error(err);
     } finally {

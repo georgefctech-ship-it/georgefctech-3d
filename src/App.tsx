@@ -150,6 +150,7 @@ export default function App() {
             onEditInventoryItem={editInventoryItem}
             onAddShoppingItem={addShoppingItem}
             userRole={userRole}
+            onNavigate={setCurrentView}
           />
         );
       case 'compras':
