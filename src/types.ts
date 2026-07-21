@@ -50,3 +50,38 @@ export interface SettingsConfig {
   defaultMaterialRate: number;
   defaultProfitMargin: number;
 }
+
+// Shared profile constants and helper functions
+export const DEFAULT_ADMIN_LOGO = "https://vyvompcoiaizoluuxnzx.supabase.co/storage/v1/object/sign/img/meu_logo.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9lYTFhZWQwNC03M2Y5LTQwODQtOWNiOS04ODBkMTA3MzAwY2UiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJpbWcvbWV1X2xvZ28ucG5nIiwic2NvcGUiOiJkb3dubG9hZCIsImlhdCI6MTc4MTc5NTUxOCwiZXhwIjoxODc2NDAzNTE4fQ.JgHY5piKmwxjB0nfW08joAWsNE-JYRA5kUUkVra9hFI";
+export const DEFAULT_COLAB_LOGO = "https://lh3.googleusercontent.com/gps-cs-s/APNQkAForRZzi0p_dHcu4q-uB5_6Hmh_ZWM1hwqil-EcrY-fKLUJWx-Z1RHuhgUQTtqJXsV29-B0tbj3CuhgI93tL_ygBJPL6nmLWh2TGr4Imchb-7y8ozTXVOdxt5UFk-PmJqQndhUJLw=w229-h164-n-k-no-nu";
+
+export const DEFAULT_ADMIN_NAME = "GeorgeFctech-3D";
+export const DEFAULT_COLAB_NAME = "GeorgeFctech Comercial";
+
+export const DEFAULT_ADMIN_SUB = "Modelagem • Escultura • Impressão 3D";
+export const DEFAULT_COLAB_SUB = "Pedidos • Compras • Suprimentos";
+
+export function getAdminLogo(): string {
+  return localStorage.getItem("g3d_admin_logo") || DEFAULT_ADMIN_LOGO;
+}
+
+export function getColabLogo(): string {
+  return localStorage.getItem("g3d_colab_logo") || DEFAULT_COLAB_LOGO;
+}
+
+export function getAdminName(): string {
+  return localStorage.getItem("g3d_admin_name") || DEFAULT_ADMIN_NAME;
+}
+
+export function getColabName(): string {
+  return localStorage.getItem("g3d_colab_name") || DEFAULT_COLAB_NAME;
+}
+
+export function getAdminSub(): string {
+  return localStorage.getItem("g3d_admin_sub") || DEFAULT_ADMIN_SUB;
+}
+
+export function getColabSub(): string {
+  return localStorage.getItem("g3d_colab_sub") || DEFAULT_COLAB_SUB;
+}
+

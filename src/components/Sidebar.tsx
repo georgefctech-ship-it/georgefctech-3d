@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   BarChart3, 
   Layers, 
@@ -25,6 +25,7 @@ import {
   FileClock,
   Calculator
 } from 'lucide-react';
+import { getAdminLogo, getColabLogo, getAdminName, getColabName, getAdminSub, getColabSub } from '../types';
 
 interface SidebarProps {
   currentView: string;
@@ -34,6 +35,14 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ currentView, onViewChange, onLogout, userRole = 'colaborador' }: SidebarProps) {
+  const [updateTick, setUpdateTick] = useState(0);
+
+  useEffect(() => {
+    const handleUpdate = () => setUpdateTick(t => t + 1);
+    window.addEventListener('g3d_visual_settings_updated', handleUpdate);
+    return () => window.removeEventListener('g3d_visual_settings_updated', handleUpdate);
+  }, []);
+
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard Comercial', icon: BarChart3, adminOnly: true },
     { id: 'pecas', label: 'Registrar Ordem 3D', icon: Layers, adminOnly: true },
@@ -54,9 +63,9 @@ export default function Sidebar({ currentView, onViewChange, onLogout, userRole 
     return true;
   });
 
-  const logoUrl = userRole === 'colaborador'
-    ? "https://lh3.googleusercontent.com/gps-cs-s/APNQkAForRZzi0p_dHcu4q-uB5_6Hmh_ZWM1hwqil-EcrY-fKLUJWx-Z1RHuhgUQTtqJXsV29-B0tbj3CuhgI93tL_ygBJPL6nmLWh2TGr4Imchb-7y8ozTXVOdxt5UFk-PmJqQndhUJLw=w229-h164-n-k-no-nu"
-    : "https://vyvompcoiaizoluuxnzx.supabase.co/storage/v1/object/sign/img/meu_logo.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9lYTFhZWQwNC03M2Y5LTQwODQtOWNiOS04ODBkMTA3MzAwY2UiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJpbWcvbWV1X2xvZ28ucG5nIiwic2NvcGUiOiJkb3dubG9hZCIsImlhdCI6MTc4MTc5NTUxOCwiZXhwIjoxODc2NDAzNTE4fQ.JgHY5piKmwxjB0nfW08joAWsNE-JYRA5kUUkVra9hFI";
+  const logoUrl = userRole === 'colaborador' ? getColabLogo() : getAdminLogo();
+  const profileName = userRole === 'colaborador' ? getColabName() : getAdminName();
+  const profileSubtitle = userRole === 'colaborador' ? getColabSub() : getAdminSub();
 
   return (
     <aside id="sidebar-nav" className="w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 h-screen flex flex-col justify-between p-6 fixed top-0 left-0 no-print z-20 font-sans shadow-sm">
@@ -73,10 +82,10 @@ export default function Sidebar({ currentView, onViewChange, onLogout, userRole 
           </div>
 
           <h2 className="text-lg font-bold font-display text-slate-800 dark:text-slate-100 tracking-wide mt-3">
-            {userRole === 'colaborador' ? 'GeorgeFctech Comercial' : 'GeorgeFctech-3D'}
+            {profileName}
           </h2>
           <p className="text-[10px] font-mono tracking-[0.18em] text-slate-400 mt-1 uppercase">
-            {userRole === 'colaborador' ? 'Pedidos • Compras • Suprimentos' : 'Modelagem • Escultura • Impressão 3D'}
+            {profileSubtitle}
           </p>
           <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider mt-2.5 ${
             userRole === 'admin' 

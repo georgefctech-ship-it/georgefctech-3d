@@ -30,8 +30,17 @@ import {
   Github,
   MessageCircle
 } from 'lucide-react';
+import { getAdminLogo, getColabLogo, getAdminName, getColabName } from './types';
 
 export default function App() {
+  const [visualUpdateTick, setVisualUpdateTick] = useState(0);
+
+  useEffect(() => {
+    const handleUpdate = () => setVisualUpdateTick(t => t + 1);
+    window.addEventListener('g3d_visual_settings_updated', handleUpdate);
+    return () => window.removeEventListener('g3d_visual_settings_updated', handleUpdate);
+  }, []);
+
   const [currentView, setCurrentView] = useState('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [importStatus, setImportStatus] = useState<string | null>(null);
@@ -268,15 +277,13 @@ export default function App() {
           <div className="w-9 h-9 rounded-full bg-transparent flex items-center justify-center p-0 overflow-hidden">
             <img 
               referrerPolicy="no-referrer"
-              src={userRole === 'colaborador'
-                ? "https://lh3.googleusercontent.com/gps-cs-s/APNQkAForRZzi0p_dHcu4q-uB5_6Hmh_ZWM1hwqil-EcrY-fKLUJWx-Z1RHuhgUQTtqJXsV29-B0tbj3CuhgI93tL_ygBJPL6nmLWh2TGr4Imchb-7y8ozTXVOdxt5UFk-PmJqQndhUJLw=w229-h164-n-k-no-nu"
-                : "https://vyvompcoiaizoluuxnzx.supabase.co/storage/v1/object/sign/img/meu_logo.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9lYTFhZWQwNC03M2Y5LTQwODQtOWNiOS04ODBkMTA3MzAwY2UiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJpbWcvbWV1X2xvZ28ucG5nIiwic2NvcGUiOiJkb3dubG9hZCIsImlhdCI6MTc4MTc5NTUxOCwiZXhwIjoxODc2NDAzNTE4fQ.JgHY5piKmwxjB0nfW08joAWsNE-JYRA5kUUkVra9hFI"}
+              src={userRole === 'colaborador' ? getColabLogo() : getAdminLogo()}
               alt="Logo"
               className="w-full h-full object-cover"
             />
           </div>
           <span className="font-bold text-sm tracking-wide text-slate-800 dark:text-slate-100">
-            {userRole === 'colaborador' ? 'GeorgeFctech Comercial' : 'GeorgeFctech-3D'}
+            {userRole === 'colaborador' ? getColabName() : getAdminName()}
           </span>
         </div>
         <div className="flex items-center gap-1.5">

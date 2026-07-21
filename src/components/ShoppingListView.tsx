@@ -37,7 +37,8 @@ import {
   Barcode,
   CheckSquare,
   FileClock,
-  Calculator
+  Calculator,
+  X
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { ShoppingItem, InventoryItem } from '../types';
@@ -213,6 +214,30 @@ export default function ShoppingListView({
     return userRole === 'colaborador' ? 'Ftéx' : '';
   });
   const [barcode, setBarcode] = useState('');
+
+  // States for Excel Report custom metadata dialog
+  const [excelModalOpen, setExcelModalOpen] = useState(false);
+  const [excelModalType, setExcelModalType] = useState<'pending' | 'completed'>('pending');
+  const [excelCompany, setExcelCompany] = useState('');
+  const [excelRequestedBy, setExcelRequestedBy] = useState('');
+  const [excelDepartment, setExcelDepartment] = useState('');
+
+  const triggerExcelReportModal = (type: 'pending' | 'completed') => {
+    setExcelModalType(type);
+    
+    // Set sensible defaults for the modal inputs
+    const defaultCompany = type === 'pending'
+      ? (filterCompany !== 'Todos' ? filterCompany : (userRole === 'colaborador' ? (company || 'Ftéx') : 'GeorgeFctech-3D'))
+      : (company || 'Ftéx');
+      
+    const defaultRequestedBy = requestedBy || (userRole === 'colaborador' ? 'Colaborador' : 'Administrador');
+    const defaultDepartment = department || (userRole === 'colaborador' ? 'Faturamento/Comercial' : 'Oficina');
+
+    setExcelCompany(defaultCompany);
+    setExcelRequestedBy(defaultRequestedBy);
+    setExcelDepartment(defaultDepartment);
+    setExcelModalOpen(true);
+  };
 
   // Automatically pre-fill company and requestedBy for colaboradores
   useEffect(() => {
@@ -861,21 +886,22 @@ export default function ShoppingListView({
     downloadAnchor.click();
   };
 
-  const generateReportExcel = () => {
+  const generateReportExcel = (customMetadata?: { company: string, requestedBy: string, department: string }) => {
     if (shopping.length === 0) return;
 
-    const defaultCompanyLabel = userRole === 'colaborador' ? (company || 'Empresa Solicitante') : 'GeorgeFctech-3D';
-    const selectedCompany = filterCompany !== 'Todos' ? filterCompany : (userRole === 'colaborador' ? (company || 'Empresa Solicitante') : defaultCompanyLabel);
+    const metaCompany = customMetadata ? customMetadata.company : (filterCompany !== 'Todos' ? filterCompany : (userRole === 'colaborador' ? (company || 'Empresa Solicitante') : 'GeorgeFctech-3D'));
+    const metaRequestedBy = customMetadata ? customMetadata.requestedBy : (requestedBy || 'Colaborador');
+    const metaDepartment = customMetadata ? customMetadata.department : (department || 'Geral');
     const dateFormatted = new Date().toLocaleDateString('pt-BR');
     const timeFormatted = new Date().toLocaleTimeString('pt-BR');
 
     // Build array of arrays representation for the Excel sheet
     const data: any[][] = [
-      [`PEDIDO DE COMPRA COMERCIAL - ${selectedCompany.toUpperCase()}`],
+      [`PEDIDO DE COMPRA COMERCIAL - ${metaCompany.toUpperCase()}`],
       [`Sistema Gestor de Insumos - GeorgeFctech 3D`],
       [],
-      [`Data de Emissão:`, `${dateFormatted} às ${timeFormatted}`, ``, `Responsável:`, requestedBy || 'Colaborador', ``, `Setor:`, department || 'Geral'],
-      [`Empresa / Cliente:`, selectedCompany, ``, `Status Geral:`, `Pendente/Ativo`, ``, `Custo Estimado Total:`, totalValue],
+      [`Data de Emissão:`, `${dateFormatted} às ${timeFormatted}`, ``, `Responsável:`, metaRequestedBy, ``, `Setor:`, metaDepartment],
+      [`Empresa / Cliente:`, metaCompany, ``, `Status Geral:`, `Pendente/Ativo`, ``, `Custo Estimado Total:`, totalValue],
       [], // Empty row spacer
       [
         'Material / Produto',
@@ -2318,7 +2344,7 @@ export default function ShoppingListView({
   };
 
   // Export Completed purchases as Excel spreadsheet (XLSX)
-  const generateCompletedPurchasesExcelReport = () => {
+  const generateCompletedPurchasesExcelReport = (customMetadata?: { company: string, requestedBy: string, department: string }) => {
     let completedPurchases = shopping.filter(item => item.checked);
 
     // Filtrar pelo período selecionado no histórico
@@ -2336,18 +2362,20 @@ export default function ShoppingListView({
       return;
     }
 
-    const defaultCompanyLabel = company || 'Ftéx';
+    const metaCompany = customMetadata ? customMetadata.company : (company || 'Ftéx');
+    const metaRequestedBy = customMetadata ? customMetadata.requestedBy : (requestedBy || 'ftex');
+    const metaDepartment = customMetadata ? customMetadata.department : (department || 'Oficina');
     const dateFormatted = new Date().toLocaleDateString('pt-BR');
     const timeFormatted = new Date().toLocaleTimeString('pt-BR');
     const totalSpent = completedPurchases.reduce((acc, i) => acc + (i.qtyNeeded * i.estUnitCost), 0);
 
     // Build array of arrays representation for the completed purchases sheet
     const data: any[][] = [
-      [`RELATÓRIO DE COMPRAS EFETUADAS E AUDITADAS - ${defaultCompanyLabel.toUpperCase()}`],
+      [`RELATÓRIO DE COMPRAS EFETUADAS E AUDITADAS - ${metaCompany.toUpperCase()}`],
       [`Histórico Consolidado de Suprimentos Recebidos - GeorgeFctech 3D`],
       [],
-      [`Data de Emissão:`, `${dateFormatted} às ${timeFormatted}`, ``, `Responsável:`, requestedBy || 'ftex', ``, `Setor:`, department || 'Oficina'],
-      [`Empresa / Firma:`, defaultCompanyLabel, ``, `Filtro de Período:`, completedPeriodFilter.toUpperCase(), ``, `Total Investido:`, totalSpent],
+      [`Data de Emissão:`, `${dateFormatted} às ${timeFormatted}`, ``, `Responsável:`, metaRequestedBy, ``, `Setor:`, metaDepartment],
+      [`Empresa / Firma:`, metaCompany, ``, `Filtro de Período:`, completedPeriodFilter.toUpperCase(), ``, `Total Investido:`, totalSpent],
       [], // Empty row spacer
       [
         'Material / Produto',
@@ -2837,7 +2865,7 @@ export default function ShoppingListView({
           </button>
 
           <button
-            onClick={generateReportExcel}
+            onClick={() => triggerExcelReportModal('pending')}
             disabled={shopping.length === 0}
             className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg border font-bold text-xs uppercase tracking-wider shadow-sm transition-all duration-200 ${
               shopping.length === 0 
@@ -4061,7 +4089,7 @@ export default function ShoppingListView({
                 </button>
 
                 <button
-                  onClick={generateCompletedPurchasesExcelReport}
+                  onClick={() => triggerExcelReportModal('completed')}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 font-bold text-[10px] uppercase tracking-wider hover:bg-emerald-100 transition duration-150 cursor-pointer"
                   title="Exportar Compras Efetuadas para Planilha Excel (.xlsx)"
                 >
@@ -4699,6 +4727,117 @@ export default function ShoppingListView({
                 Confirmar e Salvar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PARA EDITAR METADADOS DO EXCEL */}
+      {excelModalOpen && (
+        <div id="excel-metadata-modal" className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 flex items-center justify-center p-4 z-50 animate-[fadeIn_0.15s_ease-out] no-print">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-[scaleUp_0.18s_ease-out]">
+            
+            {/* Modal Header */}
+            <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-950/20">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800 dark:text-slate-100 font-display">
+                  Configurar Cabeçalho Excel
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setExcelModalOpen(false)}
+                className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              setExcelModalOpen(false);
+              const meta = {
+                company: excelCompany.trim(),
+                requestedBy: excelRequestedBy.trim(),
+                department: excelDepartment.trim()
+              };
+              if (excelModalType === 'pending') {
+                generateReportExcel(meta);
+              } else {
+                generateCompletedPurchasesExcelReport(meta);
+              }
+            }} className="p-5 space-y-4">
+              
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-normal">
+                Confirme ou altere os dados organizacionais abaixo. Eles serão incluídos no cabeçalho formal da planilha Excel gerada (.xlsx).
+              </p>
+
+              {/* Empresa */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                  Empresa Solicitante / Firma
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={excelCompany}
+                  onChange={(e) => setExcelCompany(e.target.value)}
+                  placeholder="Ex: GeorgeFctech-3D ou Ftéx"
+                  className="w-full px-3.5 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-800 dark:text-white bg-white dark:bg-slate-950 focus:outline-none focus:border-indigo-500 text-xs transition"
+                />
+              </div>
+
+              {/* Solicitante / Responsável */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                  Solicitante / Responsável
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={excelRequestedBy}
+                  onChange={(e) => setExcelRequestedBy(e.target.value)}
+                  placeholder="Ex: George"
+                  className="w-full px-3.5 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-800 dark:text-white bg-white dark:bg-slate-950 focus:outline-none focus:border-indigo-500 text-xs transition"
+                />
+              </div>
+
+              {/* Setor */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                  Setor / Departamento
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={excelDepartment}
+                  onChange={(e) => setExcelDepartment(e.target.value)}
+                  placeholder="Ex: Oficina / Comercial"
+                  className="w-full px-3.5 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-800 dark:text-white bg-white dark:bg-slate-950 focus:outline-none focus:border-indigo-500 text-xs transition"
+                />
+              </div>
+
+              {/* Buttons */}
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setExcelModalOpen(false)}
+                  className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-slate-700 dark:hover:text-white bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg duration-150 cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg duration-150 shadow-sm flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  Gerar Planilha (.XLSX)
+                </button>
+              </div>
+
+            </form>
+
           </div>
         </div>
       )}

@@ -29,9 +29,11 @@ import {
   Trash2,
   Clock,
   UserPlus,
-  RefreshCw
+  RefreshCw,
+  Palette,
+  Image
 } from 'lucide-react';
-import { SettingsConfig } from '../types';
+import { SettingsConfig, getAdminLogo, getColabLogo, getAdminName, getColabName, getAdminSub, getColabSub } from '../types';
 import { SUPABASE_SQL_BOOTSTRAP, getSupabaseClient, hasSupabaseConfigured } from '../lib/supabase';
 
 interface SettingsViewProps {
@@ -50,6 +52,17 @@ export default function SettingsView({
   const [hourlyRate, setHourlyRate] = useState(String(settings.defaultHourlyRate));
   const [materialRate, setMaterialRate] = useState(String(settings.defaultMaterialRate));
   const [profitMargin, setProfitMargin] = useState(String(settings.defaultProfitMargin));
+  
+  // States for visual profiles custom configurations
+  const [adminLogo, setAdminLogo] = useState(getAdminLogo());
+  const [adminName, setAdminName] = useState(getAdminName());
+  const [adminSub, setAdminSub] = useState(getAdminSub());
+
+  const [colabLogo, setColabLogo] = useState(getColabLogo());
+  const [colabName, setColabName] = useState(getColabName());
+  const [colabSub, setColabSub] = useState(getColabSub());
+
+  const [visualSuccess, setVisualSuccess] = useState(false);
   
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -490,6 +503,24 @@ export default function SettingsView({
     setTimeout(() => setSaveSuccess(false), 3000);
   };
 
+  const handleSaveVisualSettings = (e: React.FormEvent) => {
+    e.preventDefault();
+    setVisualSuccess(false);
+
+    localStorage.setItem('g3d_admin_logo', adminLogo.trim());
+    localStorage.setItem('g3d_admin_name', adminName.trim());
+    localStorage.setItem('g3d_admin_sub', adminSub.trim());
+
+    localStorage.setItem('g3d_colab_logo', colabLogo.trim());
+    localStorage.setItem('g3d_colab_name', colabName.trim());
+    localStorage.setItem('g3d_colab_sub', colabSub.trim());
+
+    setVisualSuccess(true);
+    // Dispatch a custom storage event to update Sidebar/App immediately
+    window.dispatchEvent(new Event('g3d_visual_settings_updated'));
+    setTimeout(() => setVisualSuccess(false), 3000);
+  };
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -844,6 +875,135 @@ export default function SettingsView({
                 </label>
               </div>
             </div>
+          </div>
+
+          {/* CARD DE PERSONALIZAÇÃO VISUAL (LOGOS E PERFIS) */}
+          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+            <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+              <Palette className="w-5 h-5 text-indigo-600" />
+              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800">
+                Personalização de Logos &amp; Perfis
+              </h3>
+            </div>
+
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Edite as imagens do logo (inserindo URL externa) e o nome do perfil exibidos na barra lateral e cabeçalhos para os perfis administrador e colaborador.
+            </p>
+
+            {visualSuccess && (
+              <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2 animate-[fadeIn_0.2s_ease-out]">
+                <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                <span>Configurações visuais salvas e aplicadas em tempo real!</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveVisualSettings} className="space-y-4 pt-1">
+              {/* ADMIN SETTINGS */}
+              <div className="p-3 bg-slate-50/50 dark:bg-slate-900/40 rounded-lg border border-slate-150 dark:border-slate-800 space-y-2.5">
+                <span className="block text-[11px] font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">
+                  Perfil Administrador
+                </span>
+                
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">
+                    Nome do Perfil
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={adminName}
+                    onChange={(e) => setAdminName(e.target.value)}
+                    className="w-full px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+                    placeholder="Ex: GeorgeFctech-3D"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">
+                    Subtítulo do Perfil
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={adminSub}
+                    onChange={(e) => setAdminSub(e.target.value)}
+                    className="w-full px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+                    placeholder="Ex: Modelagem • Impressão 3D"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">
+                    URL do Logo Administrador
+                  </label>
+                  <input
+                    type="url"
+                    required
+                    value={adminLogo}
+                    onChange={(e) => setAdminLogo(e.target.value)}
+                    className="w-full px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 text-xs font-mono focus:outline-none focus:border-indigo-500"
+                    placeholder="https://exemplo.com/logo-admin.png"
+                  />
+                </div>
+              </div>
+
+              {/* COLABORADOR SETTINGS */}
+              <div className="p-3 bg-slate-50/50 dark:bg-slate-900/40 rounded-lg border border-slate-150 dark:border-slate-800 space-y-2.5">
+                <span className="block text-[11px] font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-450">
+                  Perfil Colaborador
+                </span>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">
+                    Nome do Perfil
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={colabName}
+                    onChange={(e) => setColabName(e.target.value)}
+                    className="w-full px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+                    placeholder="Ex: GeorgeFctech Comercial"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">
+                    Subtítulo do Perfil
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={colabSub}
+                    onChange={(e) => setColabSub(e.target.value)}
+                    className="w-full px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+                    placeholder="Ex: Pedidos • Compras"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">
+                    URL do Logo Colaborador
+                  </label>
+                  <input
+                    type="url"
+                    required
+                    value={colabLogo}
+                    onChange={(e) => setColabLogo(e.target.value)}
+                    className="w-full px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 text-xs font-mono focus:outline-none focus:border-indigo-500"
+                    placeholder="https://exemplo.com/logo-colab.png"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition shadow-sm"
+              >
+                <Save className="w-4 h-4" />
+                Salvar Configurações Visuais
+              </button>
+            </form>
           </div>
 
           {/* CARD DE SEGURANÇA & ACESSO */}

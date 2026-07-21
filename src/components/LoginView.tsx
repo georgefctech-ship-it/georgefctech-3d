@@ -22,6 +22,7 @@ import {
   Moon
 } from 'lucide-react';
 import { getSupabaseClient, hasSupabaseConfigured } from '../lib/supabase';
+import { getAdminLogo, getAdminName } from '../types';
 
 interface LoginViewProps {
   onLoginSuccess: () => void;
@@ -595,13 +596,13 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
           <div className="inline-flex items-center justify-center w-24 h-24 p-0 bg-transparent rounded-full mb-4 overflow-hidden transition-all duration-300">
             <img 
               referrerPolicy="no-referrer"
-              src="https://vyvompcoiaizoluuxnzx.supabase.co/storage/v1/object/sign/img/meu_logo.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9lYTFhZWQwNC03M2Y5LTQwODQtOWNiOS04ODBkMTA3MzAwY2UiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJpbWcvbWV1X2xvZ28ucG5nIiwic2NvcGUiOiJkb3dubG9hZCIsImlhdCI6MTc4MTc5NTUxOCwiZXhwIjoxODc2NDAzNTE4fQ.JgHY5piKmwxjB0nfW08joAWsNE-JYRA5kUUkVra9hFI"
-              alt="GeorgeFctech 3D Logo"
+              src={getAdminLogo()}
+              alt="Logo"
               className="w-full h-full object-cover transition-transform duration-350 hover:scale-110"
             />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white font-display">
-            GeorgeFctech 3D
+            {getAdminName()}
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 pb-1">
             Gestor de Suprimentos &amp; Precificação
