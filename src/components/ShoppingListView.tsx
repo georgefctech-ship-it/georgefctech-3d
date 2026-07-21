@@ -155,11 +155,36 @@ export default function ShoppingListView({
 
   const shopping = useMemo(() => {
     if (userRole === 'colaborador') {
-      // Filtrar para mostrar apenas as compras vinculadas à empresa Ftéx / Ftex (setor de colaboradores)
-      // Exclui completamente as compras do setor administrativo (ex: GeorgeFctech-3D ou vazias)
+      // Filtrar para mostrar apenas as compras vinculadas ao colaborador logado ou ao setor de colaboradores (Ftéx/Ftex)
+      // Exclui completamente qualquer compra do setor administrativo (ex: GeorgeFctech-3D ou de administradores)
       const collaboratorPurchases = allShopping.filter(item => {
         const itemCompany = (item.company || '').toLowerCase().trim();
-        return itemCompany === 'ftéx' || itemCompany === 'ftex';
+        const reqBy = (item.requestedBy || '').toLowerCase().trim();
+
+        // Bloqueio explícito de dados/compras do administrador
+        if (itemCompany === 'georgefctech-3d') {
+          return false;
+        }
+        if (reqBy === 'administrador' || reqBy === 'admin' || reqBy === 'georgefctech-3d') {
+          return false;
+        }
+
+        const myEmail = currentUserEmail.toLowerCase().trim();
+        const myName = currentUsername.toLowerCase().trim();
+
+        // Se foi efetuada pelo próprio usuário cadastrado
+        const isMyPurchase = reqBy && (
+          reqBy === myEmail ||
+          reqBy === myName ||
+          (myEmail && reqBy.includes(myEmail)) ||
+          (myName && reqBy.includes(myName)) ||
+          (myEmail && myEmail.split('@')[0] === reqBy)
+        );
+
+        // Ou se pertence ao setor de colaboradores (Ftéx / Ftex)
+        const isFtexSector = itemCompany === 'ftéx' || itemCompany === 'ftex';
+
+        return isMyPurchase || isFtexSector;
       });
 
       if (filterOnlyMine) {

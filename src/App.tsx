@@ -81,6 +81,15 @@ export default function App() {
     }
   }, [isAuthenticated]);
 
+  useEffect(() => {
+    if (isAuthenticated && userRole === 'colaborador') {
+      const adminOnlyViews = ['dashboard', 'pecas', 'suprimentos', 'relatorio', 'configuracoes', 'vercel'];
+      if (adminOnlyViews.includes(currentView)) {
+        setCurrentView('compras');
+      }
+    }
+  }, [currentView, userRole, isAuthenticated]);
+
   const handleLogout = () => {
     sessionStorage.removeItem('g3d_authenticated');
     setIsAuthenticated(false);
