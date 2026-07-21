@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { ShoppingItem, InventoryItem } from '../types';
+import * as XLSX from 'xlsx';
 
 const ensureAbsoluteUrl = (url: string | undefined, productName?: string): string => {
   if (!url || !url.trim()) {
@@ -584,6 +585,111 @@ export default function ShoppingListView({
     const reportTitle = userRole === 'colaborador' ? 'PEDIDO COMERCIAL DE COMPRAS' : `${selectedCompany.toUpperCase()} - PEDIDO COMERCIAL`;
     const dateFormatted = new Date().toLocaleDateString('pt-BR');
     const timeFormatted = new Date().toLocaleTimeString('pt-BR');
+
+    // --- GENUINE XLSX EXPORT GENERATION USING SHEETJS (XLSX) ---
+    // This generates a 100% genuine OpenXML .xlsx file which opens flawlessly on any computer or mobile device without any warning.
+    const data: any[][] = [];
+
+    // Header info (Metadata)
+    if (userRole !== 'colaborador') {
+      data.push(["GeorgeFctech 3D - Gestão de Insumos"]);
+    }
+    data.push([userRole === 'colaborador' ? 'Pedido de Compras Comercial' : reportTitle]);
+    data.push([`Gerado em: ${dateFormatted} às ${timeFormatted}`]);
+    data.push([`Responsável: ${requestedBy || 'Colaborador'}`]);
+    data.push([`Setor Responsável: ${department || 'Geral'}`]);
+    data.push([`Empresa: ${userRole === 'colaborador' ? (company || 'Empresa Solicitante') : selectedCompany}`]);
+    data.push([]); // Spacing row
+
+    // Summary stats
+    data.push(["RESUMO DO PEDIDO"]);
+    data.push(["Custo Previsto Geral", `R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`]);
+    data.push(["Itens Pendentes", `${shopping.filter(i => !i.checked).length} de ${shopping.length}`]);
+    data.push(["Itens Adquiridos", `${shopping.filter(i => i.checked).length}`]);
+    data.push([]); // Spacing row
+
+    // Table Headers
+    data.push(["Material / Produto", "Código / Modelo", "Categoria", "Qtd", "Custo Unitário (R$)", "Custo Total (R$)", "Status", "Link de Acesso", "Observações"]);
+
+    // Table Rows
+    shopping.forEach(item => {
+      const itemTotal = item.qtyNeeded * item.estUnitCost;
+      const absoluteUrl = ensureAbsoluteUrl(item.purchaseLink, item.materialName);
+      data.push([
+        item.materialName,
+        item.barcode || '',
+        item.category || 'Outros',
+        item.qtyNeeded,
+        item.estUnitCost,
+        itemTotal,
+        item.checked ? 'Comprado' : 'Pendente',
+        absoluteUrl,
+        item.notes || ''
+      ]);
+    });
+
+    data.push([]); // Spacing row
+    data.push(["VALOR TOTAL ESTIMADO DO PEDIDO", "", "", "", "", totalValue, "", "", ""]);
+
+    // Create workbook and worksheet
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(data);
+
+    // Apply column widths to make it super readable and well-spaced on any device
+    ws['!cols'] = [
+      { wch: 45 }, // Material / Produto
+      { wch: 18 }, // Código / Modelo
+      { wch: 18 }, // Categoria
+      { wch: 8 },  // Qtd
+      { wch: 18 }, // Custo Unitário (R$)
+      { wch: 18 }, // Custo Total (R$)
+      { wch: 12 }, // Status
+      { wch: 35 }, // Link de Acesso
+      { wch: 30 }  // Observações
+    ];
+
+    // Format currency columns and numbers
+    const startRow = (userRole !== 'colaborador' ? 1 : 0) + 11; // where the products list starts (headers start at row index 12/13)
+    shopping.forEach((_, idx) => {
+      const rowNum = startRow + idx + 1; // 1-indexed for excel coordinates
+      
+      // Custo Unitário column (E)
+      const cellE = ws[`E${rowNum}`];
+      if (cellE) {
+        cellE.t = 'n';
+        cellE.z = '"R$"#,##0.00';
+      }
+
+      // Custo Total column (F)
+      const cellF = ws[`F${rowNum}`];
+      if (cellF) {
+        cellF.t = 'n';
+        cellF.z = '"R$"#,##0.00';
+      }
+
+      // Format Link de Acesso as hyperlink if it exists
+      const cellH = ws[`H${rowNum}`];
+      if (cellH && cellH.v) {
+        cellH.l = { target: cellH.v, tooltip: "Acessar Link" };
+      }
+    });
+
+    // Format Grand Total Cell
+    const grandTotalRow = startRow + shopping.length + 2;
+    const totalCell = ws[`F${grandTotalRow}`];
+    if (totalCell) {
+      totalCell.t = 'n';
+      totalCell.z = '"R$"#,##0.00';
+    }
+
+    XLSX.utils.book_append_sheet(wb, ws, "Pedido Comercial");
+    
+    // Save file with native .xlsx extension
+    const fileName = `Pedido_Comercial_${new Date().toISOString().split('T')[0]}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+
+    // Return early to completely bypass the old legacy HTML spreadsheet generation
+    return;
 
     // Excel-compatible HTML Spreadsheet 2003 wrapper that preserves rich styling, gridlines, and hyperlinks
     const excelContent = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
@@ -1794,6 +1900,91 @@ export default function ShoppingListView({
     const dateFormatted = new Date().toLocaleDateString('pt-BR');
     const timeFormatted = new Date().toLocaleTimeString('pt-BR');
     const totalSpent = completedPurchases.reduce((acc, i) => acc + (i.qtyNeeded * i.estUnitCost), 0);
+
+    // --- GENUINE XLSX EXPORT GENERATION USING SHEETJS (XLSX) ---
+    // This generates a 100% genuine OpenXML .xlsx file which opens flawlessly on any computer or mobile device without any warning.
+    const data: any[][] = [];
+
+    // Header metadata
+    data.push([`HISTÓRICO DE COMPRAS EFETUADAS - ${userRole === 'colaborador' ? 'Ftéx' : 'GeorgeFctech 3D'}`]);
+    data.push([`Gerado em: ${dateFormatted} às ${timeFormatted}`]);
+    data.push([`Período: ${completedPeriodFilter.toUpperCase()}`]);
+    data.push([]); // Spacing
+
+    // Table Headers
+    data.push(["Material / Produto", "Código / Modelo", "Categoria", "Empresa", "Solicitante", "Setor", "Qtd", "Unitário (R$)", "Total Pago (R$)", "Observações"]);
+
+    // Table Rows
+    completedPurchases.forEach(item => {
+      const itemTotal = item.qtyNeeded * item.estUnitCost;
+      data.push([
+        item.materialName,
+        item.barcode || '',
+        item.category || 'Outros',
+        item.company || 'Ftéx',
+        item.requestedBy || 'Colaborador',
+        item.department || '',
+        item.qtyNeeded,
+        item.estUnitCost,
+        itemTotal,
+        item.notes || ''
+      ]);
+    });
+
+    data.push([]); // Spacing
+    data.push(["VALOR TOTAL PAGO", "", "", "", "", "", "", "", totalSpent, ""]);
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(data);
+
+    // Columns widths
+    ws['!cols'] = [
+      { wch: 45 }, // Material
+      { wch: 18 }, // Código / Modelo
+      { wch: 18 }, // Categoria
+      { wch: 18 }, // Empresa
+      { wch: 18 }, // Solicitante
+      { wch: 18 }, // Setor
+      { wch: 8 },  // Qtd
+      { wch: 18 }, // Unitário
+      { wch: 18 }, // Total Pago
+      { wch: 30 }  // Observações
+    ];
+
+    // Format number/currencies
+    const startRow = 5; // Header starts on row index 5 (which is row 6 in Excel)
+    completedPurchases.forEach((_, idx) => {
+      const rowNum = startRow + idx + 1;
+
+      // Unitário column (H)
+      const cellH = ws[`H${rowNum}`];
+      if (cellH) {
+        cellH.t = 'n';
+        cellH.z = '"R$"#,##0.00';
+      }
+
+      // Total Pago column (I)
+      const cellI = ws[`I${rowNum}`];
+      if (cellI) {
+        cellI.t = 'n';
+        cellI.z = '"R$"#,##0.00';
+      }
+    });
+
+    // Format total Spent
+    const totalRow = startRow + completedPurchases.length + 2;
+    const totalCell = ws[`I${totalRow}`];
+    if (totalCell) {
+      totalCell.t = 'n';
+      totalCell.z = '"R$"#,##0.00';
+    }
+
+    XLSX.utils.book_append_sheet(wb, ws, "Histórico");
+    const fileName = `Historico_Compras_Excel_${new Date().toISOString().split('T')[0]}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+
+    // Return early to completely bypass the old legacy HTML spreadsheet generation
+    return;
 
     const excelContent = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
       xmlns:x="urn:schemas-microsoft-com:office:excel"
