@@ -18,6 +18,8 @@ import {
   Edit2,
   Tag,
   Search,
+  Mail,
+  Share2,
   CheckCircle,
   Filter,
   Layers,
@@ -39,7 +41,8 @@ import {
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { ShoppingItem, InventoryItem } from '../types';
-import * as XLSX from 'xlsx';
+// @ts-ignore
+import XLSX from 'xlsx-js-style';
 
 const ensureAbsoluteUrl = (url: string | undefined, productName?: string): string => {
   if (!url || !url.trim()) {
@@ -586,110 +589,7 @@ export default function ShoppingListView({
     const dateFormatted = new Date().toLocaleDateString('pt-BR');
     const timeFormatted = new Date().toLocaleTimeString('pt-BR');
 
-    // --- GENUINE XLSX EXPORT GENERATION USING SHEETJS (XLSX) ---
-    // This generates a 100% genuine OpenXML .xlsx file which opens flawlessly on any computer or mobile device without any warning.
-    const data: any[][] = [];
 
-    // Header info (Metadata)
-    if (userRole !== 'colaborador') {
-      data.push(["GeorgeFctech 3D - Gestão de Insumos"]);
-    }
-    data.push([userRole === 'colaborador' ? 'Pedido de Compras Comercial' : reportTitle]);
-    data.push([`Gerado em: ${dateFormatted} às ${timeFormatted}`]);
-    data.push([`Responsável: ${requestedBy || 'Colaborador'}`]);
-    data.push([`Setor Responsável: ${department || 'Geral'}`]);
-    data.push([`Empresa: ${userRole === 'colaborador' ? (company || 'Empresa Solicitante') : selectedCompany}`]);
-    data.push([]); // Spacing row
-
-    // Summary stats
-    data.push(["RESUMO DO PEDIDO"]);
-    data.push(["Custo Previsto Geral", `R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`]);
-    data.push(["Itens Pendentes", `${shopping.filter(i => !i.checked).length} de ${shopping.length}`]);
-    data.push(["Itens Adquiridos", `${shopping.filter(i => i.checked).length}`]);
-    data.push([]); // Spacing row
-
-    // Table Headers
-    data.push(["Material / Produto", "Código / Modelo", "Categoria", "Qtd", "Custo Unitário (R$)", "Custo Total (R$)", "Status", "Link de Acesso", "Observações"]);
-
-    // Table Rows
-    shopping.forEach(item => {
-      const itemTotal = item.qtyNeeded * item.estUnitCost;
-      const absoluteUrl = ensureAbsoluteUrl(item.purchaseLink, item.materialName);
-      data.push([
-        item.materialName,
-        item.barcode || '',
-        item.category || 'Outros',
-        item.qtyNeeded,
-        item.estUnitCost,
-        itemTotal,
-        item.checked ? 'Comprado' : 'Pendente',
-        absoluteUrl,
-        item.notes || ''
-      ]);
-    });
-
-    data.push([]); // Spacing row
-    data.push(["VALOR TOTAL ESTIMADO DO PEDIDO", "", "", "", "", totalValue, "", "", ""]);
-
-    // Create workbook and worksheet
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet(data);
-
-    // Apply column widths to make it super readable and well-spaced on any device
-    ws['!cols'] = [
-      { wch: 45 }, // Material / Produto
-      { wch: 18 }, // Código / Modelo
-      { wch: 18 }, // Categoria
-      { wch: 8 },  // Qtd
-      { wch: 18 }, // Custo Unitário (R$)
-      { wch: 18 }, // Custo Total (R$)
-      { wch: 12 }, // Status
-      { wch: 35 }, // Link de Acesso
-      { wch: 30 }  // Observações
-    ];
-
-    // Format currency columns and numbers
-    const startRow = (userRole !== 'colaborador' ? 1 : 0) + 11; // where the products list starts (headers start at row index 12/13)
-    shopping.forEach((_, idx) => {
-      const rowNum = startRow + idx + 1; // 1-indexed for excel coordinates
-      
-      // Custo Unitário column (E)
-      const cellE = ws[`E${rowNum}`];
-      if (cellE) {
-        cellE.t = 'n';
-        cellE.z = '"R$"#,##0.00';
-      }
-
-      // Custo Total column (F)
-      const cellF = ws[`F${rowNum}`];
-      if (cellF) {
-        cellF.t = 'n';
-        cellF.z = '"R$"#,##0.00';
-      }
-
-      // Format Link de Acesso as hyperlink if it exists
-      const cellH = ws[`H${rowNum}`];
-      if (cellH && cellH.v) {
-        cellH.l = { target: cellH.v, tooltip: "Acessar Link" };
-      }
-    });
-
-    // Format Grand Total Cell
-    const grandTotalRow = startRow + shopping.length + 2;
-    const totalCell = ws[`F${grandTotalRow}`];
-    if (totalCell) {
-      totalCell.t = 'n';
-      totalCell.z = '"R$"#,##0.00';
-    }
-
-    XLSX.utils.book_append_sheet(wb, ws, "Pedido Comercial");
-    
-    // Save file with native .xlsx extension
-    const fileName = `Pedido_Comercial_${new Date().toISOString().split('T')[0]}.xlsx`;
-    XLSX.writeFile(wb, fileName);
-
-    // Return early to completely bypass the old legacy HTML spreadsheet generation
-    return;
 
     // Excel-compatible HTML Spreadsheet 2003 wrapper that preserves rich styling, gridlines, and hyperlinks
     const excelContent = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
@@ -961,7 +861,307 @@ export default function ShoppingListView({
     downloadAnchor.click();
   };
 
-  // Standalone HTML Commercial Report Generation with Product Photos & Active Links
+  const generateReportExcel = () => {
+    if (shopping.length === 0) return;
+
+    const defaultCompanyLabel = userRole === 'colaborador' ? (company || 'Empresa Solicitante') : 'GeorgeFctech-3D';
+    const selectedCompany = filterCompany !== 'Todos' ? filterCompany : (userRole === 'colaborador' ? (company || 'Empresa Solicitante') : defaultCompanyLabel);
+    const dateFormatted = new Date().toLocaleDateString('pt-BR');
+    const timeFormatted = new Date().toLocaleTimeString('pt-BR');
+
+    // Build array of arrays representation for the Excel sheet
+    const data: any[][] = [
+      [`PEDIDO DE COMPRA COMERCIAL - ${selectedCompany.toUpperCase()}`],
+      [`Sistema Gestor de Insumos - GeorgeFctech 3D`],
+      [],
+      [`Data de Emissão:`, `${dateFormatted} às ${timeFormatted}`, ``, `Responsável:`, requestedBy || 'Colaborador', ``, `Setor:`, department || 'Geral'],
+      [`Empresa / Cliente:`, selectedCompany, ``, `Status Geral:`, `Pendente/Ativo`, ``, `Custo Estimado Total:`, totalValue],
+      [], // Empty row spacer
+      [
+        'Material / Produto',
+        'Código / Modelo',
+        'Categoria',
+        'Quantidade',
+        'Custo Unitário',
+        'Custo Total',
+        'Fornecedor / Link de Compra',
+        'Observações / Notas',
+        'Status'
+      ]
+    ];
+
+    // Add item rows
+    shopping.forEach(item => {
+      const itemTotal = item.qtyNeeded * item.estUnitCost;
+      const statusText = item.checked ? 'Adquirido' : 'Pendente';
+      
+      data.push([
+        item.materialName || '',
+        item.barcode || '',
+        item.category || 'Outros',
+        item.qtyNeeded,
+        item.estUnitCost,
+        itemTotal,
+        item.purchaseLink && item.purchaseLink.trim() !== '' ? 'Clique para Comprar ↗' : '',
+        item.notes || '',
+        statusText
+      ]);
+    });
+
+    // Add Grand Total Row
+    data.push([]);
+    data.push([
+      'VALOR TOTAL ESTIMADO DO PEDIDO',
+      '',
+      '',
+      '',
+      '',
+      totalValue,
+      '',
+      '',
+      ''
+    ]);
+
+    // Create worksheet
+    const ws = XLSX.utils.aoa_to_sheet(data);
+
+    // Set professional column widths
+    ws['!cols'] = [
+      { wch: 35 }, // Material / Produto
+      { wch: 18 }, // Código / Modelo
+      { wch: 20 }, // Categoria
+      { wch: 12 }, // Quantidade
+      { wch: 16 }, // Custo Unitário
+      { wch: 16 }, // Custo Total
+      { wch: 25 }, // Link de Compra
+      { wch: 30 }, // Observações / Notas
+      { wch: 12 }  // Status
+    ];
+
+    // Set professional row heights
+    const rowHeights = [
+      { hpt: 30 }, // Row 0 (Title)
+      { hpt: 20 }, // Row 1 (Subtitle)
+      { hpt: 12 }, // Row 2 (Spacer)
+      { hpt: 22 }, // Row 3 (Metadata 1)
+      { hpt: 22 }, // Row 4 (Metadata 2)
+      { hpt: 12 }, // Row 5 (Spacer)
+      { hpt: 28 }, // Row 6 (Headers)
+    ];
+    for (let i = 0; i < shopping.length; i++) {
+      rowHeights.push({ hpt: 24 }); // Data Rows
+    }
+    rowHeights.push({ hpt: 12 }); // Total Spacer Row
+    rowHeights.push({ hpt: 30 }); // Grand Total Row
+    ws['!rows'] = rowHeights;
+
+    // Enable gridlines explicitly so they are visible
+    ws['!views'] = [{ showGridLines: true }];
+
+    // Merge cells for title block & grand total label
+    ws['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 8 } }, // Title span
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 8 } }, // Subtitle span
+      { s: { r: 8 + shopping.length, c: 0 }, e: { r: 8 + shopping.length, c: 4 } } // Merge "VALOR TOTAL ESTIMADO DO PEDIDO" cell
+    ];
+
+    // Format numbers, currency and add clickable hyperlinks
+    const startRow = 7; // Header row is at index 6, data starts at index 7
+    shopping.forEach((item, index) => {
+      const rIdx = startRow + index;
+
+      // Format unit cost as currency (BRL format)
+      const unitCostCellRef = XLSX.utils.encode_cell({ r: rIdx, c: 4 });
+      if (ws[unitCostCellRef]) {
+        ws[unitCostCellRef].t = 'n';
+        ws[unitCostCellRef].z = '"R$"#,##0.00';
+      }
+
+      // Format total cost as currency
+      const totalCostCellRef = XLSX.utils.encode_cell({ r: rIdx, c: 5 });
+      if (ws[totalCostCellRef]) {
+        ws[totalCostCellRef].t = 'n';
+        ws[totalCostCellRef].z = '"R$"#,##0.00';
+      }
+
+      // Format qty as integer
+      const qtyCellRef = XLSX.utils.encode_cell({ r: rIdx, c: 3 });
+      if (ws[qtyCellRef]) {
+        ws[qtyCellRef].t = 'n';
+        ws[qtyCellRef].z = '#,##0';
+      }
+
+      // Create hyperlink for purchase links
+      if (item.purchaseLink && item.purchaseLink.trim() !== '') {
+        const linkCellRef = XLSX.utils.encode_cell({ r: rIdx, c: 6 });
+        const absoluteUrl = ensureAbsoluteUrl(item.purchaseLink, item.materialName);
+        if (ws[linkCellRef]) {
+          ws[linkCellRef].l = {
+            Target: absoluteUrl,
+            Tooltip: 'Clique para abrir o link do fornecedor no seu navegador'
+          };
+        }
+      }
+    });
+
+    // Format grand total cell currency
+    const grandTotalRowIdx = 8 + shopping.length;
+    const grandTotalCellRef = XLSX.utils.encode_cell({ r: grandTotalRowIdx, c: 5 });
+    if (ws[grandTotalCellRef]) {
+      ws[grandTotalCellRef].t = 'n';
+      ws[grandTotalCellRef].z = '"R$"#,##0.00';
+    }
+
+    // Iterate over all keys in the sheet and apply professional design
+    Object.keys(ws).forEach((cellKey) => {
+      if (cellKey.startsWith('!')) return; // skip metadata like !ref, !merges, !cols, !rows, !views
+      
+      const cell = ws[cellKey];
+      const parsedCell = XLSX.utils.decode_cell(cellKey);
+      const r = parsedCell.r; // 0-based row index
+      const c = parsedCell.c; // 0-based column index
+
+      // Default font and borders
+      let font = { name: 'Segoe UI', sz: 10, color: { rgb: '1E293B' }, bold: false, italic: false };
+      let fill = {};
+      let alignment = { vertical: 'center', horizontal: 'left', wrapText: true };
+      let border = {
+        top: { style: 'thin', color: { rgb: 'E2E8F0' } },
+        bottom: { style: 'thin', color: { rgb: 'E2E8F0' } },
+        left: { style: 'thin', color: { rgb: 'E2E8F0' } },
+        right: { style: 'thin', color: { rgb: 'E2E8F0' } }
+      };
+
+      // 1. STYLE MAIN TITLE BLOCK (Row 0 & Row 1)
+      if (r === 0) {
+        font = { name: 'Segoe UI', sz: 14, color: { rgb: 'FFFFFF' }, bold: true, italic: false };
+        fill = { patternType: 'solid', fgColor: { rgb: '1E3A8A' } }; // Deep Navy Blue
+        alignment = { vertical: 'center', horizontal: 'center', wrapText: false };
+        border = {
+          top: { style: 'medium', color: { rgb: '1E293B' } },
+          bottom: { style: 'none', color: { rgb: 'FFFFFF' } },
+          left: { style: 'medium', color: { rgb: '1E293B' } },
+          right: { style: 'medium', color: { rgb: '1E293B' } }
+        };
+      } else if (r === 1) {
+        font = { name: 'Segoe UI', sz: 10, color: { rgb: '93C5FD' }, bold: true, italic: true }; // Light blue text
+        fill = { patternType: 'solid', fgColor: { rgb: '1E3A8A' } }; // Deep Navy Blue
+        alignment = { vertical: 'center', horizontal: 'center', wrapText: false };
+        border = {
+          top: { style: 'none', color: { rgb: 'FFFFFF' } },
+          bottom: { style: 'medium', color: { rgb: '1E293B' } },
+          left: { style: 'medium', color: { rgb: '1E293B' } },
+          right: { style: 'medium', color: { rgb: '1E293B' } }
+        };
+      }
+      // 2. STYLE METADATA CELLS (Row 3 & Row 4)
+      else if (r === 3 || r === 4) {
+        const isLabelCell = (c === 0 || c === 3 || c === 6);
+        if (isLabelCell) {
+          font = { name: 'Segoe UI', sz: 9.5, color: { rgb: '475569' }, bold: true, italic: false };
+          fill = { patternType: 'solid', fgColor: { rgb: 'F1F5F9' } }; // Slate 100 label background
+          alignment = { vertical: 'center', horizontal: 'left', wrapText: false };
+        } else {
+          font = { name: 'Segoe UI', sz: 9.5, color: { rgb: '0F172A' }, bold: (r === 4 && c === 7), italic: false }; // Bold total cost value
+          fill = { patternType: 'solid', fgColor: { rgb: 'FFFFFF' } };
+          alignment = { vertical: 'center', horizontal: (r === 4 && c === 7) ? 'right' : 'left', wrapText: false };
+        }
+        border = {
+          top: { style: 'thin', color: { rgb: 'CBD5E1' } },
+          bottom: { style: 'thin', color: { rgb: 'CBD5E1' } },
+          left: { style: 'thin', color: { rgb: 'CBD5E1' } },
+          right: { style: 'thin', color: { rgb: 'CBD5E1' } }
+        };
+      }
+      // 3. STYLE TABLE HEADER ROW (Row 6)
+      else if (r === 6) {
+        font = { name: 'Segoe UI', sz: 10, color: { rgb: 'FFFFFF' }, bold: true, italic: false };
+        fill = { patternType: 'solid', fgColor: { rgb: '334155' } }; // Slate 700 header
+        alignment = { vertical: 'center', horizontal: (c === 0 || c === 7) ? 'left' : 'center', wrapText: false };
+        border = {
+          top: { style: 'medium', color: { rgb: '1E293B' } },
+          bottom: { style: 'medium', color: { rgb: '1E293B' } },
+          left: { style: 'thin', color: { rgb: '475569' } },
+          right: { style: 'thin', color: { rgb: '475569' } }
+        };
+      }
+      // 4. STYLE DATA ROWS (Row 7 to 7 + shopping.length - 1)
+      else if (r >= 7 && r < 7 + shopping.length) {
+        // Alternating row background
+        const isOddRow = (r % 2 !== 0);
+        fill = { patternType: 'solid', fgColor: { rgb: isOddRow ? 'F8FAFC' : 'FFFFFF' } };
+
+        // Column specific alignment
+        if (c === 0) {
+          alignment = { vertical: 'center', horizontal: 'left', wrapText: true };
+          font.bold = true; // Make material name bold
+        } else if (c === 1 || c === 2) {
+          alignment = { vertical: 'center', horizontal: 'center', wrapText: false };
+        } else if (c === 3) {
+          alignment = { vertical: 'center', horizontal: 'center', wrapText: false };
+        } else if (c === 4 || c === 5) {
+          alignment = { vertical: 'center', horizontal: 'right', wrapText: false };
+        } else if (c === 6) {
+          alignment = { vertical: 'center', horizontal: 'center', wrapText: false };
+          font = { name: 'Segoe UI', sz: 9.5, color: { rgb: '2563EB' }, bold: true, italic: false }; // Hyperlink color
+        } else if (c === 7) {
+          alignment = { vertical: 'center', horizontal: 'left', wrapText: true };
+          font.italic = true;
+          font.color = { rgb: '64748B' }; // Slate 500 for notes
+        } else if (c === 8) {
+          // Status cell
+          const val = String(cell.v);
+          alignment = { vertical: 'center', horizontal: 'center', wrapText: false };
+          if (val === 'Adquirido') {
+            fill = { patternType: 'solid', fgColor: { rgb: 'D1FAE5' } }; // Soft green
+            font = { name: 'Segoe UI', sz: 9, color: { rgb: '065F46' }, bold: true, italic: false };
+          } else {
+            fill = { patternType: 'solid', fgColor: { rgb: 'FEF3C7' } }; // Soft amber
+            font = { name: 'Segoe UI', sz: 9, color: { rgb: '92400E' }, bold: true, italic: false };
+          }
+        }
+      }
+      // 5. STYLE GRAND TOTAL ROW
+      else if (r === 8 + shopping.length) {
+        font = { name: 'Segoe UI', sz: 10.5, color: { rgb: '0F172A' }, bold: true, italic: false };
+        fill = { patternType: 'solid', fgColor: { rgb: 'E2E8F0' } }; // Highlight total
+        alignment = { vertical: 'center', horizontal: (c === 5) ? 'right' : 'left', wrapText: false };
+        border = {
+          top: { style: 'thin', color: { rgb: '94A3B8' } },
+          bottom: { style: 'double', color: { rgb: '0F172A' } },
+          left: { style: 'thin', color: { rgb: 'CBD5E1' } },
+          right: { style: 'thin', color: { rgb: 'CBD5E1' } }
+        };
+      }
+      // Skip spacer cells/rows by leaving borders empty or non-existent
+      else {
+        border = {
+          top: { style: 'none', color: { rgb: 'FFFFFF' } },
+          bottom: { style: 'none', color: { rgb: 'FFFFFF' } },
+          left: { style: 'none', color: { rgb: 'FFFFFF' } },
+          right: { style: 'none', color: { rgb: 'FFFFFF' } }
+        };
+        fill = { patternType: 'none' };
+      }
+
+      // Assign styles back to cell object
+      cell.s = {
+        font,
+        fill,
+        alignment,
+        border
+      };
+    });
+
+    // Build workbook and write
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Pedido de Compra');
+    XLSX.writeFile(wb, `Pedido_Comercial_${new Date().toISOString().split('T')[0]}.xlsx`);
+
+    setToastMessage("Sucesso! A planilha Excel (.xlsx) profissional foi baixada.");
+    setTimeout(() => setToastMessage(null), 5000);
+  };
+
   const downloadHtmlReport = () => {
     if (shopping.length === 0) return;
 
@@ -971,131 +1171,175 @@ export default function ShoppingListView({
     const dateFormatted = new Date().toLocaleDateString('pt-BR');
     const timeFormatted = new Date().toLocaleTimeString('pt-BR');
 
-    // Create a beautifully-styled, print-ready standalone HTML document
+    // Create a beautifully-styled, print-ready standalone HTML document with solid grids and elegant "PDF" styling
     const htmlContent = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
   <title>${reportTitle}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body {
       font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
       margin: 0;
-      padding: 40px 20px;
-      background-color: #f8fafc;
-      color: #1e293b;
+      padding: 0;
+      background-color: #f1f5f9;
+      color: #0f172a;
     }
-    .container {
-      max-width: 1100px;
-      margin: 0 auto;
-      background-color: #ffffff;
-      border: 1px solid #e2e8f0;
-      border-radius: 12px;
-      padding: 40px;
-      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
-    }
-    .header-banner {
-      background-color: #1e1b4b;
-      background-image: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
-      color: #ffffff;
-      padding: 30px;
-      border-radius: 8px;
-      margin-bottom: 30px;
+    .print-banner {
       display: flex;
-      justify-content: space-between;
+      justify-content: center;
       align-items: center;
+      gap: 12px;
+      padding: 16px;
+      background-color: #1e1b4b;
+      color: #ffffff;
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
-    .header-left h1 {
-      margin: 0 0 8px 0;
-      font-size: 24px;
-      font-weight: 800;
-      letter-spacing: -0.025em;
-    }
-    .header-left p {
-      margin: 0;
-      font-size: 14px;
-      color: #c7d2fe;
-    }
-    .header-right {
-      text-align: right;
-    }
-    .header-right h2 {
-      margin: 0 0 5px 0;
-      font-size: 14px;
+    .print-btn {
+      background-color: #10b981;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      font-size: 13px;
+      font-weight: bold;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
       text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: #a5b4fc;
+      letter-spacing: 0.5px;
+      transition: background-color 0.15s ease;
     }
-    .header-right p {
-      margin: 0;
-      font-size: 12px;
-      color: #cbd5e1;
-      font-family: monospace;
+    .print-btn:hover {
+      background-color: #059669;
     }
-    .stats-grid {
-      display: grid;
-      grid-template-cols: repeat(3, 1fr);
-      gap: 20px;
-      margin-bottom: 30px;
+    .close-btn {
+      background-color: #475569;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      font-size: 13px;
+      font-weight: bold;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      transition: background-color 0.15s ease;
     }
-    .stat-card {
-      background-color: #f8fafc;
-      border: 1px solid #e2e8f0;
+    .close-btn:hover {
+      background-color: #334155;
+    }
+    .pdf-container {
+      max-width: 900px;
+      margin: 30px auto;
+      background-color: #ffffff;
+      border: 2px solid #1e293b;
       border-radius: 8px;
-      padding: 20px;
+      padding: 30px;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
     }
-    .stat-card h3 {
-      margin: 0 0 8px 0;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: #64748b;
-    }
-    .stat-card p {
-      margin: 0;
-      font-size: 22px;
-      font-weight: 800;
-      color: #1e1b4b;
-      font-family: monospace;
-    }
-    .stat-card.amber p {
-      color: #b45309;
-    }
-    .stat-card.emerald p {
-      color: #047857;
-    }
-    table {
+    .header-table {
       width: 100%;
       border-collapse: collapse;
-      margin-bottom: 30px;
+      margin-bottom: 20px;
     }
-    th {
-      background-color: #f1f5f9;
+    .header-table td {
+      border: none !important;
+      padding: 4px 0 !important;
+    }
+    .doc-logo {
+      font-size: 24px;
+      font-weight: 800;
+      color: #1e1b4b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 0;
+    }
+    .doc-subtitle {
+      font-size: 11px;
       color: #475569;
-      font-weight: 700;
+      font-weight: bold;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-top: 3px;
+    }
+    .doc-meta {
+      font-size: 12px;
+      color: #334155;
+      text-align: right;
+      line-height: 1.5;
+    }
+    .divider-solid {
+      border-top: 3px solid #1e1b4b;
+      margin: 15px 0 25px 0;
+    }
+    .info-grid {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 25px;
+    }
+    .info-grid td {
+      border: 1px solid #1e293b !important;
+      padding: 10px 14px !important;
+      font-size: 12px;
+      background-color: #f8fafc;
+      width: 33.33%;
+    }
+    .info-label {
+      font-size: 10px;
+      color: #64748b;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 3px;
+    }
+    .info-value {
+      font-size: 14px;
+      font-weight: bold;
+      color: #0f172a;
+    }
+    .items-grid-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 25px;
+    }
+    .items-grid-table th {
+      background-color: #1e1b4b;
+      color: #ffffff;
+      font-weight: bold;
       font-size: 11px;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
-      padding: 12px 16px;
-      border-bottom: 2px solid #e2e8f0;
+      letter-spacing: 0.5px;
+      padding: 10px 8px;
+      border: 1px solid #1e293b !important;
       text-align: left;
     }
-    td {
-      padding: 14px 16px;
-      border-bottom: 1px solid #f1f5f9;
-      font-size: 13px;
-      color: #334155;
+    .items-grid-table td {
+      border: 1px solid #1e293b !important;
+      padding: 12px 10px;
+      font-size: 12px;
+      color: #0f172a;
+      vertical-align: middle;
     }
-    tr:hover td {
+    .items-grid-table tr:nth-child(even) {
       background-color: #f8fafc;
     }
     .badge {
-      display: inline-flex;
-      align-items: center;
-      padding: 4px 8px;
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: 600;
+      display: inline-block;
+      padding: 3px 6px;
+      border-radius: 4px;
+      font-size: 9px;
+      font-weight: bold;
+      text-transform: uppercase;
+      border: 1px solid currentColor;
     }
     .badge-filamento { background-color: #eef2ff; color: #4338ca; }
     .badge-pecas { background-color: #fef2f2; color: #b91c1c; }
@@ -1105,217 +1349,235 @@ export default function ShoppingListView({
     .badge-status-comprado { background-color: #ecfdf5; color: #047857; }
     .badge-status-pendente { background-color: #fffbeb; color: #b45309; }
 
-    .price {
+    .price-col {
       font-family: monospace;
       font-weight: bold;
       text-align: right;
+      white-space: nowrap;
     }
-    .price-total {
-      color: #4f46e5;
+    .action-link {
+      display: inline-flex;
+      align-items: center;
+      background-color: #2563eb;
+      color: #ffffff !important;
+      text-decoration: none !important;
+      font-weight: bold;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 10px;
+      border: 1px solid #1d4ed8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+      white-space: nowrap;
     }
-    .link-btn {
-      color: #2563eb;
-      text-decoration: none;
-      font-weight: 600;
+    .action-link:hover {
+      background-color: #1d4ed8;
     }
-    .link-btn:hover {
-      text-decoration: underline;
-    }
-    .notes {
+    .notes-box {
       font-size: 11px;
-      color: #64748b;
-      margin-top: 4px;
+      color: #475569;
+      margin-top: 5px;
       font-style: italic;
     }
-    .barcode {
+    .barcode-label {
       font-family: monospace;
       font-size: 10px;
-      color: #4f46e5;
+      color: #4338ca;
       font-weight: bold;
       background-color: #eef2ff;
-      padding: 2px 6px;
-      border-radius: 4px;
+      border: 1px solid #c7d2fe;
+      padding: 1px 4px;
+      border-radius: 3px;
       display: inline-block;
       margin-top: 4px;
     }
-    .total-row {
-      background-color: #f8fafc;
-      font-weight: 800;
+    .row-highlight {
+      background-color: #e2e8f0 !important;
+      font-weight: bold;
     }
-    .total-row td {
-      border-top: 2px solid #e2e8f0;
-      font-size: 14px;
+    .row-highlight td {
+      border-top: 2px solid #1e1b4b !important;
+      border-bottom: 2px solid #1e1b4b !important;
+      font-size: 13px !important;
       color: #1e1b4b;
     }
-    .footer {
-      border-top: 1px dashed #cbd5e1;
-      padding-top: 25px;
-      margin-top: 4px;
-      display: grid;
-      grid-template-cols: 1fr 1fr;
-      gap: 40px;
+    .signatures-block {
+      margin-top: 35px;
+      display: flex;
+      justify-content: space-between;
+      gap: 30px;
     }
-    .signature-box {
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      padding: 20px;
+    .signature-card {
+      flex: 1;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      padding: 16px;
       text-align: center;
+      background-color: #f8fafc;
     }
-    .signature-line {
-      border-top: 1px solid #cbd5e1;
-      margin-top: 40px;
-      padding-top: 8px;
-      font-size: 12px;
-      color: #64748b;
-      font-weight: 600;
+    .line-indicator {
+      border-top: 1px solid #475569;
+      margin-top: 35px;
+      padding-top: 6px;
+      font-size: 11px;
+      font-weight: bold;
+      color: #334155;
     }
     @media print {
       body {
         background-color: #ffffff;
         padding: 0;
       }
-      .container {
+      .no-print {
+        display: none !important;
+      }
+      .pdf-container {
         border: none;
         box-shadow: none;
         padding: 0;
+        margin: 0 auto;
+        max-width: 100%;
       }
-      .header-banner {
-        background-color: #ffffff !important;
-        background-image: none !important;
-        color: #000000 !important;
-        border-bottom: 2px solid #000000;
-        padding: 10px 0;
-        margin-bottom: 20px;
+      .items-grid-table th {
+        background-color: #1e1b4b !important;
+        color: #ffffff !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
       }
-      .header-left p, .header-right h2, .header-right p {
-        color: #334155 !important;
-      }
-      .stat-card {
-        border: 1px solid #cbd5e1 !important;
-      }
-      th {
-        background-color: #f8fafc !important;
-        color: #000000 !important;
-        border-bottom: 2px solid #cbd5e1 !important;
-      }
-      tr {
-        page-break-inside: avoid;
+      .action-link {
+        border: none;
+        background: none;
+        color: #2563eb !important;
+        padding: 0;
+        text-decoration: underline !important;
+        box-shadow: none;
       }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header-banner">
-      <div class="header-left">
-        <h1>${userRole === 'colaborador' ? 'Pedido de Compras Comercial' : 'GeorgeFctech 3D &bull; Gestão de Insumos'}</h1>
-        <p>${userRole === 'colaborador' ? 'Gestão de Insumos e Pedidos' : 'Relatório de Planejamento de Compras Comerciais'}</p>
-        ${userRole === 'colaborador' ? `
-        <p style="margin-top: 6px; font-size: 11px; color: #cbd5e1; font-weight: bold;">Responsável: ${requestedBy || 'Colaborador'} &bull; Setor Responsável: ${department || 'Geral'} &bull; Empresa: ${company || 'Empresa Solicitante'}</p>
-        ` : `
-        <p style="margin-top: 6px; font-size: 11px; color: #cbd5e1; font-weight: bold;">Firma Responsável: GeorgeFctech-3D</p>
-        `}
-      </div>
-      <div class="header-right">
-        <h2>${userRole === 'colaborador' ? (company || 'Empresa Solicitante').toUpperCase() : selectedCompany.toUpperCase()}</h2>
-        <p>Gerado em: ${dateFormatted} às ${timeFormatted}</p>
-      </div>
-    </div>
+  <div class="print-banner no-print">
+    <button class="print-btn" onclick="window.print()">
+      📱 IMPRIMIR / SALVAR COMO PDF
+    </button>
+    <button class="close-btn" onclick="window.close()">
+      FECHAR PREVIEW
+    </button>
+  </div>
 
-    <div class="stats-grid">
-      <div class="stat-card">
-        <h3>Custo Previsto Geral</h3>
-        <p>R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-      </div>
-      <div class="stat-card amber">
-        <h3>Itens Pendentes</h3>
-        <p>${shopping.filter(i => !i.checked).length} de ${shopping.length}</p>
-      </div>
-      <div class="stat-card emerald">
-        <h3>Itens Adquiridos</h3>
-        <p>${shopping.filter(i => i.checked).length}</p>
-      </div>
-    </div>
+  <div class="pdf-container">
+    <table class="header-table">
+      <tr>
+        <td style="width: 55%; vertical-align: top;">
+          <h1 class="doc-logo">${userRole === 'colaborador' ? 'FTÉX' : 'GEORGEFCTECH 3D'}</h1>
+          <div style="font-size: 10px; font-weight: bold; color: #1e1b4b; letter-spacing: 1px;">SISTEMA GESTOR DE INSUMOS</div>
+          <p class="doc-subtitle">${userRole === 'colaborador' ? 'Pedido de Compra Comercial' : 'Planejamento de Compras de Materiais'}</p>
+        </td>
+        <td style="width: 45%; vertical-align: top; text-align: right;">
+          <div class="doc-meta">
+            <strong>PEDIDO DE INSUMOS COMERCIAL</strong><br>
+            Emissão: ${dateFormatted} às ${timeFormatted}<br>
+            Responsável: ${requestedBy || 'Colaborador'}<br>
+            Setor: ${department || 'Suprimentos'}
+          </div>
+        </td>
+      </tr>
+    </table>
 
-    <table>
+    <div class="divider-solid"></div>
+
+    <table class="info-grid">
+      <tr>
+        <td>
+          <div class="info-label">Custo Estimado Geral</div>
+          <div class="info-value" style="color: #4f46e5;">R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+        </td>
+        <td>
+          <div class="info-label">Firma / Empresa</div>
+          <div class="info-value">${userRole === 'colaborador' ? (company || 'Empresa Solicitante') : selectedCompany}</div>
+        </td>
+        <td>
+          <div class="info-label">Itens Pendentes</div>
+          <div class="info-value" style="color: #b45309;">${shopping.filter(i => !i.checked).length} de ${shopping.length}</div>
+        </td>
+      </tr>
+    </table>
+
+    <table class="items-grid-table">
       <thead>
         <tr>
-          <th>Material / Produto</th>
-          <th>Categoria</th>
-          <th>Solicitante / Setor</th>
-          <th style="text-align: center;">Qtd</th>
-          <th style="text-align: right;">Unitário</th>
-          <th style="text-align: right;">Custo Total</th>
-          <th>Status</th>
-          <th>Link para Compra</th>
+          <th style="width: 35%;">Material / Produto</th>
+          <th style="width: 15%;">Categoria</th>
+          <th style="width: 10%; text-align: center;">Qtd</th>
+          <th style="width: 15%; text-align: right;">Custo Unit.</th>
+          <th style="width: 15%; text-align: right;">Custo Total</th>
+          <th style="width: 10%; text-align: center;">Ações</th>
         </tr>
       </thead>
       <tbody>
         ${filteredShopping.map(item => {
           const itemTotal = item.qtyNeeded * item.estUnitCost;
           const absoluteUrl = ensureAbsoluteUrl(item.purchaseLink, item.materialName);
-          const statusText = item.checked ? 'Adquirido' : 'Pendente';
-          const statusClass = item.checked ? 'badge-status-comprado' : 'badge-status-pendente';
+          const hasLink = item.purchaseLink && item.purchaseLink.trim() !== '';
           
           let catClass = 'badge-outros';
           if (item.category === 'Filamento') catClass = 'badge-filamento';
           else if (item.category === 'Peças de Reposição') catClass = 'badge-pecas';
           else if (item.category === 'Acessórios/Insumos') catClass = 'badge-acessorios';
 
-          const reqText = item.requestedBy || 'Administração';
-          const deptText = item.department ? ` - Setor: ${item.department}` : '';
-
           return `
             <tr>
               <td>
                 <div style="font-weight: bold; color: #0f172a;">${item.materialName}</div>
-                ${item.barcode ? `<div class="barcode">Cód: ${item.barcode}</div>` : ''}
-                ${item.notes ? `<div class="notes">Obs: ${item.notes}</div>` : ''}
+                ${item.barcode ? `<div class="barcode-label">Cód: ${item.barcode}</div>` : ''}
+                ${item.notes ? `<div class="notes-box">Obs: ${item.notes}</div>` : ''}
               </td>
               <td>
                 <span class="badge ${catClass}">${item.category || 'Outros'}</span>
               </td>
-              <td>
-                <div style="font-weight: 500;">${reqText}</div>
-                <div style="font-size: 11px; color: #64748b;">${deptText}</div>
-              </td>
               <td style="text-align: center; font-weight: bold;">
                 ${item.qtyNeeded}
               </td>
-              <td class="price">
+              <td class="price-col">
                 R$ ${item.estUnitCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </td>
-              <td class="price price-total">
+              <td class="price-col" style="color: #4f46e5;">
                 R$ ${itemTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </td>
-              <td>
-                <span class="badge ${statusClass}">${statusText}</span>
-              </td>
-              <td>
-                <a href="${absoluteUrl}" class="link-btn" target="_blank" rel="noreferrer">Acessar Link</a>
+              <td style="text-align: center;">
+                ${hasLink ? `
+                  <a href="${absoluteUrl}" class="action-link" target="_blank" rel="noreferrer">
+                    Link ↗
+                  </a>
+                ` : `
+                  <span style="font-size: 11px; color: #94a3b8; font-style: italic;">Sem link</span>
+                `}
               </td>
             </tr>
           `;
         }).join('')}
         
-        <tr class="total-row">
-          <td colspan="5" style="text-align: right; padding-right: 20px;">VALOR TOTAL DO PEDIDO:</td>
-          <td class="price" style="color: #4f46e5; font-size: 15px;">
+        <tr class="row-highlight">
+          <td colspan="4" style="text-align: right; font-weight: bold; padding-right: 15px;">VALOR TOTAL ESTIMADO DO PEDIDO:</td>
+          <td class="price-col" style="color: #1e1b4b; font-size: 14px;">
             R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </td>
-          <td colspan="2"></td>
+          <td></td>
         </tr>
       </tbody>
     </table>
 
-    <div class="footer">
-      <div class="signature-box">
-        <p style="margin: 0 0 10px 0; font-size: 12px; color: #64748b; text-align: left;">Assinatura do Responsável Técnico:</p>
-        <div class="signature-line">${userRole === 'colaborador' ? requestedBy || 'Colaborador' : 'Gestão de Suprimentos - GeorgeFctech-3D'}</div>
+    <div class="signatures-block">
+      <div class="signature-card">
+        <div style="font-size: 10px; font-weight: bold; color: #64748b; text-transform: uppercase; text-align: left;">Responsável Técnico</div>
+        <div class="line-indicator">${requestedBy || 'Colaborador'}</div>
+        <div style="font-size: 10px; color: #94a3b8; margin-top: 3px;">Setor: ${department || 'Geral'}</div>
       </div>
-      <div class="signature-box">
-        <p style="margin: 0 0 10px 0; font-size: 12px; color: #64748b; text-align: left;">Liberação e Aprovação de Custos:</p>
-        <div class="signature-line">${userRole === 'colaborador' ? company || 'Empresa Solicitante' : 'Departamento Financeiro / Comercial'}</div>
+      <div class="signature-card">
+        <div style="font-size: 10px; font-weight: bold; color: #64748b; text-transform: uppercase; text-align: left;">Aprovação Financeira</div>
+        <div class="line-indicator">Diretoria Executiva / GeorgeFctech-3D</div>
+        <div style="font-size: 10px; color: #94a3b8; margin-top: 3px;">Firma: ${userRole === 'colaborador' ? (company || 'Empresa Solicitante') : selectedCompany}</div>
       </div>
     </div>
   </div>
@@ -1327,11 +1589,79 @@ export default function ShoppingListView({
     const url = URL.createObjectURL(blob);
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute('href', url);
-    downloadAnchor.setAttribute('download', `Pedido_Comercial_${new Date().toISOString().split('T')[0]}.html`);
+    downloadAnchor.setAttribute('download', `Pedido_Comercial_PDF_${new Date().toISOString().split('T')[0]}.html`);
     downloadAnchor.click();
     
-    setToastMessage("Sucesso! O relatório de compras foi baixado como arquivo HTML.");
-    setTimeout(() => setToastMessage(null), 4000);
+    // Also try to open immediately in a new tab for extreme smartphone convenience (Direct Print view!)
+    try {
+      const newTab = window.open();
+      if (newTab) {
+        newTab.document.write(htmlContent);
+        newTab.document.close();
+      }
+    } catch (e) {
+      console.warn("Popup block detected, download handled successfully", e);
+    }
+
+    setToastMessage("Sucesso! O relatório PDF foi baixado e a tela de visualização foi aberta.");
+    setTimeout(() => setToastMessage(null), 5000);
+  };
+
+  const handleSendEmail = () => {
+    if (shopping.length === 0) return;
+
+    const defaultCompanyLabel = userRole === 'colaborador' ? (company || 'Empresa Solicitante') : 'GeorgeFctech-3D';
+    const selectedCompany = filterCompany !== 'Todos' ? filterCompany : (userRole === 'colaborador' ? (company || 'Empresa Solicitante') : `GERAL / ${defaultCompanyLabel}`);
+    const reportTitle = userRole === 'colaborador' ? 'PEDIDO COMERCIAL DE COMPRAS' : `${selectedCompany.toUpperCase()} - PEDIDO COMERCIAL`;
+    const dateFormatted = new Date().toLocaleDateString('pt-BR');
+    const timeFormatted = new Date().toLocaleTimeString('pt-BR');
+
+    let text = `📦 ${reportTitle.toUpperCase()}\n`;
+    text += `--------------------------------------------------\n`;
+    text += `📅 Data: ${dateFormatted} às ${timeFormatted}\n`;
+    text += `👤 Solicitante: ${requestedBy || 'Colaborador'}\n`;
+    text += `🏢 Empresa: ${selectedCompany}\n`;
+    text += `📍 Setor: ${department || 'Geral'}\n`;
+    text += `--------------------------------------------------\n\n`;
+    text += `🛒 ITENS DO PEDIDO:\n\n`;
+
+    shopping.forEach((item, index) => {
+      const itemTotal = item.qtyNeeded * item.estUnitCost;
+      text += `${index + 1}. ${item.materialName}\n`;
+      if (item.barcode) text += `   • Código/Modelo: ${item.barcode}\n`;
+      text += `   • Categoria: ${item.category || 'Outros'}\n`;
+      text += `   • Qtd: ${item.qtyNeeded}x\n`;
+      text += `   • Custo Unitário: R$ ${item.estUnitCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n`;
+      text += `   • Custo Total: R$ ${itemTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n`;
+      if (item.purchaseLink) {
+        const absUrl = ensureAbsoluteUrl(item.purchaseLink, item.materialName);
+        text += `   • Link: ${absUrl}\n`;
+      }
+      if (item.notes) text += `   • Obs: ${item.notes}\n`;
+      text += `\n`;
+    });
+
+    text += `--------------------------------------------------\n`;
+    text += `💰 VALOR TOTAL ESTIMADO: R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n`;
+    text += `📊 Status: ${shopping.filter(i => !i.checked).length} Pendente(s) | ${shopping.filter(i => i.checked).length} Adquirido(s)\n`;
+    text += `--------------------------------------------------\n\n`;
+    text += `Enviado do Gestor de Insumos - GeorgeFctech 3D`;
+
+    // Try to copy to clipboard
+    try {
+      navigator.clipboard.writeText(text);
+    } catch (err) {
+      console.error("Clipboard write failed", err);
+    }
+
+    const mailtoSubject = encodeURIComponent(`${reportTitle} - ${selectedCompany}`);
+    const mailtoBody = encodeURIComponent(text);
+    
+    // Open in a mailto link
+    window.location.href = `mailto:?subject=${mailtoSubject}&body=${mailtoBody}`;
+
+    setToastMessage("Pedido copiado para a área de transferência! Seu aplicativo de e-mail foi acionado.");
+    setTimeout(() => setToastMessage(null), 5000);
   };
 
   const downloadCompletedPurchasesHtmlReport = () => {
@@ -1423,337 +1753,368 @@ export default function ShoppingListView({
 <head>
   <meta charset="UTF-8">
   <title>Relatório Mensal de Compras Efetuadas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body {
       font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
       margin: 0;
-      padding: 40px 20px;
+      padding: 0;
       background-color: #f1f5f9;
-      color: #1e293b;
+      color: #0f172a;
     }
-    .container {
-      max-width: 1100px;
-      margin: 0 auto;
-      background-color: #ffffff;
-      border: 1px solid #cbd5e1;
-      border-radius: 16px;
-      padding: 40px;
-      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
-    }
-    .header-banner {
-      background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
-      color: #ffffff;
-      padding: 35px;
-      border-radius: 12px;
-      margin-bottom: 35px;
+    .print-banner {
       display: flex;
-      justify-content: space-between;
+      justify-content: center;
       align-items: center;
+      gap: 12px;
+      padding: 16px;
+      background-color: #1e1b4b;
+      color: #ffffff;
+      position: sticky;
+      top: 0;
+      z-index: 1000;
       box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
-    .header-left h1 {
-      margin: 0 0 8px 0;
-      font-size: 26px;
-      font-weight: 800;
-      letter-spacing: -0.025em;
-    }
-    .header-left p {
-      margin: 0;
-      font-size: 14px;
-      color: #c7d2fe;
-    }
-    .header-right {
-      text-align: right;
-    }
-    .header-right h2 {
-      margin: 0 0 5px 0;
+    .print-btn {
+      background-color: #10b981;
+      color: white;
+      border: none;
+      padding: 10px 20px;
       font-size: 13px;
+      font-weight: bold;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
       text-transform: uppercase;
-      letter-spacing: 0.15em;
-      color: #818cf8;
+      letter-spacing: 0.5px;
+      transition: background-color 0.15s ease;
     }
-    .header-right p {
-      margin: 0;
-      font-size: 12px;
-      color: #cbd5e1;
-      font-family: monospace;
+    .print-btn:hover {
+      background-color: #059669;
     }
-    .stats-summary {
-      display: grid;
-      grid-template-cols: repeat(3, 1fr);
-      gap: 20px;
-      margin-bottom: 35px;
-    }
-    .stat-card {
-      background-color: #f8fafc;
-      border: 1px solid #e2e8f0;
-      border-radius: 10px;
-      padding: 20px;
-      box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
-    }
-    .stat-card h3 {
-      margin: 0 0 6px 0;
-      font-size: 11px;
+    .close-btn {
+      background-color: #475569;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      font-size: 13px;
+      font-weight: bold;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: #64748b;
-      font-weight: 700;
+      letter-spacing: 0.5px;
+      transition: background-color 0.15s ease;
     }
-    .stat-card p {
-      margin: 0;
+    .close-btn:hover {
+      background-color: #334155;
+    }
+    .pdf-container {
+      max-width: 900px;
+      margin: 30px auto;
+      background-color: #ffffff;
+      border: 2px solid #1e293b;
+      border-radius: 8px;
+      padding: 30px;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+    }
+    .header-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+    }
+    .header-table td {
+      border: none !important;
+      padding: 4px 0 !important;
+    }
+    .doc-logo {
       font-size: 24px;
       font-weight: 800;
-      color: #0f172a;
-      font-family: monospace;
-    }
-    .stat-card.accent p {
-      color: #10b981;
-    }
-    .month-container {
-      margin-bottom: 45px;
-    }
-    .month-header {
-      background-color: #f8fafc;
-      border-left: 6px solid #4f46e5;
-      padding: 12px 20px;
-      margin-bottom: 25px;
-      border-radius: 0 8px 8px 0;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-    }
-    .month-header h2 {
-      margin: 0;
-      font-size: 18px;
       color: #1e1b4b;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
-      font-weight: 800;
+      letter-spacing: 0.5px;
+      margin: 0;
+    }
+    .doc-subtitle {
+      font-size: 11px;
+      color: #475569;
+      font-weight: bold;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-top: 3px;
+    }
+    .doc-meta {
+      font-size: 12px;
+      color: #334155;
+      text-align: right;
+      line-height: 1.5;
+    }
+    .divider-solid {
+      border-top: 3px solid #1e1b4b;
+      margin: 15px 0 25px 0;
+    }
+    .info-grid {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 25px;
+    }
+    .info-grid td {
+      border: 1px solid #1e293b !important;
+      padding: 10px 14px !important;
+      font-size: 12px;
+      background-color: #f8fafc;
+      width: 33.33%;
+    }
+    .info-label {
+      font-size: 10px;
+      color: #64748b;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 3px;
+    }
+    .info-value {
+      font-size: 14px;
+      font-weight: bold;
+      color: #0f172a;
+    }
+    .month-section {
+      margin-bottom: 35px;
+    }
+    .month-header {
+      background-color: #1e1b4b;
+      color: #ffffff;
+      padding: 8px 15px;
+      margin-bottom: 15px;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
     .group-wrapper {
-      border: 1px solid #e2e8f0;
-      border-radius: 12px;
-      margin-bottom: 30px;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      margin-bottom: 25px;
       overflow: hidden;
       background-color: #ffffff;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
     }
     .group-banner {
       background-color: #f1f5f9;
-      padding: 16px 24px;
-      border-bottom: 1px solid #e2e8f0;
+      padding: 12px 16px;
+      border-bottom: 1px solid #1e293b;
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
     .group-title h3 {
       margin: 0;
-      font-size: 14px;
-      font-weight: 800;
+      font-size: 13px;
+      font-weight: bold;
       color: #1e293b;
     }
     .group-title p {
-      margin: 4px 0 0 0;
-      font-size: 12px;
+      margin: 2px 0 0 0;
+      font-size: 11px;
       color: #475569;
     }
     .group-subtotal {
-      font-size: 15px;
-      font-weight: 800;
+      font-size: 13px;
+      font-weight: bold;
       color: #047857;
       background-color: #d1fae5;
-      padding: 4px 10px;
-      border-radius: 6px;
+      border: 1px solid #a7f3d0;
+      padding: 4px 8px;
+      border-radius: 4px;
       font-family: monospace;
     }
-    table {
+    table.items-grid-table {
       width: 100%;
       border-collapse: collapse;
     }
-    th {
-      background-color: #fafafb;
-      color: #475569;
-      font-weight: 700;
+    table.items-grid-table th {
+      background-color: #f8fafc;
+      color: #1e293b;
+      font-weight: bold;
       font-size: 11px;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
-      padding: 14px 24px;
-      border-bottom: 1px solid #e2e8f0;
+      letter-spacing: 0.5px;
+      padding: 8px 10px;
+      border: 1px solid #1e293b !important;
       text-align: left;
     }
-    td {
-      padding: 14px 24px;
-      border-bottom: 1px solid #f1f5f9;
-      font-size: 13px;
-      color: #334155;
+    table.items-grid-table td {
+      border: 1px solid #cbd5e1 !important;
+      padding: 10px;
+      font-size: 12px;
+      color: #0f172a;
+      vertical-align: middle;
     }
-    tr:last-child td {
-      border-bottom: none;
-    }
-    tr:hover td {
-      background-color: #fafbfc;
+    table.items-grid-table tr:nth-child(even) {
+      background-color: #f8fafc;
     }
     .badge {
-      display: inline-flex;
-      align-items: center;
-      padding: 4px 8px;
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: 600;
+      display: inline-block;
+      padding: 3px 6px;
+      border-radius: 4px;
+      font-size: 9px;
+      font-weight: bold;
+      text-transform: uppercase;
+      border: 1px solid currentColor;
     }
     .badge-filamento { background-color: #eef2ff; color: #4338ca; }
     .badge-pecas { background-color: #fef2f2; color: #b91c1c; }
     .badge-acessorios { background-color: #f0fdfa; color: #0d9488; }
     .badge-outros { background-color: #f1f5f9; color: #475569; }
 
-    .price {
+    .price-col {
       font-family: monospace;
       font-weight: bold;
+      text-align: right;
+      white-space: nowrap;
     }
-    .link-btn {
+    .action-link {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
       background-color: #e0f2fe;
-      color: #0369a1;
-      text-decoration: none;
-      font-weight: 700;
-      padding: 6px 14px;
-      border-radius: 6px;
-      font-size: 12px;
-      transition: all 0.15s ease;
+      color: #0369a1 !important;
+      text-decoration: none !important;
+      font-weight: bold;
+      padding: 5px 10px;
+      border-radius: 4px;
+      font-size: 10px;
       border: 1px solid #bae6fd;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
     }
-    .link-btn:hover {
+    .action-link:hover {
       background-color: #0284c7;
-      color: #ffffff;
-      border-color: #0284c7;
+      color: white !important;
     }
-    .barcode {
+    .notes-box {
+      font-size: 11px;
+      color: #475569;
+      margin-top: 5px;
+      font-style: italic;
+    }
+    .barcode-label {
       font-family: monospace;
       font-size: 10px;
-      color: #4f46e5;
+      color: #4338ca;
       font-weight: bold;
       background-color: #eef2ff;
-      padding: 2px 6px;
-      border-radius: 4px;
+      border: 1px solid #c7d2fe;
+      padding: 1px 4px;
+      border-radius: 3px;
       display: inline-block;
       margin-top: 4px;
     }
-    .no-link {
-      font-size: 11px;
-      color: #94a3b8;
-      font-style: italic;
+    .signatures-block {
+      margin-top: 35px;
+      display: flex;
+      justify-content: space-between;
+      gap: 30px;
     }
-    .footer {
-      border-top: 1px dashed #cbd5e1;
-      padding-top: 30px;
-      margin-top: 40px;
-      display: grid;
-      grid-template-cols: 1fr 1fr;
-      gap: 40px;
-    }
-    .signature-box {
-      border: 1px solid #e2e8f0;
-      border-radius: 10px;
-      padding: 24px;
+    .signature-card {
+      flex: 1;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      padding: 16px;
       text-align: center;
       background-color: #f8fafc;
     }
-    .signature-line {
-      border-top: 1px solid #cbd5e1;
-      margin-top: 45px;
-      padding-top: 8px;
-      font-size: 12px;
-      color: #475569;
-      font-weight: 700;
+    .line-indicator {
+      border-top: 1px solid #475569;
+      margin-top: 35px;
+      padding-top: 6px;
+      font-size: 11px;
+      font-weight: bold;
+      color: #334155;
     }
     @media print {
       body {
         background-color: #ffffff;
         padding: 0;
       }
-      .container {
+      .no-print {
+        display: none !important;
+      }
+      .pdf-container {
         border: none;
         box-shadow: none;
         padding: 0;
+        margin: 0 auto;
+        max-width: 100%;
       }
-      .header-banner {
-        background: #ffffff !important;
-        color: #000000 !important;
-        border-bottom: 3px solid #000000;
-        padding: 10px 0;
-        margin-bottom: 25px;
-        box-shadow: none;
-      }
-      .header-left p {
-        color: #334155 !important;
-      }
-      .header-right h2, .header-right p {
-        color: #000000 !important;
-      }
-      .stat-card {
-        border: 1px solid #cbd5e1 !important;
-        background-color: #ffffff !important;
-      }
-      .group-banner {
+      table.items-grid-table th {
         background-color: #f1f5f9 !important;
+        color: #1e293b !important;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
       }
-      .group-subtotal {
-        background-color: #e2e8f0 !important;
-        color: #000000 !important;
-        border: 1px solid #cbd5e1;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-      }
-      .link-btn {
-        border: 1px solid #000000 !important;
-        color: #000000 !important;
-        background: none !important;
-      }
-      .group-wrapper {
-        page-break-inside: avoid;
+      .action-link {
+        border: none;
+        background: none;
+        color: #0369a1 !important;
+        padding: 0;
+        text-decoration: underline !important;
+        box-shadow: none;
       }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header-banner">
-      <div class="header-left">
-        <h1>Relatório de Compras Efetuadas</h1>
-        <p>Histórico Consolidado de Suprimentos Recebidos e Auditados</p>
-      </div>
-      <div class="header-right">
-        <h2 style="margin: 0; font-size: 16px; font-weight: 800; color: #ffffff; text-transform: uppercase; letter-spacing: 0.05em;">
-          ${company || 'Ftéx'}
-        </h2>
-        <p style="margin: 4px 0 0 0; font-size: 12px; color: #cbd5e1;">
-          <strong>Responsável:</strong> ${requestedBy || 'ftex'}
-        </p>
-        <p style="margin: 2px 0 0 0; font-size: 11px; color: #a5b4fc; font-family: monospace;">
-          <strong>Setor:</strong> ${department || 'Setor Responsável'}
-        </p>
-        <p style="margin: 6px 0 0 0; font-size: 10px; color: #94a3b8; font-family: monospace; border-top: 1px solid #312e81; padding-top: 4px;">
-          Gerado em: ${dateFormatted} às ${timeFormatted}
-        </p>
-      </div>
-    </div>
+  <div class="print-banner no-print">
+    <button class="print-btn" onclick="window.print()">
+      📱 IMPRIMIR / SALVAR COMO PDF
+    </button>
+    <button class="close-btn" onclick="window.close()">
+      FECHAR PREVIEW
+    </button>
+  </div>
 
-    <div class="stats-summary">
-      <div class="stat-card">
-        <h3>Total Investido</h3>
-        <p>R$ ${totalValueCompleted.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-      </div>
-      <div class="stat-card accent">
-        <h3>Total de Itens</h3>
-        <p>${completedPurchases.length} finalizados</p>
-      </div>
-      <div class="stat-card">
-        <h3>Meses Ativos</h3>
-        <p>${Object.keys(groups).length}</p>
-      </div>
-    </div>
+  <div class="pdf-container">
+    <table class="header-table">
+      <tr>
+        <td style="width: 55%; vertical-align: top;">
+          <h1 class="doc-logo">${company || 'Ftéx'}</h1>
+          <div style="font-size: 10px; font-weight: bold; color: #1e1b4b; letter-spacing: 1px;">SISTEMA GESTOR DE INSUMOS</div>
+          <p class="doc-subtitle">Relatório Mensal de Compras Efetuadas</p>
+        </td>
+        <td style="width: 45%; vertical-align: top; text-align: right;">
+          <div class="doc-meta">
+            <strong>HISTÓRICO DE COMPRAS</strong><br>
+            Emissão: ${dateFormatted} às ${timeFormatted}<br>
+            Responsável: ${requestedBy || 'ftex'}<br>
+            Setor: ${department || 'Oficina'}
+          </div>
+        </td>
+      </tr>
+    </table>
+
+    <div class="divider-solid"></div>
+
+    <table class="info-grid">
+      <tr>
+        <td>
+          <div class="info-label">Total Investido</div>
+          <div class="info-value" style="color: #047857;">R$ ${totalValueCompleted.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+        </td>
+        <td>
+          <div class="info-label">Total de Itens</div>
+          <div class="info-value">${completedPurchases.length} finalizados</div>
+        </td>
+        <td>
+          <div class="info-label">Meses Ativos</div>
+          <div class="info-value">${Object.keys(groups).length}</div>
+        </td>
+      </tr>
+    </table>
 `;
 
     // Loop through each Month
@@ -1763,7 +2124,7 @@ export default function ShoppingListView({
       htmlContent += `
     <div class="month-section">
       <div class="month-header">
-        <h2>${month}</h2>
+        ${month}
       </div>
       `;
 
@@ -1783,7 +2144,7 @@ export default function ShoppingListView({
             Subtotal: R$ ${subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
         </div>
-        <table>
+        <table class="items-grid-table">
           <thead>
             <tr>
               <th style="width: 35%;">Item de Compra</th>
@@ -1811,8 +2172,8 @@ export default function ShoppingListView({
             <tr>
               <td>
                 <div style="font-weight: bold; color: #0f172a;">${item.materialName}</div>
-                ${item.barcode ? `<div class="barcode">Cód: ${item.barcode}</div>` : ''}
-                ${item.notes ? `<div class="notes">Obs: ${item.notes}</div>` : ''}
+                ${item.barcode ? `<div class="barcode-label">Cód: ${item.barcode}</div>` : ''}
+                ${item.notes ? `<div class="notes-box">Obs: ${item.notes}</div>` : ''}
               </td>
               <td>
                 <span class="badge ${catClass}">${item.category || 'Outros'}</span>
@@ -1820,19 +2181,19 @@ export default function ShoppingListView({
               <td style="text-align: center; font-weight: 700; color: #1e293b;">
                 ${item.qtyNeeded}
               </td>
-              <td class="price" style="text-align: right; color: #475569;">
+              <td class="price-col" style="color: #475569;">
                 R$ ${item.estUnitCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </td>
-              <td class="price" style="text-align: right; color: #0f172a; font-weight: 800;">
+              <td class="price-col" style="color: #0f172a; font-weight: 800;">
                 R$ ${itemTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </td>
               <td style="text-align: center;">
                 ${hasLink ? `
-                  <a href="${absoluteUrl}" class="link-btn" target="_blank" rel="noreferrer" title="Acessar fornecedor">
-                    Comprar 🔗
+                  <a href="${absoluteUrl}" class="action-link" target="_blank" rel="noreferrer" title="Acessar fornecedor">
+                    Comprar ↗
                   </a>
                 ` : `
-                  <span class="no-link">Sem link</span>
+                  <span style="font-size: 11px; color: #94a3b8; font-style: italic;">Sem link</span>
                 `}
               </td>
             </tr>
@@ -1852,14 +2213,16 @@ export default function ShoppingListView({
     });
 
     htmlContent += `
-    <div class="footer">
-      <div class="signature-box">
-        <p style="margin: 0 0 10px 0; font-size: 12px; color: #64748b; text-align: left;">Assinatura do Conferente Técnico:</p>
-        <div class="signature-line">Gestão de Oficina & Estoque</div>
+    <div class="signatures-block">
+      <div class="signature-card">
+        <div style="font-size: 10px; font-weight: bold; color: #64748b; text-transform: uppercase; text-align: left;">Conferência Física / Qualidade</div>
+        <div class="line-indicator">Gestão de Oficina & Estoque</div>
+        <div style="font-size: 10px; color: #94a3b8; margin-top: 3px;">Status: Auditado</div>
       </div>
-      <div class="signature-box">
-        <p style="margin: 0 0 10px 0; font-size: 12px; color: #64748b; text-align: left;">Liberação e Homologação de Custos:</p>
-        <div class="signature-line">Diretoria Executiva / Comercial</div>
+      <div class="signature-card">
+        <div style="font-size: 10px; font-weight: bold; color: #64748b; text-transform: uppercase; text-align: left;">Homologação de Custos</div>
+        <div class="line-indicator">Diretoria Executiva / Comercial</div>
+        <div style="font-size: 10px; color: #94a3b8; margin-top: 3px;">Firma: ${company || 'Ftéx'}</div>
       </div>
     </div>
   </div>
@@ -1871,14 +2234,90 @@ export default function ShoppingListView({
     const url = URL.createObjectURL(blob);
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute('href', url);
-    downloadAnchor.setAttribute('download', `Relatorio_Compras_Efetuadas_Mensal_${new Date().toISOString().split('T')[0]}.html`);
+    downloadAnchor.setAttribute('download', `Relatorio_Compras_Efetuadas_Mensal_PDF_${new Date().toISOString().split('T')[0]}.html`);
     downloadAnchor.click();
     
-    setToastMessage("Sucesso! O relatório mensal de compras efetuadas foi gerado em HTML.");
-    setTimeout(() => setToastMessage(null), 4000);
+    // Also try to open immediately in a new tab for extreme smartphone convenience (Direct Print view!)
+    try {
+      const newTab = window.open();
+      if (newTab) {
+        newTab.document.write(htmlContent);
+        newTab.document.close();
+      }
+    } catch (e) {
+      console.warn("Popup block detected, download handled successfully", e);
+    }
+
+    setToastMessage("Sucesso! O relatório mensal de compras efetuadas foi baixado e a tela de visualização foi aberta.");
+    setTimeout(() => setToastMessage(null), 5000);
   };
 
-  // Export Completed purchases as Excel spreadsheet (XLS)
+  const handleSendCompletedEmail = () => {
+    let completedPurchases = shopping.filter(item => item.checked);
+
+    if (completedPeriodFilter === 'hoje') {
+      completedPurchases = completedPurchases.filter(item => isToday(getPurchasedDate(item)));
+    } else if (completedPeriodFilter === 'semana') {
+      completedPurchases = completedPurchases.filter(item => isThisWeek(getPurchasedDate(item)));
+    } else if (completedPeriodFilter === 'mes') {
+      completedPurchases = completedPurchases.filter(item => isThisMonth(getPurchasedDate(item)));
+    }
+
+    if (completedPurchases.length === 0) {
+      setToastMessage("Aviso: Nenhuma compra encontrada para o período selecionado para enviar por e-mail.");
+      setTimeout(() => setToastMessage(null), 4000);
+      return;
+    }
+
+    const dateFormatted = new Date().toLocaleDateString('pt-BR');
+    const timeFormatted = new Date().toLocaleTimeString('pt-BR');
+    const totalSpent = completedPurchases.reduce((acc, i) => acc + (i.qtyNeeded * i.estUnitCost), 0);
+
+    let text = `📜 HISTÓRICO DE COMPRAS EFETUADAS - ${userRole === 'colaborador' ? 'FTÉX' : 'GEORGEFCTECH 3D'}\n`;
+    text += `--------------------------------------------------\n`;
+    text += `📅 Gerado em: ${dateFormatted} às ${timeFormatted}\n`;
+    text += `⏱️ Período: ${completedPeriodFilter.toUpperCase()}\n`;
+    text += `--------------------------------------------------\n\n`;
+    text += `✅ ITENS COMPRADOS:\n\n`;
+
+    completedPurchases.forEach((item, index) => {
+      const itemTotal = item.qtyNeeded * item.estUnitCost;
+      text += `${index + 1}. ${item.materialName}\n`;
+      if (item.barcode) text += `   • Código/Modelo: ${item.barcode}\n`;
+      text += `   • Categoria: ${item.category || 'Outros'}\n`;
+      text += `   • Empresa: ${item.company || 'Ftéx'}\n`;
+      text += `   • Solicitante: ${item.requestedBy || 'Colaborador'}\n`;
+      if (item.department) text += `   • Setor: ${item.department}\n`;
+      text += `   • Qtd: ${item.qtyNeeded}x\n`;
+      text += `   • Unitário: R$ ${item.estUnitCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n`;
+      text += `   • Total Pago: R$ ${itemTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n`;
+      if (item.notes) text += `   • Obs: ${item.notes}\n`;
+      text += `\n`;
+    });
+
+    text += `--------------------------------------------------\n`;
+    text += `💰 VALOR TOTAL PAGO: R$ ${totalSpent.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n`;
+    text += `--------------------------------------------------\n\n`;
+    text += `Enviado do Gestor de Insumos - GeorgeFctech 3D`;
+
+    // Try to copy to clipboard
+    try {
+      navigator.clipboard.writeText(text);
+    } catch (err) {
+      console.error("Clipboard write failed", err);
+    }
+
+    const mailtoSubject = encodeURIComponent(`Histórico de Compras Efetuadas - ${completedPeriodFilter.toUpperCase()}`);
+    const mailtoBody = encodeURIComponent(text);
+
+    // Open in a mailto link
+    window.location.href = `mailto:?subject=${mailtoSubject}&body=${mailtoBody}`;
+
+    setToastMessage("Histórico copiado para a área de transferência! Seu aplicativo de e-mail foi acionado.");
+    setTimeout(() => setToastMessage(null), 5000);
+  };
+
+  // Export Completed purchases as Excel spreadsheet (XLSX)
   const generateCompletedPurchasesExcelReport = () => {
     let completedPurchases = shopping.filter(item => item.checked);
 
@@ -1897,197 +2336,281 @@ export default function ShoppingListView({
       return;
     }
 
+    const defaultCompanyLabel = company || 'Ftéx';
     const dateFormatted = new Date().toLocaleDateString('pt-BR');
     const timeFormatted = new Date().toLocaleTimeString('pt-BR');
     const totalSpent = completedPurchases.reduce((acc, i) => acc + (i.qtyNeeded * i.estUnitCost), 0);
 
-    // --- GENUINE XLSX EXPORT GENERATION USING SHEETJS (XLSX) ---
-    // This generates a 100% genuine OpenXML .xlsx file which opens flawlessly on any computer or mobile device without any warning.
-    const data: any[][] = [];
+    // Build array of arrays representation for the completed purchases sheet
+    const data: any[][] = [
+      [`RELATÓRIO DE COMPRAS EFETUADAS E AUDITADAS - ${defaultCompanyLabel.toUpperCase()}`],
+      [`Histórico Consolidado de Suprimentos Recebidos - GeorgeFctech 3D`],
+      [],
+      [`Data de Emissão:`, `${dateFormatted} às ${timeFormatted}`, ``, `Responsável:`, requestedBy || 'ftex', ``, `Setor:`, department || 'Oficina'],
+      [`Empresa / Firma:`, defaultCompanyLabel, ``, `Filtro de Período:`, completedPeriodFilter.toUpperCase(), ``, `Total Investido:`, totalSpent],
+      [], // Empty row spacer
+      [
+        'Material / Produto',
+        'Código / Modelo',
+        'Categoria',
+        'Quantidade',
+        'Custo Unitário',
+        'Total Pago',
+        'Observações / Notas',
+        'Solicitante',
+        'Setor',
+        'Empresa',
+        'Data da Compra'
+      ]
+    ];
 
-    // Header metadata
-    data.push([`HISTÓRICO DE COMPRAS EFETUADAS - ${userRole === 'colaborador' ? 'Ftéx' : 'GeorgeFctech 3D'}`]);
-    data.push([`Gerado em: ${dateFormatted} às ${timeFormatted}`]);
-    data.push([`Período: ${completedPeriodFilter.toUpperCase()}`]);
-    data.push([]); // Spacing
-
-    // Table Headers
-    data.push(["Material / Produto", "Código / Modelo", "Categoria", "Empresa", "Solicitante", "Setor", "Qtd", "Unitário (R$)", "Total Pago (R$)", "Observações"]);
-
-    // Table Rows
+    // Add completed purchases rows
     completedPurchases.forEach(item => {
       const itemTotal = item.qtyNeeded * item.estUnitCost;
+      const purchaseDate = getPurchasedDate(item).toLocaleDateString('pt-BR');
+      
       data.push([
-        item.materialName,
+        item.materialName || '',
         item.barcode || '',
         item.category || 'Outros',
-        item.company || 'Ftéx',
-        item.requestedBy || 'Colaborador',
-        item.department || '',
         item.qtyNeeded,
         item.estUnitCost,
         itemTotal,
-        item.notes || ''
+        item.notes || '',
+        item.requestedBy || '',
+        item.department || '',
+        item.company || '',
+        purchaseDate
       ]);
     });
 
-    data.push([]); // Spacing
-    data.push(["VALOR TOTAL PAGO", "", "", "", "", "", "", "", totalSpent, ""]);
+    // Add Grand Total Row
+    data.push([]);
+    data.push([
+      'VALOR TOTAL DE COMPRAS EFETUADAS E AUDITADAS',
+      '',
+      '',
+      '',
+      '',
+      totalSpent,
+      '',
+      '',
+      '',
+      '',
+      ''
+    ]);
 
-    const wb = XLSX.utils.book_new();
+    // Create worksheet
     const ws = XLSX.utils.aoa_to_sheet(data);
 
-    // Columns widths
+    // Set professional column widths
     ws['!cols'] = [
-      { wch: 45 }, // Material
+      { wch: 35 }, // Material / Produto
       { wch: 18 }, // Código / Modelo
       { wch: 18 }, // Categoria
-      { wch: 18 }, // Empresa
-      { wch: 18 }, // Solicitante
-      { wch: 18 }, // Setor
-      { wch: 8 },  // Qtd
-      { wch: 18 }, // Unitário
-      { wch: 18 }, // Total Pago
-      { wch: 30 }  // Observações
+      { wch: 12 }, // Quantidade
+      { wch: 16 }, // Custo Unitário
+      { wch: 16 }, // Total Pago
+      { wch: 30 }, // Observações / Notas
+      { wch: 15 }, // Solicitante
+      { wch: 15 }, // Setor
+      { wch: 15 }, // Empresa
+      { wch: 15 }  // Data da Compra
     ];
 
-    // Format number/currencies
-    const startRow = 5; // Header starts on row index 5 (which is row 6 in Excel)
-    completedPurchases.forEach((_, idx) => {
-      const rowNum = startRow + idx + 1;
+    // Set professional row heights
+    const rowHeights = [
+      { hpt: 30 }, // Row 0 (Title)
+      { hpt: 20 }, // Row 1 (Subtitle)
+      { hpt: 12 }, // Row 2 (Spacer)
+      { hpt: 22 }, // Row 3 (Metadata 1)
+      { hpt: 22 }, // Row 4 (Metadata 2)
+      { hpt: 12 }, // Row 5 (Spacer)
+      { hpt: 28 }, // Row 6 (Headers)
+    ];
+    for (let i = 0; i < completedPurchases.length; i++) {
+      rowHeights.push({ hpt: 24 }); // Data Rows
+    }
+    rowHeights.push({ hpt: 12 }); // Total Spacer Row
+    rowHeights.push({ hpt: 30 }); // Grand Total Row
+    ws['!rows'] = rowHeights;
 
-      // Unitário column (H)
-      const cellH = ws[`H${rowNum}`];
-      if (cellH) {
-        cellH.t = 'n';
-        cellH.z = '"R$"#,##0.00';
+    // Enable gridlines explicitly so they are visible
+    ws['!views'] = [{ showGridLines: true }];
+
+    // Merge cells for title block & grand total label
+    ws['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 10 } }, // Title span
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 10 } }, // Subtitle span
+      { s: { r: 8 + completedPurchases.length, c: 0 }, e: { r: 8 + completedPurchases.length, c: 4 } } // Merge "VALOR TOTAL DE COMPRAS..." label cell
+    ];
+
+    // Format numbers, currency
+    const startRow = 7; // Header row is at index 6, data starts at index 7
+    completedPurchases.forEach((item, index) => {
+      const rIdx = startRow + index;
+
+      // Format unit cost as currency (BRL format)
+      const unitCostCellRef = XLSX.utils.encode_cell({ r: rIdx, c: 4 });
+      if (ws[unitCostCellRef]) {
+        ws[unitCostCellRef].t = 'n';
+        ws[unitCostCellRef].z = '"R$"#,##0.00';
       }
 
-      // Total Pago column (I)
-      const cellI = ws[`I${rowNum}`];
-      if (cellI) {
-        cellI.t = 'n';
-        cellI.z = '"R$"#,##0.00';
+      // Format total cost as currency
+      const totalCostCellRef = XLSX.utils.encode_cell({ r: rIdx, c: 5 });
+      if (ws[totalCostCellRef]) {
+        ws[totalCostCellRef].t = 'n';
+        ws[totalCostCellRef].z = '"R$"#,##0.00';
+      }
+
+      // Format qty as integer
+      const qtyCellRef = XLSX.utils.encode_cell({ r: rIdx, c: 3 });
+      if (ws[qtyCellRef]) {
+        ws[qtyCellRef].t = 'n';
+        ws[qtyCellRef].z = '#,##0';
       }
     });
 
-    // Format total Spent
-    const totalRow = startRow + completedPurchases.length + 2;
-    const totalCell = ws[`I${totalRow}`];
-    if (totalCell) {
-      totalCell.t = 'n';
-      totalCell.z = '"R$"#,##0.00';
+    // Format grand total cell currency
+    const grandTotalRowIdx = 8 + completedPurchases.length;
+    const grandTotalCellRef = XLSX.utils.encode_cell({ r: grandTotalRowIdx, c: 5 });
+    if (ws[grandTotalCellRef]) {
+      ws[grandTotalCellRef].t = 'n';
+      ws[grandTotalCellRef].z = '"R$"#,##0.00';
     }
 
-    XLSX.utils.book_append_sheet(wb, ws, "Histórico");
-    const fileName = `Historico_Compras_Excel_${new Date().toISOString().split('T')[0]}.xlsx`;
-    XLSX.writeFile(wb, fileName);
+    // Iterate over all keys in the completed purchases sheet and apply beautiful formatting
+    Object.keys(ws).forEach((cellKey) => {
+      if (cellKey.startsWith('!')) return; // skip metadata
+      
+      const cell = ws[cellKey];
+      const parsedCell = XLSX.utils.decode_cell(cellKey);
+      const r = parsedCell.r; // 0-based row index
+      const c = parsedCell.c; // 0-based column index
 
-    // Return early to completely bypass the old legacy HTML spreadsheet generation
-    return;
+      // Default font and borders
+      let font = { name: 'Segoe UI', sz: 10, color: { rgb: '1E293B' }, bold: false, italic: false };
+      let fill = {};
+      let alignment = { vertical: 'center', horizontal: 'left', wrapText: true };
+      let border = {
+        top: { style: 'thin', color: { rgb: 'E2E8F0' } },
+        bottom: { style: 'thin', color: { rgb: 'E2E8F0' } },
+        left: { style: 'thin', color: { rgb: 'E2E8F0' } },
+        right: { style: 'thin', color: { rgb: 'E2E8F0' } }
+      };
 
-    const excelContent = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
-      xmlns:x="urn:schemas-microsoft-com:office:excel"
-      xmlns="http://www.w3.org/TR/REC-html40">
-<head>
-  <meta charset="UTF-8">
-  <!--[if gte mso 9]>
-  <xml>
-    <x:ExcelWorkbook>
-      <x:ExcelWorksheets>
-        <x:ExcelWorksheet>
-          <x:Name>Histórico de Compras</x:Name>
-          <x:WorksheetOptions>
-            <x:DisplayGridlines/>
-          </x:WorksheetOptions>
-        </x:ExcelWorksheet>
-      </x:ExcelWorksheets>
-    </x:ExcelWorkbook>
-  </xml>
-  <![endif]-->
-  <style>
-    body {
-      font-family: 'Segoe UI', Arial, sans-serif;
-      margin: 0;
-      padding: 30px;
-    }
-    table {
-      width: 1000px;
-      border-collapse: collapse;
-    }
-    th {
-      background-color: #0f172a;
-      color: #ffffff;
-      font-weight: bold;
-      border: 1px solid #cbd5e1;
-      text-align: left;
-      padding: 12px 10px;
-    }
-    td {
-      border: 1px solid #cbd5e1;
-      padding: 12px 10px;
-    }
-    .title-banner {
-      background-color: #1e1b4b;
-      color: #ffffff;
-      padding: 20px;
-      font-weight: bold;
-      font-size: 16pt;
-    }
-  </style>
-</head>
-<body>
-  <table>
-    <tr>
-      <td colspan="7" class="title-banner" style="background-color: #1e1b4b; color: #ffffff; padding: 20px; font-weight: bold; font-size: 16pt;">
-        HISTÓRICO DE COMPRAS EFETUADAS - ${userRole === 'colaborador' ? 'Ftéx' : 'GeorgeFctech 3D'}
-        <div style="font-size: 10pt; color: #cbd5e1; font-weight: normal; margin-top: 4px;">
-          Gerado em: ${dateFormatted} às ${timeFormatted} &bull; Período: ${completedPeriodFilter.toUpperCase()}
-        </div>
-      </td>
-    </tr>
-    <tr style="height: 10px;"><td colspan="7" style="border: none;"></td></tr>
-    <tr>
-      <th style="width: 250px;">Material / Produto</th>
-      <th style="width: 120px;">Categoria</th>
-      <th style="width: 120px;">Empresa</th>
-      <th style="width: 120px;">Solicitante / Setor</th>
-      <th style="width: 60px; text-align: center;">Qtd</th>
-      <th style="width: 120px; text-align: right;">Unitário</th>
-      <th style="width: 120px; text-align: right;">Total Pago</th>
-    </tr>
-    ${completedPurchases.map(item => {
-      const itemTotal = item.qtyNeeded * item.estUnitCost;
-      return `
-        <tr>
-          <td style="font-weight: bold;">
-            ${item.materialName}
-            ${item.barcode ? `<br/><span style="font-size: 8.5pt; color: #4338ca;">Cód: ${item.barcode}</span>` : ''}
-            ${item.notes ? `<br/><span style="font-size: 8.5pt; color: #64748b; font-style: italic;">Obs: ${item.notes}</span>` : ''}
-          </td>
-          <td>${item.category || 'Outros'}</td>
-          <td>${item.company || 'Ftéx'}</td>
-          <td>${item.requestedBy || 'Colaborador'}${item.department ? ` - ${item.department}` : ''}</td>
-          <td style="text-align: center;">${item.qtyNeeded}</td>
-          <td style="text-align: right; font-family: Courier New, monospace;">R$ ${item.estUnitCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-          <td style="text-align: right; font-family: Courier New, monospace; font-weight: bold; color: #059669;">R$ ${itemTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-        </tr>
-      `;
-    }).join('')}
-    <tr style="background-color: #f1f5f9; font-weight: bold;">
-      <td colspan="6" style="text-align: right;">VALOR TOTAL PAGO:</td>
-      <td style="text-align: right; font-family: Courier New, monospace; font-weight: bold; color: #047857;">R$ ${totalSpent.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-    </tr>
-  </table>
-</body>
-</html>`;
+      // 1. STYLE MAIN TITLE BLOCK (Row 0 & Row 1)
+      if (r === 0) {
+        font = { name: 'Segoe UI', sz: 14, color: { rgb: 'FFFFFF' }, bold: true, italic: false };
+        fill = { patternType: 'solid', fgColor: { rgb: '065F46' } }; // Forest Green Header for completed purchases
+        alignment = { vertical: 'center', horizontal: 'center', wrapText: false };
+        border = {
+          top: { style: 'medium', color: { rgb: '064E3B' } },
+          bottom: { style: 'none', color: { rgb: 'FFFFFF' } },
+          left: { style: 'medium', color: { rgb: '064E3B' } },
+          right: { style: 'medium', color: { rgb: '064E3B' } }
+        };
+      } else if (r === 1) {
+        font = { name: 'Segoe UI', sz: 10, color: { rgb: 'A7F3D0' }, bold: true, italic: true }; // Light green text
+        fill = { patternType: 'solid', fgColor: { rgb: '065F46' } }; // Forest Green
+        alignment = { vertical: 'center', horizontal: 'center', wrapText: false };
+        border = {
+          top: { style: 'none', color: { rgb: 'FFFFFF' } },
+          bottom: { style: 'medium', color: { rgb: '064E3B' } },
+          left: { style: 'medium', color: { rgb: '064E3B' } },
+          right: { style: 'medium', color: { rgb: '064E3B' } }
+        };
+      }
+      // 2. STYLE METADATA CELLS (Row 3 & Row 4)
+      else if (r === 3 || r === 4) {
+        const isLabelCell = (c === 0 || c === 3 || c === 6);
+        if (isLabelCell) {
+          font = { name: 'Segoe UI', sz: 9.5, color: { rgb: '475569' }, bold: true, italic: false };
+          fill = { patternType: 'solid', fgColor: { rgb: 'F1F5F9' } }; // Slate 100 label background
+          alignment = { vertical: 'center', horizontal: 'left', wrapText: false };
+        } else {
+          font = { name: 'Segoe UI', sz: 9.5, color: { rgb: '0F172A' }, bold: (r === 4 && c === 7), italic: false }; // Bold total cost value
+          fill = { patternType: 'solid', fgColor: { rgb: 'FFFFFF' } };
+          alignment = { vertical: 'center', horizontal: (r === 4 && c === 7) ? 'right' : 'left', wrapText: false };
+        }
+        border = {
+          top: { style: 'thin', color: { rgb: 'CBD5E1' } },
+          bottom: { style: 'thin', color: { rgb: 'CBD5E1' } },
+          left: { style: 'thin', color: { rgb: 'CBD5E1' } },
+          right: { style: 'thin', color: { rgb: 'CBD5E1' } }
+        };
+      }
+      // 3. STYLE TABLE HEADER ROW (Row 6)
+      else if (r === 6) {
+        font = { name: 'Segoe UI', sz: 10, color: { rgb: 'FFFFFF' }, bold: true, italic: false };
+        fill = { patternType: 'solid', fgColor: { rgb: '334155' } }; // Slate 700 header
+        alignment = { vertical: 'center', horizontal: (c === 0 || c === 6) ? 'left' : 'center', wrapText: false };
+        border = {
+          top: { style: 'medium', color: { rgb: '064E3B' } },
+          bottom: { style: 'medium', color: { rgb: '064E3B' } },
+          left: { style: 'thin', color: { rgb: '475569' } },
+          right: { style: 'thin', color: { rgb: '475569' } }
+        };
+      }
+      // 4. STYLE DATA ROWS (Row 7 to 7 + completedPurchases.length - 1)
+      else if (r >= 7 && r < 7 + completedPurchases.length) {
+        const isOddRow = (r % 2 !== 0);
+        fill = { patternType: 'solid', fgColor: { rgb: isOddRow ? 'F0FDF4' : 'FFFFFF' } }; // Soft light green row alternation
 
-    const blob = new Blob([excelContent], { type: 'application/vnd.ms-excel;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute('href', url);
-    downloadAnchor.setAttribute('download', `Historico_Compras_Excel_${new Date().toISOString().split('T')[0]}.xls`);
-    downloadAnchor.click();
+        if (c === 0) {
+          alignment = { vertical: 'center', horizontal: 'left', wrapText: true };
+          font.bold = true;
+        } else if (c === 1 || c === 2 || c === 7 || c === 8 || c === 9 || c === 10) {
+          alignment = { vertical: 'center', horizontal: 'center', wrapText: false };
+        } else if (c === 3) {
+          alignment = { vertical: 'center', horizontal: 'center', wrapText: false };
+        } else if (c === 4 || c === 5) {
+          alignment = { vertical: 'center', horizontal: 'right', wrapText: false };
+        } else if (c === 6) {
+          alignment = { vertical: 'center', horizontal: 'left', wrapText: true };
+          font.italic = true;
+          font.color = { rgb: '475569' };
+        }
+      }
+      // 5. STYLE GRAND TOTAL ROW
+      else if (r === 8 + completedPurchases.length) {
+        font = { name: 'Segoe UI', sz: 10.5, color: { rgb: '065F46' }, bold: true, italic: false };
+        fill = { patternType: 'solid', fgColor: { rgb: 'D1FAE5' } }; // Highlight total in soft green
+        alignment = { vertical: 'center', horizontal: (c === 5) ? 'right' : 'left', wrapText: false };
+        border = {
+          top: { style: 'thin', color: { rgb: '059669' } },
+          bottom: { style: 'double', color: { rgb: '064E3B' } },
+          left: { style: 'thin', color: { rgb: 'CBD5E1' } },
+          right: { style: 'thin', color: { rgb: 'CBD5E1' } }
+        };
+      }
+      else {
+        border = {
+          top: { style: 'none', color: { rgb: 'FFFFFF' } },
+          bottom: { style: 'none', color: { rgb: 'FFFFFF' } },
+          left: { style: 'none', color: { rgb: 'FFFFFF' } },
+          right: { style: 'none', color: { rgb: 'FFFFFF' } }
+        };
+        fill = { patternType: 'none' };
+      }
+
+      // Assign styles back to cell object
+      cell.s = {
+        font,
+        fill,
+        alignment,
+        border
+      };
+    });
+
+    // Build workbook and write
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Histórico de Compras');
+    XLSX.writeFile(wb, `Historico_Compras_Efetuadas_${completedPeriodFilter.toUpperCase()}_${new Date().toISOString().split('T')[0]}.xlsx`);
+
+    setToastMessage("Sucesso! O histórico de compras foi exportado como Excel (.xlsx) profissional.");
+    setTimeout(() => setToastMessage(null), 5000);
   };
 
   // Import Purchased items directly to Active Inventory (Dar Baixa)
@@ -2314,7 +2837,7 @@ export default function ShoppingListView({
           </button>
 
           <button
-            onClick={generateReport}
+            onClick={generateReportExcel}
             disabled={shopping.length === 0}
             className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg border font-bold text-xs uppercase tracking-wider shadow-sm transition-all duration-200 ${
               shopping.length === 0 
@@ -2323,7 +2846,7 @@ export default function ShoppingListView({
             }`}
           >
             <Download className="w-4 h-4" />
-            GERAR PEDIDO COMERCIAL EXCEL
+            GERAR PLANILHA EXCEL (.XLSX)
           </button>
 
           <button
@@ -3540,7 +4063,7 @@ export default function ShoppingListView({
                 <button
                   onClick={generateCompletedPurchasesExcelReport}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 font-bold text-[10px] uppercase tracking-wider hover:bg-emerald-100 transition duration-150 cursor-pointer"
-                  title="Exportar Compras Efetuadas para Planilha Excel"
+                  title="Exportar Compras Efetuadas para Planilha Excel (.xlsx)"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>Exportar Planilha Excel</span>
