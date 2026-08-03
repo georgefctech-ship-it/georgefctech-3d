@@ -103,11 +103,35 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       setSupabaseActive(true);
       setIsFirstAccess(false);
 
-      // Centralized Check: If not in localStorage, check if it's already registered on Supabase query!
-      if (!savedPassword) {
-        const checkMasterGlobal = async () => {
-          const supabase = getSupabaseClient();
-          if (supabase) {
+      // Centralized Check: Check if master password or local users need syncing to Supabase
+      const syncAndCheckGlobal = async () => {
+        const supabase = getSupabaseClient();
+        if (supabase) {
+          // 1. Sync any local users to Supabase so no recent registration is ever lost
+          const localUsersStr = localStorage.getItem('g3d_local_users');
+          if (localUsersStr) {
+            try {
+              const localUsers = JSON.parse(localUsersStr);
+              if (Array.isArray(localUsers) && localUsers.length > 0) {
+                for (const lu of localUsers) {
+                  if (lu.email) {
+                    const activeRole = (lu.role || 'colaborador').replace('_pendente', '');
+                    await supabase.from('g3d_user_roles').upsert({
+                      email: String(lu.email).toLowerCase().trim(),
+                      username: lu.username || lu.email.split('@')[0],
+                      password: lu.password || '123',
+                      role: activeRole
+                    }, { onConflict: 'email' });
+                  }
+                }
+              }
+            } catch (err) {
+              console.warn("Erro ao sincronizar usuários para o Supabase:", err);
+            }
+          }
+
+          // 2. Check global master password if not cached locally
+          if (!savedPassword) {
             try {
               const { data } = await supabase
                 .from('g3d_user_roles')
@@ -124,9 +148,9 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
               console.error("Erro ao checar senha mestra global:", err);
             }
           }
-        };
-        checkMasterGlobal();
-      }
+        }
+      };
+      syncAndCheckGlobal();
     } else if (!savedPassword) {
       // Se a nuvem não está configurada e não temos senha mestra, precisamos cadastrar a senha mestra
       setSupabaseActive(false);
@@ -226,7 +250,8 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       return;
     }
 
-    const finalRole = getPendingRole(registerRole);
+    // Direct active role so registered users get access immediately
+    const finalRole = registerRole; // 'colaborador' ou 'admin'
     const localUsersStr = localStorage.getItem('g3d_local_users') || '[]';
     let localUsers: any[] = [];
     try {
@@ -241,15 +266,6 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       password: passwordVal,
       role: finalRole
     };
-
-    if (localUsers.some(u => u.email === emailVal)) {
-      setError('Este e-mail já está cadastrado no sistema.');
-      setLoading(false);
-      return;
-    }
-
-    localUsers.push(newUser);
-    localStorage.setItem('g3d_local_users', JSON.stringify(localUsers));
 
     const supabase = getSupabaseClient();
     if (supabase && hasSupabaseConfigured()) {
@@ -277,14 +293,18 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
         if (upsertErr) throw upsertErr;
       } catch (upsertErr: any) {
         console.error('Erro ao salvar no Supabase:', upsertErr);
-        setError(`Cadastro salvo localmente, mas falhou ao sincronizar no Supabase: ${upsertErr.message}`);
+        setError(`Falha ao registrar no Supabase: ${upsertErr.message}`);
         setLoading(false);
         return;
       }
     }
 
+    const updatedLocal = localUsers.filter(u => u.email?.toLowerCase() !== emailVal);
+    updatedLocal.push(newUser);
+    localStorage.setItem('g3d_local_users', JSON.stringify(updatedLocal));
+
     setLoading(false);
-    setSuccessMsg('Cadastro realizado com sucesso! Seu acesso ficará pendente de aprovação pelo administrador.');
+    setSuccessMsg('Cadastro realizado com sucesso! Seu acesso já está ativado no Supabase.');
 
     // Reset fields
     setRegisterEmail('');
@@ -297,7 +317,8 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       setIsFirstAccess(false);
       setError(null);
       setSuccessMsg(null);
-    }, 4000);
+      setUserName(emailVal);
+    }, 2000);
   };
 
   const handleMasterLogin = async (e: React.FormEvent) => {
@@ -314,6 +335,8 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       return;
     }
 
+    const normalizedIdentifier = inputEmailOrUser.toLowerCase().trim();
+
     // Load local users
     const localUsersStr = localStorage.getItem('g3d_local_users') || '[]';
     let localUsers: any[] = [];
@@ -325,98 +348,88 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
 
     const savedMasterPassword = localStorage.getItem('g3d_master_password')?.trim();
 
-    // 1. Check Remote Supabase FIRST if configured
+    // 1. QUERY SUPABASE DIRECTLY IN ONE SINGLE CALL
     const supabase = getSupabaseClient();
     if (supabase && hasSupabaseConfigured()) {
       try {
-        const normalizedIdentifier = inputEmailOrUser.toLowerCase().trim();
-
-        // 1a. Check master password on Supabase
-        const { data: masterRow } = await supabase
-          .from('g3d_user_roles')
-          .select('role')
-          .eq('email', 'system_master_password')
-          .maybeSingle();
-        const globalMasterPassword = String(masterRow?.role ?? '').trim();
-
-        if (globalMasterPassword && inputPassword === globalMasterPassword) {
-          // Save locally as cache
-          localStorage.setItem('g3d_master_password', globalMasterPassword);
-          sessionStorage.setItem('g3d_authenticated', 'true');
-          sessionStorage.setItem('g3d_user_role', selectedRole); // use the role selected in the screen (admin or colaborador)
-          sessionStorage.setItem('g3d_username', inputEmailOrUser || (selectedRole === 'admin' ? 'Administrador' : 'Colaborador'));
-          sessionStorage.setItem('g3d_user_email', inputEmailOrUser.includes('@') ? inputEmailOrUser : 'admin@master.com');
-          setLoading(false);
-          onLoginSuccess();
-          return;
-        }
-
-        // 1b. Check case-insensitive registered user by email
-        let dbUser: any = null;
-        const { data: dbUserByEmail, error: emailErr } = await supabase
+        const { data: remoteRows, error: remoteErr } = await supabase
           .from('g3d_user_roles')
           .select('*')
-          .ilike('email', normalizedIdentifier)
-          .maybeSingle();
+          .or(`email.ilike.${normalizedIdentifier},username.ilike.${normalizedIdentifier},email.eq.system_master_password`);
 
-        if (emailErr) throw emailErr;
-        dbUser = dbUserByEmail;
+        if (!remoteErr && remoteRows) {
+          // Check for master password entry
+          const masterRow = remoteRows.find(r => r.email === 'system_master_password');
+          const globalMasterPassword = String(masterRow?.role ?? '').trim();
 
-        // 1c. Check case-insensitive registered user by username
-        if (!dbUser) {
-          const { data: dbUserByUsername, error: usernameErr } = await supabase
-            .from('g3d_user_roles')
-            .select('*')
-            .ilike('username', normalizedIdentifier)
-            .maybeSingle();
+          // Check for matching user entry
+          let dbUser = remoteRows.find(
+            r => String(r.email ?? '').toLowerCase().trim() === normalizedIdentifier ||
+                 String(r.username ?? '').toLowerCase().trim() === normalizedIdentifier
+          );
 
-          if (usernameErr) throw usernameErr;
-          dbUser = dbUserByUsername;
-        }
-
-        if (dbUser) {
-          const storedRemotePassword = String(dbUser.password ?? '').trim();
-          const passwordMatches = (storedRemotePassword && storedRemotePassword === inputPassword) || (!storedRemotePassword && globalMasterPassword && inputPassword === globalMasterPassword);
-
-          if (passwordMatches) {
-            if (isPendingRole(dbUser.role)) {
-              setError('Acesso bloqueado. Seu cadastro está pendente de liberação pelo administrador.');
-              setLoading(false);
-              return;
-            }
-
-            const normalizedRole = getApprovedRole(dbUser.role);
-
-            // Update local users cache to keep it in sync and unblocked!
-            const updatedLocalUsers = localUsers.filter(u => u.email?.toLowerCase() !== dbUser.email?.toLowerCase());
-            updatedLocalUsers.push({
-              email: dbUser.email,
-              username: dbUser.username,
-              password: storedRemotePassword || inputPassword,
-              role: normalizedRole
-            });
-            localStorage.setItem('g3d_local_users', JSON.stringify(updatedLocalUsers));
-
+          // 1a. Master password check
+          if (globalMasterPassword && inputPassword === globalMasterPassword) {
+            localStorage.setItem('g3d_master_password', globalMasterPassword);
             sessionStorage.setItem('g3d_authenticated', 'true');
-            sessionStorage.setItem('g3d_user_role', normalizedRole);
-            sessionStorage.setItem('g3d_username', dbUser.username || inputEmailOrUser);
-            sessionStorage.setItem('g3d_user_email', dbUser.email || inputEmailOrUser);
+            sessionStorage.setItem('g3d_user_role', selectedRole);
+            sessionStorage.setItem('g3d_username', dbUser?.username || inputEmailOrUser || (selectedRole === 'admin' ? 'Administrador' : 'Colaborador'));
+            sessionStorage.setItem('g3d_user_email', dbUser?.email || (inputEmailOrUser.includes('@') ? inputEmailOrUser : 'admin@master.com'));
             setLoading(false);
             onLoginSuccess();
             return;
-          } else {
-            setError('Senha incorreta para o usuário especificado.');
-            setLoading(false);
-            return;
+          }
+
+          // 1b. Registered user check
+          if (dbUser) {
+            const storedRemotePassword = String(dbUser.password ?? '').trim();
+            const passwordMatches =
+              (storedRemotePassword && storedRemotePassword === inputPassword) ||
+              (!storedRemotePassword && globalMasterPassword && inputPassword === globalMasterPassword) ||
+              (savedMasterPassword && inputPassword === savedMasterPassword);
+
+            if (passwordMatches) {
+              let activeRole = dbUser.role ? String(dbUser.role).toLowerCase().trim() : 'colaborador';
+              // If role was saved as pending, auto-approve so user can access immediately
+              if (activeRole.includes('pendente') || activeRole === 'pendente') {
+                activeRole = activeRole.includes('admin') ? 'admin' : 'colaborador';
+                try {
+                  await supabase.from('g3d_user_roles').update({ role: activeRole }).eq('email', dbUser.email);
+                } catch (e) {
+                  console.warn('Auto-aprovação no Supabase:', e);
+                }
+              }
+
+              // Keep local cache in sync
+              const updatedLocalUsers = localUsers.filter(u => u.email?.toLowerCase() !== dbUser.email?.toLowerCase());
+              updatedLocalUsers.push({
+                email: dbUser.email,
+                username: dbUser.username,
+                password: storedRemotePassword || inputPassword,
+                role: activeRole
+              });
+              localStorage.setItem('g3d_local_users', JSON.stringify(updatedLocalUsers));
+
+              sessionStorage.setItem('g3d_authenticated', 'true');
+              sessionStorage.setItem('g3d_user_role', activeRole);
+              sessionStorage.setItem('g3d_username', dbUser.username || inputEmailOrUser);
+              sessionStorage.setItem('g3d_user_email', dbUser.email || inputEmailOrUser);
+              setLoading(false);
+              onLoginSuccess();
+              return;
+            } else {
+              setError('Senha incorreta para o usuário especificado.');
+              setLoading(false);
+              return;
+            }
           }
         }
       } catch (err: any) {
-        console.error('Erro ao validar login no Supabase, caindo para local:', err);
+        console.error('Erro ao consultar Supabase durante login:', err);
       }
     }
 
-    // 2. Local Fallback (runs if Supabase is offline, not configured, or returned no user)
-    // 2a. Check local master password
+    // 2. Local Fallback
     if (savedMasterPassword && inputPassword === savedMasterPassword) {
       sessionStorage.setItem('g3d_authenticated', 'true');
       sessionStorage.setItem('g3d_user_role', selectedRole);
@@ -427,22 +440,32 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       return;
     }
 
-    // 2b. Check local users
     const matchedLocalUser = localUsers.find(
-      u => u.email?.toLowerCase() === inputEmailOrUser.toLowerCase() || u.username?.toLowerCase() === inputEmailOrUser.toLowerCase()
+      u => u.email?.toLowerCase() === normalizedIdentifier || u.username?.toLowerCase() === normalizedIdentifier
     );
 
     if (matchedLocalUser) {
       const storedLocalPassword = String(matchedLocalUser.password ?? '').trim();
       if (storedLocalPassword === inputPassword) {
-        if (isPendingRole(matchedLocalUser.role)) {
-          setError('Acesso bloqueado. Seu cadastro está pendente de liberação pelo administrador.');
-          setLoading(false);
-          return;
+        let activeRole = matchedLocalUser.role ? String(matchedLocalUser.role).toLowerCase().trim() : 'colaborador';
+        if (activeRole.includes('pendente')) {
+          activeRole = activeRole.includes('admin') ? 'admin' : 'colaborador';
         }
-        
+
+        // Push to Supabase if connected
+        if (supabase && hasSupabaseConfigured()) {
+          try {
+            await supabase.from('g3d_user_roles').upsert({
+              email: matchedLocalUser.email,
+              username: matchedLocalUser.username,
+              password: matchedLocalUser.password,
+              role: activeRole
+            }, { onConflict: 'email' });
+          } catch (e) {}
+        }
+
         sessionStorage.setItem('g3d_authenticated', 'true');
-        sessionStorage.setItem('g3d_user_role', matchedLocalUser.role);
+        sessionStorage.setItem('g3d_user_role', activeRole);
         sessionStorage.setItem('g3d_username', matchedLocalUser.username);
         sessionStorage.setItem('g3d_user_email', matchedLocalUser.email);
         setLoading(false);

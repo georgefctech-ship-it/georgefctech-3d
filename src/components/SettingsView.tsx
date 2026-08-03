@@ -112,20 +112,27 @@ export default function SettingsView({
     const supabase = getSupabaseClient();
     if (supabase && hasSupabaseConfigured()) {
       try {
+        if (localUsers.length > 0) {
+          for (const lu of localUsers) {
+            if (lu.email) {
+              const activeRole = String(lu.role || 'colaborador').replace('_pendente', '');
+              await supabase.from('g3d_user_roles').upsert({
+                email: String(lu.email).toLowerCase().trim(),
+                username: lu.username || lu.email.split('@')[0],
+                password: lu.password || '123',
+                role: activeRole
+              }, { onConflict: 'email' });
+            }
+          }
+        }
+
         const { data, error } = await supabase
           .from('g3d_user_roles')
           .select('*')
           .order('email', { ascending: true });
         if (error) throw error;
         
-        // Merge Supabase users and any local users to display them nicely
-        const merged = [...(data || [])];
-        localUsers.forEach(lu => {
-          if (!merged.some(dbu => dbu.email?.toLowerCase() === lu.email?.toLowerCase())) {
-            merged.push(lu);
-          }
-        });
-        setCollaborators(merged);
+        setCollaborators(data || []);
       } catch (err: any) {
         console.warn("Erro ao buscar no Supabase, exibindo locais:", err);
         setCollaborators(localUsers);
