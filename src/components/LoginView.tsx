@@ -115,12 +115,12 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
               if (Array.isArray(localUsers) && localUsers.length > 0) {
                 for (const lu of localUsers) {
                   if (lu.email) {
-                    const activeRole = (lu.role || 'colaborador').replace('_pendente', '');
+                    const userRoleToSync = String(lu.role || 'colaborador_pendente');
                     await supabase.from('g3d_user_roles').upsert({
                       email: String(lu.email).toLowerCase().trim(),
                       username: lu.username || lu.email.split('@')[0],
                       password: lu.password || '123',
-                      role: activeRole
+                      role: userRoleToSync
                     }, { onConflict: 'email' });
                   }
                 }
@@ -250,8 +250,8 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       return;
     }
 
-    // Direct active role so registered users get access immediately
-    const finalRole = registerRole; // 'colaborador' ou 'admin'
+    // Pending role by default until administrator approves access
+    const finalRole = getPendingRole(registerRole); // 'colaborador_pendente' ou 'admin_pendente'
     const localUsersStr = localStorage.getItem('g3d_local_users') || '[]';
     let localUsers: any[] = [];
     try {
@@ -304,7 +304,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     localStorage.setItem('g3d_local_users', JSON.stringify(updatedLocal));
 
     setLoading(false);
-    setSuccessMsg('Cadastro realizado com sucesso! Seu acesso já está ativado no Supabase.');
+    setSuccessMsg('Cadastro realizado com sucesso! Seu acesso está pendente de liberação pelo administrador.');
 
     // Reset fields
     setRegisterEmail('');
@@ -318,7 +318,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       setError(null);
       setSuccessMsg(null);
       setUserName(emailVal);
-    }, 2000);
+    }, 2500);
   };
 
   const handleMasterLogin = async (e: React.FormEvent) => {
@@ -389,16 +389,13 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
               (savedMasterPassword && inputPassword === savedMasterPassword);
 
             if (passwordMatches) {
-              let activeRole = dbUser.role ? String(dbUser.role).toLowerCase().trim() : 'colaborador';
-              // If role was saved as pending, auto-approve so user can access immediately
-              if (activeRole.includes('pendente') || activeRole === 'pendente') {
-                activeRole = activeRole.includes('admin') ? 'admin' : 'colaborador';
-                try {
-                  await supabase.from('g3d_user_roles').update({ role: activeRole }).eq('email', dbUser.email);
-                } catch (e) {
-                  console.warn('Auto-aprovação no Supabase:', e);
-                }
+              if (isPendingRole(dbUser.role)) {
+                setError('Acesso bloqueado. Seu cadastro está pendente de liberação pelo administrador.');
+                setLoading(false);
+                return;
               }
+
+              const activeRole = getApprovedRole(dbUser.role);
 
               // Keep local cache in sync
               const updatedLocalUsers = localUsers.filter(u => u.email?.toLowerCase() !== dbUser.email?.toLowerCase());
@@ -447,10 +444,13 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     if (matchedLocalUser) {
       const storedLocalPassword = String(matchedLocalUser.password ?? '').trim();
       if (storedLocalPassword === inputPassword) {
-        let activeRole = matchedLocalUser.role ? String(matchedLocalUser.role).toLowerCase().trim() : 'colaborador';
-        if (activeRole.includes('pendente')) {
-          activeRole = activeRole.includes('admin') ? 'admin' : 'colaborador';
+        if (isPendingRole(matchedLocalUser.role)) {
+          setError('Acesso bloqueado. Seu cadastro está pendente de liberação pelo administrador.');
+          setLoading(false);
+          return;
         }
+
+        const activeRole = getApprovedRole(matchedLocalUser.role);
 
         // Push to Supabase if connected
         if (supabase && hasSupabaseConfigured()) {

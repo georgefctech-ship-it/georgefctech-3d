@@ -115,12 +115,12 @@ export default function SettingsView({
         if (localUsers.length > 0) {
           for (const lu of localUsers) {
             if (lu.email) {
-              const activeRole = String(lu.role || 'colaborador').replace('_pendente', '');
+              const userRoleToSync = String(lu.role || 'colaborador_pendente');
               await supabase.from('g3d_user_roles').upsert({
                 email: String(lu.email).toLowerCase().trim(),
                 username: lu.username || lu.email.split('@')[0],
                 password: lu.password || '123',
-                role: activeRole
+                role: userRoleToSync
               }, { onConflict: 'email' });
             }
           }
