@@ -131,35 +131,24 @@ export function isAdministratorPurchase(item: ShoppingItem): boolean {
   const reqBy = (item.requestedBy || '').toLowerCase().trim();
   const dept = (item.department || '').toLowerCase().trim();
 
-  // 1. Check requestedBy, company, or department matching administrator values
+  // Explicit check for Administrator identifier fields
   if (
-    reqBy.includes('george') ||
-    reqBy.includes('admin') ||
-    reqBy === 'g3d' ||
+    reqBy === 'administrador' ||
+    reqBy === 'admin' ||
+    reqBy === 'administração' ||
     reqBy === 'georgefctech-3d' ||
     reqBy === 'georgefctech 3d' ||
     reqBy === 'georgefctec' ||
     reqBy === 'georgefctec@gmail.com' ||
-    company.includes('george') ||
-    company.includes('admin') ||
-    company.includes('3d') ||
+    reqBy === 'g3d' ||
+    reqBy.includes('georgefctec') ||
     company === 'georgefctech-3d' ||
     company === 'georgefctech 3d' ||
-    company === 'geral' ||
-    company === 'oficina' ||
-    dept.includes('admin') ||
-    dept.includes('george') ||
-    dept === 'oficina'
+    company === 'administração' ||
+    company === 'admin' ||
+    dept === 'diretoria' ||
+    dept === 'administração'
   ) {
-    return true;
-  }
-
-  // 2. Check if explicitly tagged as collaborator
-  const isFtexCompany = company.includes('ftéx') || company.includes('ftex') || company.includes('comercial') || company.includes('faturamento');
-  const isColabRequested = reqBy.includes('colaborador') || reqBy.includes('ftex') || reqBy.includes('ftéx') || (reqBy !== '' && !reqBy.includes('george') && !reqBy.includes('admin'));
-
-  // If not explicitly a collaborator purchase, treat as administrator purchase
-  if (!isFtexCompany && !isColabRequested) {
     return true;
   }
 
@@ -184,26 +173,23 @@ export function isOwnedByCurrentCollaborator(
   const uEmail = (email || '').toLowerCase().trim();
   const uEmailPrefix = uEmail ? uEmail.split('@')[0] : '';
 
-  // 2. Match requestedBy with user's name or email
+  // 2. Match requestedBy with user's name or email or generic collaborator fields
   if (
+    !reqBy ||
     (uName && (reqBy === uName || reqBy.includes(uName) || uName.includes(reqBy))) ||
     (uEmail && (reqBy === uEmail || reqBy.includes(uEmail))) ||
-    (uEmailPrefix && (reqBy === uEmailPrefix || reqBy.includes(uEmailPrefix)))
+    (uEmailPrefix && (reqBy === uEmailPrefix || reqBy.includes(uEmailPrefix))) ||
+    reqBy.includes('colaborador') ||
+    reqBy.includes('ftex') ||
+    reqBy.includes('ftéx') ||
+    company.includes('ftex') ||
+    company.includes('ftéx') ||
+    company.includes('comercial')
   ) {
     return true;
   }
 
-  // 3. Fallback for generic collaborator orders
-  if (reqBy.includes('colaborador') || reqBy.includes('ftex') || reqBy.includes('ftéx')) {
-    return true;
-  }
-
-  // 4. Fallback when requestedBy is empty but company is collaborator
-  if (!reqBy) {
-    return company.includes('ftex') || company.includes('ftéx') || company.includes('comercial');
-  }
-
-  return false;
+  return true;
 }
 
 interface ShoppingListViewProps {
@@ -236,14 +222,21 @@ export default function ShoppingListView({
 
   const shopping = useMemo(() => {
     if (userRole === 'colaborador') {
-      // Os colaboradores só têm acesso aos pedidos efetuados pelo seu próprio usuário.
-      // Oculta estritamente todos os pedidos efetuados pelo administrador.
-      return allShopping.filter(item =>
-        isOwnedByCurrentCollaborator(item, currentUsername, currentUserEmail)
-      );
+      // 1. Oculta estritamente todos os pedidos efetuados pelo administrador.
+      const colabPurchases = allShopping.filter(item => !isAdministratorPurchase(item));
+
+      // 2. Se a opção "Apenas Minhas Solicitações" estiver ativa, filtra por usuário
+      if (filterOnlyMine) {
+        return colabPurchases.filter(item =>
+          isOwnedByCurrentCollaborator(item, currentUsername, currentUserEmail)
+        );
+      }
+
+      // Exibe todas as compras feitas em modo colaborador
+      return colabPurchases;
     }
     return allShopping;
-  }, [allShopping, userRole, currentUserEmail, currentUsername]);
+  }, [allShopping, userRole, currentUserEmail, currentUsername, filterOnlyMine]);
 
   const [formOpen, setFormOpen] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);

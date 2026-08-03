@@ -374,7 +374,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
             sessionStorage.setItem('g3d_authenticated', 'true');
             sessionStorage.setItem('g3d_user_role', selectedRole);
             sessionStorage.setItem('g3d_username', dbUser?.username || inputEmailOrUser || (selectedRole === 'admin' ? 'Administrador' : 'Colaborador'));
-            sessionStorage.setItem('g3d_user_email', dbUser?.email || (inputEmailOrUser.includes('@') ? inputEmailOrUser : 'admin@master.com'));
+            sessionStorage.setItem('g3d_user_email', dbUser?.email || (inputEmailOrUser.includes('@') ? inputEmailOrUser : (selectedRole === 'admin' ? 'admin@master.com' : 'colaborador@ftex.com')));
             setLoading(false);
             onLoginSuccess();
             return;
@@ -431,7 +431,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       sessionStorage.setItem('g3d_authenticated', 'true');
       sessionStorage.setItem('g3d_user_role', selectedRole);
       sessionStorage.setItem('g3d_username', inputEmailOrUser || (selectedRole === 'admin' ? 'Administrador' : 'Colaborador'));
-      sessionStorage.setItem('g3d_user_email', inputEmailOrUser.includes('@') ? inputEmailOrUser : 'admin@master.com');
+      sessionStorage.setItem('g3d_user_email', inputEmailOrUser.includes('@') ? inputEmailOrUser : (selectedRole === 'admin' ? 'admin@master.com' : 'colaborador@ftex.com'));
       setLoading(false);
       onLoginSuccess();
       return;
