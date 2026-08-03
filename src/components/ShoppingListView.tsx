@@ -127,9 +127,9 @@ const getProductImage = (item: ShoppingItem): string => {
 
 export function isAdministratorPurchase(item: ShoppingItem): boolean {
   if (!item) return false;
-  const company = (item.company || '').toLowerCase().trim();
-  const reqBy = (item.requestedBy || '').toLowerCase().trim();
-  const dept = (item.department || '').toLowerCase().trim();
+  const company = String(item.company || '').toLowerCase().trim();
+  const reqBy = String(item.requestedBy || '').toLowerCase().trim();
+  const dept = String(item.department || '').toLowerCase().trim();
 
   // Explicit check for Administrator identifier fields
   if (
@@ -167,10 +167,10 @@ export function isOwnedByCurrentCollaborator(
     return false;
   }
 
-  const reqBy = (item.requestedBy || '').toLowerCase().trim();
-  const company = (item.company || '').toLowerCase().trim();
-  const uName = (username || '').toLowerCase().trim();
-  const uEmail = (email || '').toLowerCase().trim();
+  const reqBy = String(item.requestedBy || '').toLowerCase().trim();
+  const company = String(item.company || '').toLowerCase().trim();
+  const uName = String(username || '').toLowerCase().trim();
+  const uEmail = String(email || '').toLowerCase().trim();
   const uEmailPrefix = uEmail ? uEmail.split('@')[0] : '';
 
   // 2. Match requestedBy with user's name or email or generic collaborator fields
@@ -2782,13 +2782,13 @@ export default function ShoppingListView({
   const companiesList = useMemo(() => {
     const list = new Set<string>();
     shopping.forEach(item => {
-      if (item.company?.trim()) {
-        const companyName = item.company.trim();
-        if (userRole === 'colaborador' && (companyName.toLowerCase() === 'georgefctech-3d' || companyName.toLowerCase().includes('geral'))) {
+      const cStr = String(item.company || '').trim();
+      if (cStr) {
+        if (userRole === 'colaborador' && (cStr.toLowerCase() === 'georgefctech-3d' || cStr.toLowerCase().includes('geral'))) {
           // Skip admin-specific company name in collaborator view
           return;
         }
-        list.add(companyName);
+        list.add(cStr);
       }
     });
     return Array.from(list);
@@ -2796,20 +2796,28 @@ export default function ShoppingListView({
 
   // Filtering Logic
   const filteredShopping = shopping.filter(item => {
-    const matchesSearch = item.materialName.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          (item.notes && item.notes.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                          (item.barcode && item.barcode.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                          (item.requestedBy && item.requestedBy.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                          (item.department && item.department.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                          (item.company && item.company.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    const q = searchQuery.toLowerCase();
+    const nameStr = String(item.materialName || '').toLowerCase();
+    const notesStr = String(item.notes || '').toLowerCase();
+    const barcodeStr = String(item.barcode || '').toLowerCase();
+    const reqByStr = String(item.requestedBy || '').toLowerCase();
+    const deptStr = String(item.department || '').toLowerCase();
+    const compStr = String(item.company || '').toLowerCase();
+
+    const matchesSearch = nameStr.includes(q) || 
+                          notesStr.includes(q) ||
+                          barcodeStr.includes(q) ||
+                          reqByStr.includes(q) ||
+                          deptStr.includes(q) ||
+                          compStr.includes(q) ||
                           (searchQuery.replace(/\D/g, '').length > 0 && 
-                           item.notes && item.notes.replace(/\D/g, '').includes(searchQuery.replace(/\D/g, '')));
+                           notesStr.replace(/\D/g, '').includes(searchQuery.replace(/\D/g, '')));
     const matchesCategory = filterCategory === 'Todos' || item.category === filterCategory;
     const matchesStatus = filterStatus === 'Todos' || 
                           (filterStatus === 'Pendentes' && !item.checked) || 
                           (filterStatus === 'Comprados' && item.checked);
     const matchesCompany = filterCompany === 'Todos' ||
-                          (item.company && item.company.toLowerCase() === filterCompany.toLowerCase()) ||
+                          (compStr === filterCompany.toLowerCase()) ||
                           (!item.company && filterCompany.toLowerCase() === 'georgefctech-3d');
 
     return matchesSearch && matchesCategory && matchesStatus && matchesCompany;
@@ -4249,11 +4257,12 @@ export default function ShoppingListView({
               // Aplicar busca
               const completedItems = baseCompletedItems.filter(item => {
                 if (!completedSearchQuery) return true;
+                const q = completedSearchQuery.toLowerCase();
                 return (
-                  item.materialName.toLowerCase().includes(completedSearchQuery.toLowerCase()) ||
-                  (item.barcode && item.barcode.toLowerCase().includes(completedSearchQuery.toLowerCase())) ||
-                  (item.company && item.company.toLowerCase().includes(completedSearchQuery.toLowerCase())) ||
-                  (item.requestedBy && item.requestedBy.toLowerCase().includes(completedSearchQuery.toLowerCase()))
+                  String(item.materialName || '').toLowerCase().includes(q) ||
+                  String(item.barcode || '').toLowerCase().includes(q) ||
+                  String(item.company || '').toLowerCase().includes(q) ||
+                  String(item.requestedBy || '').toLowerCase().includes(q)
                 );
               });
 

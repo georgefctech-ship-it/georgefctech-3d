@@ -235,7 +235,7 @@ export default function RegistrationForm({
               <div className="flex flex-col gap-2">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
                   Tempo Slicer (h)
-                  <HelpCircle className="w-3.5 h-3.5 text-slate-400" title="Tempo total impresso fornecido pelo fatiador" />
+                  <span title="Tempo total impresso fornecido pelo fatiador"><HelpCircle className="w-3.5 h-3.5 text-slate-400" /></span>
                 </label>
                 <input
                   type="number"
@@ -249,7 +249,7 @@ export default function RegistrationForm({
               <div className="flex flex-col gap-2">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
                   Peso Final (g)
-                  <HelpCircle className="w-3.5 h-3.5 text-slate-400" title="Consumo estimado ou peso final pesado em balança" />
+                  <span title="Consumo estimado ou peso final pesado em balança"><HelpCircle className="w-3.5 h-3.5 text-slate-400" /></span>
                 </label>
                 <input
                   type="number"

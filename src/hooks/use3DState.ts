@@ -633,7 +633,7 @@ export function use3DState() {
     try {
       const updated = inventory.map(item => {
         if (item.id === id) {
-          const status = newQty === 0 ? 'Esgotado' : newQty <= 1 ? 'Poucas Unidades' : 'Em Estoque';
+          const status: 'Em Estoque' | 'Poucas Unidades' | 'Esgotado' = newQty === 0 ? 'Esgotado' : newQty <= 1 ? 'Poucas Unidades' : 'Em Estoque';
           return { ...item, qty: newQty, status };
         }
         return item;
