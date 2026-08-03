@@ -129,26 +129,45 @@ export function isAdministratorPurchase(item: ShoppingItem): boolean {
   if (!item) return false;
   const company = (item.company || '').toLowerCase().trim();
   const reqBy = (item.requestedBy || '').toLowerCase().trim();
+  const dept = (item.department || '').toLowerCase().trim();
 
-  // 1. Check company
+  // 1. Check company matching administrator/system values
   if (
+    company.includes('george') ||
+    company.includes('admin') ||
+    company.includes('3d') ||
     company === 'georgefctech-3d' ||
-    company.includes('georgefctech') ||
-    company === 'administração' ||
-    company === 'admin'
+    company === 'georgefctech 3d' ||
+    company === 'geral' ||
+    company === 'oficina'
   ) {
     return true;
   }
 
-  // 2. Check requestedBy
+  // 2. Check requestedBy matching administrator names, emails, or tags
   if (
-    reqBy === 'administrador' ||
-    reqBy === 'admin' ||
+    reqBy.includes('george') ||
     reqBy.includes('admin') ||
+    reqBy === 'g3d' ||
     reqBy === 'georgefctech-3d' ||
-    reqBy.includes('georgefctec') ||
+    reqBy === 'georgefctech 3d' ||
+    reqBy === 'georgefctec' ||
     reqBy === 'georgefctec@gmail.com'
   ) {
+    return true;
+  }
+
+  // 3. Check department matching administrator sectors
+  if (dept.includes('admin') || dept.includes('george') || dept === 'oficina') {
+    return true;
+  }
+
+  // 4. Check if explicitly tagged as collaborator
+  const isFtexCompany = company.includes('ftéx') || company.includes('ftex') || company.includes('comercial') || company.includes('faturamento');
+  const isColabRequested = reqBy.includes('colaborador') || reqBy.includes('ftex') || reqBy.includes('ftéx') || (reqBy !== '' && !reqBy.includes('george') && !reqBy.includes('admin'));
+
+  // If not explicitly a collaborator purchase, treat as administrator purchase
+  if (!isFtexCompany && !isColabRequested) {
     return true;
   }
 
@@ -929,11 +948,17 @@ export default function ShoppingListView({
   };
 
   const generateReportExcel = (customMetadata?: { company: string, requestedBy: string, department: string }) => {
-    if (shopping.length === 0) return;
+    const reportItems = userRole === 'colaborador' ? shopping.filter(item => !isAdministratorPurchase(item)) : shopping;
+    if (reportItems.length === 0) {
+      setToastMessage("Aviso: Nenhum item de compra encontrado para gerar a planilha.");
+      setTimeout(() => setToastMessage(null), 4000);
+      return;
+    }
 
-    const metaCompany = customMetadata ? customMetadata.company : (filterCompany !== 'Todos' ? filterCompany : (userRole === 'colaborador' ? (company || 'Empresa Solicitante') : 'GeorgeFctech-3D'));
-    const metaRequestedBy = customMetadata ? customMetadata.requestedBy : (requestedBy || 'Colaborador');
-    const metaDepartment = customMetadata ? customMetadata.department : (department || 'Geral');
+    const reportTotalValue = reportItems.reduce((acc, i) => acc + (i.qtyNeeded * i.estUnitCost), 0);
+    const metaCompany = customMetadata ? customMetadata.company : (filterCompany !== 'Todos' ? filterCompany : (userRole === 'colaborador' ? (company || 'Ftéx') : 'GeorgeFctech-3D'));
+    const metaRequestedBy = customMetadata ? customMetadata.requestedBy : (requestedBy || (userRole === 'colaborador' ? 'Colaborador Ftéx' : 'Administrador'));
+    const metaDepartment = customMetadata ? customMetadata.department : (department || (userRole === 'colaborador' ? 'Faturamento/Comercial' : 'Geral'));
     const dateFormatted = new Date().toLocaleDateString('pt-BR');
     const timeFormatted = new Date().toLocaleTimeString('pt-BR');
 
@@ -943,7 +968,7 @@ export default function ShoppingListView({
       [`Sistema Gestor de Insumos - GeorgeFctech 3D`],
       [],
       [`Data de Emissão:`, `${dateFormatted} às ${timeFormatted}`, ``, `Responsável:`, metaRequestedBy, ``, `Setor:`, metaDepartment],
-      [`Empresa / Cliente:`, metaCompany, ``, `Status Geral:`, `Pendente/Ativo`, ``, `Custo Estimado Total:`, totalValue],
+      [`Empresa / Cliente:`, metaCompany, ``, `Status Geral:`, `Pendente/Ativo`, ``, `Custo Estimado Total:`, reportTotalValue],
       [], // Empty row spacer
       [
         'Material / Produto',
@@ -959,7 +984,7 @@ export default function ShoppingListView({
     ];
 
     // Add item rows
-    shopping.forEach(item => {
+    reportItems.forEach(item => {
       const itemTotal = item.qtyNeeded * item.estUnitCost;
       const statusText = item.checked ? 'Adquirido' : 'Pendente';
       
@@ -984,7 +1009,7 @@ export default function ShoppingListView({
       '',
       '',
       '',
-      totalValue,
+      reportTotalValue,
       '',
       '',
       ''
@@ -1694,10 +1719,12 @@ export default function ShoppingListView({
   };
 
   const handleSendEmail = () => {
-    if (shopping.length === 0) return;
+    const emailItems = userRole === 'colaborador' ? shopping.filter(item => !isAdministratorPurchase(item)) : shopping;
+    if (emailItems.length === 0) return;
 
-    const defaultCompanyLabel = userRole === 'colaborador' ? (company || 'Empresa Solicitante') : 'GeorgeFctech-3D';
-    const selectedCompany = filterCompany !== 'Todos' ? filterCompany : (userRole === 'colaborador' ? (company || 'Empresa Solicitante') : `GERAL / ${defaultCompanyLabel}`);
+    const emailTotalValue = emailItems.reduce((acc, i) => acc + (i.qtyNeeded * i.estUnitCost), 0);
+    const defaultCompanyLabel = userRole === 'colaborador' ? (company || 'Ftéx') : 'GeorgeFctech-3D';
+    const selectedCompany = filterCompany !== 'Todos' ? filterCompany : (userRole === 'colaborador' ? (company || 'Ftéx') : `GERAL / ${defaultCompanyLabel}`);
     const reportTitle = userRole === 'colaborador' ? 'PEDIDO COMERCIAL DE COMPRAS' : `${selectedCompany.toUpperCase()} - PEDIDO COMERCIAL`;
     const dateFormatted = new Date().toLocaleDateString('pt-BR');
     const timeFormatted = new Date().toLocaleTimeString('pt-BR');
@@ -1705,13 +1732,13 @@ export default function ShoppingListView({
     let text = `📦 ${reportTitle.toUpperCase()}\n`;
     text += `--------------------------------------------------\n`;
     text += `📅 Data: ${dateFormatted} às ${timeFormatted}\n`;
-    text += `👤 Solicitante: ${requestedBy || 'Colaborador'}\n`;
+    text += `👤 Solicitante: ${requestedBy || (userRole === 'colaborador' ? 'Colaborador Ftéx' : 'Administrador')}\n`;
     text += `🏢 Empresa: ${selectedCompany}\n`;
-    text += `📍 Setor: ${department || 'Geral'}\n`;
+    text += `📍 Setor: ${department || (userRole === 'colaborador' ? 'Faturamento/Comercial' : 'Geral')}\n`;
     text += `--------------------------------------------------\n\n`;
     text += `🛒 ITENS DO PEDIDO:\n\n`;
 
-    shopping.forEach((item, index) => {
+    emailItems.forEach((item, index) => {
       const itemTotal = item.qtyNeeded * item.estUnitCost;
       text += `${index + 1}. ${item.materialName}\n`;
       if (item.barcode) text += `   • Código/Modelo: ${item.barcode}\n`;
@@ -1728,8 +1755,8 @@ export default function ShoppingListView({
     });
 
     text += `--------------------------------------------------\n`;
-    text += `💰 VALOR TOTAL ESTIMADO: R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n`;
-    text += `📊 Status: ${shopping.filter(i => !i.checked).length} Pendente(s) | ${shopping.filter(i => i.checked).length} Adquirido(s)\n`;
+    text += `💰 VALOR TOTAL ESTIMADO: R$ ${emailTotalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n`;
+    text += `📊 Status: ${emailItems.filter(i => !i.checked).length} Pendente(s) | ${emailItems.filter(i => i.checked).length} Adquirido(s)\n`;
     text += `--------------------------------------------------\n\n`;
     text += `Enviado do Gestor de Insumos - GeorgeFctech 3D`;
 
@@ -1752,6 +1779,9 @@ export default function ShoppingListView({
 
   const downloadCompletedPurchasesHtmlReport = () => {
     let completedPurchases = shopping.filter(item => item.checked);
+    if (userRole === 'colaborador') {
+      completedPurchases = completedPurchases.filter(item => !isAdministratorPurchase(item));
+    }
 
     // Filtrar pelo período selecionado no histórico
     if (completedPeriodFilter === 'hoje') {
@@ -2406,6 +2436,9 @@ export default function ShoppingListView({
   // Export Completed purchases as Excel spreadsheet (XLSX)
   const generateCompletedPurchasesExcelReport = (customMetadata?: { company: string, requestedBy: string, department: string }) => {
     let completedPurchases = shopping.filter(item => item.checked);
+    if (userRole === 'colaborador') {
+      completedPurchases = completedPurchases.filter(item => !isAdministratorPurchase(item));
+    }
 
     // Filtrar pelo período selecionado no histórico
     if (completedPeriodFilter === 'hoje') {
@@ -2422,9 +2455,9 @@ export default function ShoppingListView({
       return;
     }
 
-    const metaCompany = customMetadata ? customMetadata.company : (company || 'Ftéx');
-    const metaRequestedBy = customMetadata ? customMetadata.requestedBy : (requestedBy || 'ftex');
-    const metaDepartment = customMetadata ? customMetadata.department : (department || 'Oficina');
+    const metaCompany = customMetadata ? customMetadata.company : (userRole === 'colaborador' ? (company || 'Ftéx') : 'GeorgeFctech-3D');
+    const metaRequestedBy = customMetadata ? customMetadata.requestedBy : (requestedBy || (userRole === 'colaborador' ? 'Colaborador Ftéx' : 'Administrador'));
+    const metaDepartment = customMetadata ? customMetadata.department : (department || (userRole === 'colaborador' ? 'Faturamento/Comercial' : 'Oficina'));
     const dateFormatted = new Date().toLocaleDateString('pt-BR');
     const timeFormatted = new Date().toLocaleTimeString('pt-BR');
     const totalSpent = completedPurchases.reduce((acc, i) => acc + (i.qtyNeeded * i.estUnitCost), 0);
