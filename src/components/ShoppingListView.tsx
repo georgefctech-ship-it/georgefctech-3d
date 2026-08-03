@@ -3133,8 +3133,8 @@ export default function ShoppingListView({
                   onChange={(e) => setCategory(e.target.value as any)}
                   className="w-full text-sm px-4 py-2 border border-slate-200 rounded-lg bg-white text-slate-800 focus:outline-none focus:border-indigo-500 shadow-xs"
                 >
-                  {userRole !== 'colaborador' && <option value="Filamento">Filamento de Impressão</option>}
-                  {userRole !== 'colaborador' && <option value="Peças de Reposição">Peças de Reposição (Bicos, Correias)</option>}
+                  <option value="Filamento">Filamento de Impressão</option>
+                  <option value="Peças de Reposição">Peças de Reposição (Bicos, Correias)</option>
                   <option value="Acessórios/Insumos">Acessórios / Outros Insumos</option>
                   <option value="Outros">Outras Despesas</option>
                 </select>
@@ -3696,7 +3696,7 @@ export default function ShoppingListView({
                           ) : (
                             <div className="flex items-center justify-center gap-2">
                               {/* Import to Stock (Any category & Checked) */}
-                              {item.checked && userRole !== 'colaborador' && (
+                              {item.checked && (
                                 <button
                                   onClick={() => handleImportToStock(item)}
                                   title="Dar baixa no estoque ativo de suprimentos"
@@ -3718,25 +3718,21 @@ export default function ShoppingListView({
                                 </button>
                               )}
 
-                              {(!item.checked || userRole !== 'colaborador') && (
-                                <>
-                                  <button
-                                    onClick={() => handleStartEdit(item)}
-                                    title="Editar entrada técnico comercial"
-                                    className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition cursor-pointer"
-                                  >
-                                    <Edit2 className="w-4 h-4" />
-                                  </button>
-                                  
-                                  <button
-                                    onClick={() => handleDeleteShoppingItem(item.id)}
-                                    title="Remover do cronograma"
-                                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </>
-                              )}
+                              <button
+                                onClick={() => handleStartEdit(item)}
+                                title="Editar entrada técnico comercial"
+                                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              
+                              <button
+                                onClick={() => handleDeleteShoppingItem(item.id)}
+                                title="Remover do cronograma"
+                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
                             </div>
                           )}
                         </td>
@@ -3928,7 +3924,7 @@ export default function ShoppingListView({
                       </div>
 
                       <div className="flex items-center gap-1 no-print">
-                        {item.checked && userRole !== 'colaborador' && (
+                        {item.checked && (
                           <button
                             onClick={() => handleImportToStock(item)}
                             className="p-1 px-2 rounded-md bg-indigo-50 border border-indigo-100 text-indigo-700 flex items-center gap-1 text-[10px] font-bold uppercase cursor-pointer"
@@ -3944,22 +3940,18 @@ export default function ShoppingListView({
                             Validar
                           </button>
                         )}
-                        {(!item.checked || userRole !== 'colaborador') && (
-                          <>
-                            <button
-                              onClick={() => handleStartEdit(item)}
-                              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded transition cursor-pointer"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteShoppingItem(item.id)}
-                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </>
-                        )}
+                        <button
+                          onClick={() => handleStartEdit(item)}
+                          className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded transition cursor-pointer"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteShoppingItem(item.id)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
                   )}
@@ -4048,11 +4040,35 @@ export default function ShoppingListView({
                 </p>
               </div>
               
-              <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-xl p-3 text-right">
-                <span className="block text-[10px] font-bold uppercase text-amber-600 font-mono">Pedidos Pendentes</span>
-                <span className="text-xl font-bold font-mono text-amber-700 dark:text-amber-400">
-                  {shopping.filter(i => !i.checked).length} itens
-                </span>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={downloadHtmlReport}
+                    disabled={shopping.length === 0}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 font-bold text-[10px] uppercase tracking-wider hover:bg-blue-100 transition duration-150 cursor-pointer disabled:opacity-50"
+                    title="Gerar Relatório HTML dos Pedidos"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>Relatório Pedidos (HTML)</span>
+                  </button>
+
+                  <button
+                    onClick={() => triggerExcelReportModal('pending')}
+                    disabled={shopping.length === 0}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 font-bold text-[10px] uppercase tracking-wider hover:bg-emerald-100 transition duration-150 cursor-pointer disabled:opacity-50"
+                    title="Exportar Pedidos para Planilha Excel (.xlsx)"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Planilha Excel (.XLSX)</span>
+                  </button>
+                </div>
+
+                <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-xl p-3 text-right">
+                  <span className="block text-[10px] font-bold uppercase text-amber-600 font-mono">Pedidos Pendentes</span>
+                  <span className="text-xl font-bold font-mono text-amber-700 dark:text-amber-400">
+                    {shopping.filter(i => !i.checked).length} itens
+                  </span>
+                </div>
               </div>
             </div>
 
