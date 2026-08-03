@@ -114,7 +114,10 @@ const DEFAULT_SHOPPING: ShoppingItem[] = [
     purchaseLink: 'https://www.mercadolivre.com.br/filamento-creality-petg-1-kg-175-mm-para-impresso-3d-em-cor-preta/p/MLB51382966?product_trigger_id=MLB50257710&picker=true&quantity=1',
     category: 'Filamento',
     notes: 'Insumo de reposição rápida para prototipagem de adaptadores mecânicos',
-    checked: false
+    checked: false,
+    requestedBy: 'Administrador',
+    company: 'GeorgeFctech-3D',
+    department: 'Oficina'
   },
   {
     id: 'SHOP-002',
@@ -124,7 +127,10 @@ const DEFAULT_SHOPPING: ShoppingItem[] = [
     purchaseLink: 'https://www.mercadolivre.com.br/',
     category: 'Peças de Reposição',
     notes: 'Manutenção preventiva nas cabeças de extrusão Creality',
-    checked: false
+    checked: false,
+    requestedBy: 'Administrador',
+    company: 'GeorgeFctech-3D',
+    department: 'Oficina'
   },
   {
     id: 'SHOP-003',
@@ -134,7 +140,10 @@ const DEFAULT_SHOPPING: ShoppingItem[] = [
     purchaseLink: 'https://www.mercadolivre.com.br/',
     category: 'Acessórios/Insumos',
     notes: 'Limpeza e desengorduramento técnico das mesas de PEI texturizadas',
-    checked: true
+    checked: true,
+    requestedBy: 'Administrador',
+    company: 'GeorgeFctech-3D',
+    department: 'Oficina'
   }
 ];
 
@@ -218,9 +227,9 @@ export function use3DState() {
     category: db.category || 'Outros',
     notes: db.notes || undefined,
     checked: !!db.checked,
-    requestedBy: db.requested_by || 'Colaborador',
-    department: db.department || 'Faturamento/Comercial',
-    company: db.company || 'Ftéx',
+    requestedBy: db.requested_by || undefined,
+    department: db.department || undefined,
+    company: db.company || undefined,
     barcode: db.barcode || undefined
   });
 

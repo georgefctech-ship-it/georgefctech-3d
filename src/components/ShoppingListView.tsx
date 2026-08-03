@@ -125,6 +125,36 @@ const getProductImage = (item: ShoppingItem): string => {
   return 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=200&auto=format&fit=crop&q=80';
 };
 
+export function isAdministratorPurchase(item: ShoppingItem): boolean {
+  if (!item) return false;
+  const company = (item.company || '').toLowerCase().trim();
+  const reqBy = (item.requestedBy || '').toLowerCase().trim();
+
+  // 1. Check company
+  if (
+    company === 'georgefctech-3d' ||
+    company.includes('georgefctech') ||
+    company === 'administração' ||
+    company === 'admin'
+  ) {
+    return true;
+  }
+
+  // 2. Check requestedBy
+  if (
+    reqBy === 'administrador' ||
+    reqBy === 'admin' ||
+    reqBy.includes('admin') ||
+    reqBy === 'georgefctech-3d' ||
+    reqBy.includes('georgefctec') ||
+    reqBy === 'georgefctec@gmail.com'
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 interface ShoppingListViewProps {
   shopping: ShoppingItem[];
   inventory: InventoryItem[];
@@ -155,23 +185,9 @@ export default function ShoppingListView({
 
   const shopping = useMemo(() => {
     if (userRole === 'colaborador') {
-      // Filtrar para mostrar todas as compras do setor colaborador/comercial.
-      // Exclui estritamente apenas pedidos do setor administrativo (GeorgeFctech-3D / Administrador).
-      const collaboratorPurchases = allShopping.filter(item => {
-        const itemCompany = (item.company || '').toLowerCase().trim();
-        const reqBy = (item.requestedBy || '').toLowerCase().trim();
-
-        // Bloqueio explícito de dados/compras exclusivas do administrador
-        if (itemCompany === 'georgefctech-3d') {
-          return false;
-        }
-        if (reqBy === 'administrador' || reqBy === 'admin' || reqBy === 'georgefctech-3d') {
-          return false;
-        }
-
-        // Mantém permanente qualquer compra de colaborador (Ftéx / Comercial / Sem empresa definida)
-        return true;
-      });
+      // Filtrar para mostrar apenas as compras efetuadas por colaboradores.
+      // Oculta estritamente todas as compras efetuadas pelo administrador.
+      const collaboratorPurchases = allShopping.filter(item => !isAdministratorPurchase(item));
 
       if (filterOnlyMine) {
         return collaboratorPurchases.filter(item => {
@@ -612,13 +628,21 @@ export default function ShoppingListView({
 
   const handleAddFromLowStock = (item: InventoryItem) => {
     const defaultLink = item.purchaseLink || 'https://www.mercadolivre.com.br/';
+    const isColab = userRole === 'colaborador';
+    const sessionUsername = sessionStorage.getItem('g3d_username') || '';
+    const sessionEmail = sessionStorage.getItem('g3d_user_email') || '';
+    const colabUser = requestedBy || sessionUsername || sessionEmail || 'Colaborador Ftéx';
+
     onAddShoppingItem({
       materialName: `Filamento ${item.material} (Reposição)`,
       qtyNeeded: 2, 
       estUnitCost: item.unitCost || 130.00,
       purchaseLink: defaultLink,
       category: 'Filamento',
-      notes: `Reabastecimento sugerido. Estoque crítico atual: ${item.qty} rolos.`
+      notes: `Reabastecimento sugerido. Estoque crítico atual: ${item.qty} rolos.`,
+      company: isColab ? 'Ftéx' : 'GeorgeFctech-3D',
+      requestedBy: isColab ? colabUser : 'Administrador',
+      department: isColab ? 'Faturamento/Comercial' : 'Geral'
     });
   };
 
