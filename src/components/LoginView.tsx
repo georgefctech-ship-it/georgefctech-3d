@@ -221,7 +221,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       }
     }
 
-    const finalUsername = userName.trim() || (selectedRole === 'admin' ? 'Administrador' : 'Colaborador');
+    const finalUsername = userName.trim() || (selectedRole === 'admin' ? 'georgefctech' : 'Colaborador');
     sessionStorage.setItem('g3d_authenticated', 'true');
     sessionStorage.setItem('g3d_user_role', selectedRole);
     sessionStorage.setItem('g3d_username', finalUsername);
@@ -445,7 +445,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
 
             sessionStorage.setItem('g3d_authenticated', 'true');
             sessionStorage.setItem('g3d_user_role', grantedRole);
-            sessionStorage.setItem('g3d_username', dbUser?.username || inputEmailOrUser || (grantedRole === 'admin' ? 'Administrador' : 'Colaborador'));
+            sessionStorage.setItem('g3d_username', dbUser?.username || inputEmailOrUser || (grantedRole === 'admin' ? 'georgefctech' : 'Colaborador'));
             sessionStorage.setItem('g3d_user_email', dbUser?.email || (inputEmailOrUser.includes('@') ? inputEmailOrUser : (grantedRole === 'admin' ? 'georgefctec@gmail.com' : 'colaborador@ftex.com')));
             
             setLoading(false);
@@ -465,7 +465,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       localStorage.setItem('g3d_master_password', inputPassword);
       sessionStorage.setItem('g3d_authenticated', 'true');
       sessionStorage.setItem('g3d_user_role', grantedRole);
-      sessionStorage.setItem('g3d_username', inputEmailOrUser || (grantedRole === 'admin' ? 'Administrador' : 'Colaborador'));
+      sessionStorage.setItem('g3d_username', inputEmailOrUser || (grantedRole === 'admin' ? 'georgefctech' : 'Colaborador'));
       sessionStorage.setItem('g3d_user_email', inputEmailOrUser.includes('@') ? inputEmailOrUser : (grantedRole === 'admin' ? 'georgefctec@gmail.com' : 'colaborador@ftex.com'));
       setLoading(false);
       onLoginSuccess();
