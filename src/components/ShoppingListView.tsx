@@ -131,20 +131,7 @@ export function isAdministratorPurchase(item: ShoppingItem): boolean {
   const reqBy = (item.requestedBy || '').toLowerCase().trim();
   const dept = (item.department || '').toLowerCase().trim();
 
-  // 1. Check company matching administrator/system values
-  if (
-    company.includes('george') ||
-    company.includes('admin') ||
-    company.includes('3d') ||
-    company === 'georgefctech-3d' ||
-    company === 'georgefctech 3d' ||
-    company === 'geral' ||
-    company === 'oficina'
-  ) {
-    return true;
-  }
-
-  // 2. Check requestedBy matching administrator names, emails, or tags
+  // 1. Check requestedBy, company, or department matching administrator values
   if (
     reqBy.includes('george') ||
     reqBy.includes('admin') ||
@@ -152,23 +139,68 @@ export function isAdministratorPurchase(item: ShoppingItem): boolean {
     reqBy === 'georgefctech-3d' ||
     reqBy === 'georgefctech 3d' ||
     reqBy === 'georgefctec' ||
-    reqBy === 'georgefctec@gmail.com'
+    reqBy === 'georgefctec@gmail.com' ||
+    company.includes('george') ||
+    company.includes('admin') ||
+    company.includes('3d') ||
+    company === 'georgefctech-3d' ||
+    company === 'georgefctech 3d' ||
+    company === 'geral' ||
+    company === 'oficina' ||
+    dept.includes('admin') ||
+    dept.includes('george') ||
+    dept === 'oficina'
   ) {
     return true;
   }
 
-  // 3. Check department matching administrator sectors
-  if (dept.includes('admin') || dept.includes('george') || dept === 'oficina') {
-    return true;
-  }
-
-  // 4. Check if explicitly tagged as collaborator
+  // 2. Check if explicitly tagged as collaborator
   const isFtexCompany = company.includes('ftéx') || company.includes('ftex') || company.includes('comercial') || company.includes('faturamento');
   const isColabRequested = reqBy.includes('colaborador') || reqBy.includes('ftex') || reqBy.includes('ftéx') || (reqBy !== '' && !reqBy.includes('george') && !reqBy.includes('admin'));
 
   // If not explicitly a collaborator purchase, treat as administrator purchase
   if (!isFtexCompany && !isColabRequested) {
     return true;
+  }
+
+  return false;
+}
+
+export function isOwnedByCurrentCollaborator(
+  item: ShoppingItem,
+  username: string,
+  email: string
+): boolean {
+  if (!item) return false;
+
+  // 1. Admin purchases are strictly forbidden for collaborators
+  if (isAdministratorPurchase(item)) {
+    return false;
+  }
+
+  const reqBy = (item.requestedBy || '').toLowerCase().trim();
+  const company = (item.company || '').toLowerCase().trim();
+  const uName = (username || '').toLowerCase().trim();
+  const uEmail = (email || '').toLowerCase().trim();
+  const uEmailPrefix = uEmail ? uEmail.split('@')[0] : '';
+
+  // 2. Match requestedBy with user's name or email
+  if (
+    (uName && (reqBy === uName || reqBy.includes(uName) || uName.includes(reqBy))) ||
+    (uEmail && (reqBy === uEmail || reqBy.includes(uEmail))) ||
+    (uEmailPrefix && (reqBy === uEmailPrefix || reqBy.includes(uEmailPrefix)))
+  ) {
+    return true;
+  }
+
+  // 3. Fallback for generic collaborator orders
+  if (reqBy.includes('colaborador') || reqBy.includes('ftex') || reqBy.includes('ftéx')) {
+    return true;
+  }
+
+  // 4. Fallback when requestedBy is empty but company is collaborator
+  if (!reqBy) {
+    return company.includes('ftex') || company.includes('ftéx') || company.includes('comercial');
   }
 
   return false;
@@ -204,31 +236,14 @@ export default function ShoppingListView({
 
   const shopping = useMemo(() => {
     if (userRole === 'colaborador') {
-      // Filtrar para mostrar apenas as compras efetuadas por colaboradores.
-      // Oculta estritamente todas as compras efetuadas pelo administrador.
-      const collaboratorPurchases = allShopping.filter(item => !isAdministratorPurchase(item));
-
-      if (filterOnlyMine) {
-        return collaboratorPurchases.filter(item => {
-          const reqBy = (item.requestedBy || '').toLowerCase().trim();
-          const myEmail = currentUserEmail.toLowerCase().trim();
-          const myName = currentUsername.toLowerCase().trim();
-          
-          if (!reqBy) return true;
-          
-          return (
-            reqBy === myEmail ||
-            reqBy === myName ||
-            (myEmail && reqBy.includes(myEmail)) ||
-            (myName && reqBy.includes(myName)) ||
-            (myEmail && myEmail.split('@')[0] === reqBy)
-          );
-        });
-      }
-      return collaboratorPurchases;
+      // Os colaboradores só têm acesso aos pedidos efetuados pelo seu próprio usuário.
+      // Oculta estritamente todos os pedidos efetuados pelo administrador.
+      return allShopping.filter(item =>
+        isOwnedByCurrentCollaborator(item, currentUsername, currentUserEmail)
+      );
     }
     return allShopping;
-  }, [allShopping, userRole, currentUserEmail, currentUsername, filterOnlyMine]);
+  }, [allShopping, userRole, currentUserEmail, currentUsername]);
 
   const [formOpen, setFormOpen] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
