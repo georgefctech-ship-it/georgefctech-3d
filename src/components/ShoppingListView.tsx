@@ -155,13 +155,13 @@ export default function ShoppingListView({
 
   const shopping = useMemo(() => {
     if (userRole === 'colaborador') {
-      // Filtrar para mostrar apenas as compras vinculadas ao colaborador logado ou ao setor de colaboradores (Ftéx/Ftex)
-      // Exclui completamente qualquer compra do setor administrativo (ex: GeorgeFctech-3D ou de administradores)
+      // Filtrar para mostrar todas as compras do setor colaborador/comercial.
+      // Exclui estritamente apenas pedidos do setor administrativo (GeorgeFctech-3D / Administrador).
       const collaboratorPurchases = allShopping.filter(item => {
         const itemCompany = (item.company || '').toLowerCase().trim();
         const reqBy = (item.requestedBy || '').toLowerCase().trim();
 
-        // Bloqueio explícito de dados/compras do administrador
+        // Bloqueio explícito de dados/compras exclusivas do administrador
         if (itemCompany === 'georgefctech-3d') {
           return false;
         }
@@ -169,22 +169,8 @@ export default function ShoppingListView({
           return false;
         }
 
-        const myEmail = currentUserEmail.toLowerCase().trim();
-        const myName = currentUsername.toLowerCase().trim();
-
-        // Se foi efetuada pelo próprio usuário cadastrado
-        const isMyPurchase = reqBy && (
-          reqBy === myEmail ||
-          reqBy === myName ||
-          (myEmail && reqBy.includes(myEmail)) ||
-          (myName && reqBy.includes(myName)) ||
-          (myEmail && myEmail.split('@')[0] === reqBy)
-        );
-
-        // Ou se pertence ao setor de colaboradores (Ftéx / Ftex)
-        const isFtexSector = itemCompany === 'ftéx' || itemCompany === 'ftex';
-
-        return isMyPurchase || isFtexSector;
+        // Mantém permanente qualquer compra de colaborador (Ftéx / Comercial / Sem empresa definida)
+        return true;
       });
 
       if (filterOnlyMine) {
@@ -193,7 +179,7 @@ export default function ShoppingListView({
           const myEmail = currentUserEmail.toLowerCase().trim();
           const myName = currentUsername.toLowerCase().trim();
           
-          if (!reqBy) return false;
+          if (!reqBy) return true;
           
           return (
             reqBy === myEmail ||
@@ -529,6 +515,14 @@ export default function ShoppingListView({
     e.preventDefault();
     if (!materialName.trim()) return;
 
+    const sessionUsername = sessionStorage.getItem('g3d_username') || '';
+    const sessionEmail = sessionStorage.getItem('g3d_user_email') || '';
+    const fallbackUser = sessionUsername || sessionEmail || (userRole === 'colaborador' ? 'Colaborador Ftéx' : 'Administrador');
+
+    const submittedRequestedBy = requestedBy.trim() || fallbackUser;
+    const submittedDept = department.trim() || (userRole === 'colaborador' ? 'Faturamento/Comercial' : 'Geral');
+    const submittedComp = company.trim() || (userRole === 'colaborador' ? 'Ftéx' : 'GeorgeFctech-3D');
+
     onAddShoppingItem({
       materialName: materialName.trim(),
       qtyNeeded,
@@ -536,9 +530,9 @@ export default function ShoppingListView({
       purchaseLink: purchaseLink.trim(),
       category,
       notes: notes.trim(),
-      requestedBy: requestedBy.trim() || undefined,
-      department: department.trim() || undefined,
-      company: company.trim() || undefined,
+      requestedBy: submittedRequestedBy,
+      department: submittedDept,
+      company: submittedComp,
       barcode: barcode.trim() || undefined
     });
 
@@ -549,18 +543,17 @@ export default function ShoppingListView({
     setPurchaseLink('');
     setCategory(userRole === 'colaborador' ? 'Acessórios/Insumos' : 'Filamento');
     setNotes('');
-    const username = sessionStorage.getItem('g3d_username') || '';
-    const email = sessionStorage.getItem('g3d_user_email') || '';
-    let defaultUser = username;
-    if (username.toLowerCase() === 'ftex' || username.toLowerCase() === 'ftéx') {
-      if (email && !email.toLowerCase().includes('ftex') && !email.toLowerCase().includes('ftéx')) {
-        const prefix = email.split('@')[0];
-        defaultUser = prefix.charAt(0).toUpperCase() + prefix.slice(1);
+    
+    let resetUser = sessionUsername;
+    if (sessionUsername.toLowerCase() === 'ftex' || sessionUsername.toLowerCase() === 'ftéx') {
+      if (sessionEmail && !sessionEmail.toLowerCase().includes('ftex') && !sessionEmail.toLowerCase().includes('ftéx')) {
+        const prefix = sessionEmail.split('@')[0];
+        resetUser = prefix.charAt(0).toUpperCase() + prefix.slice(1);
       } else {
-        defaultUser = '';
+        resetUser = '';
       }
     }
-    setRequestedBy(defaultUser);
+    setRequestedBy(resetUser);
     setDepartment('');
     setCompany(userRole === 'colaborador' ? 'Ftéx' : '');
     setBarcode('');
@@ -1016,10 +1009,11 @@ export default function ShoppingListView({
       { s: { r: 8 + shopping.length, c: 0 }, e: { r: 8 + shopping.length, c: 4 } } // Merge "VALOR TOTAL ESTIMADO DO PEDIDO" cell
     ];
 
-    // Format numbers, currency and add clickable hyperlinks
+    // Format numbers, currency and add clickable hyperlinks with dynamic Excel formulas
     const startRow = 7; // Header row is at index 6, data starts at index 7
     shopping.forEach((item, index) => {
       const rIdx = startRow + index;
+      const excelRow = rIdx + 1; // 1-based Excel row number (e.g. 8, 9, 10...)
 
       // Format unit cost as currency (BRL format)
       const unitCostCellRef = XLSX.utils.encode_cell({ r: rIdx, c: 4 });
@@ -1028,12 +1022,14 @@ export default function ShoppingListView({
         ws[unitCostCellRef].z = '"R$"#,##0.00';
       }
 
-      // Format total cost as currency
+      // Format total cost cell as dynamic formula: Quantidade (D) * Custo Unitário (E)
       const totalCostCellRef = XLSX.utils.encode_cell({ r: rIdx, c: 5 });
-      if (ws[totalCostCellRef]) {
-        ws[totalCostCellRef].t = 'n';
-        ws[totalCostCellRef].z = '"R$"#,##0.00';
-      }
+      ws[totalCostCellRef] = {
+        t: 'n',
+        f: `D${excelRow}*E${excelRow}`,
+        v: item.qtyNeeded * item.estUnitCost,
+        z: '"R$"#,##0.00'
+      };
 
       // Format qty as integer
       const qtyCellRef = XLSX.utils.encode_cell({ r: rIdx, c: 3 });
@@ -1055,13 +1051,28 @@ export default function ShoppingListView({
       }
     });
 
-    // Format grand total cell currency
+    const startDataRowExcel = startRow + 1; // Row 8
+    const endDataRowExcel = startRow + shopping.length; // Row (7 + shopping.length)
+
+    // Format grand total cell currency & dynamic SUM formula
     const grandTotalRowIdx = 8 + shopping.length;
+    const grandTotalRowExcel = grandTotalRowIdx + 1;
     const grandTotalCellRef = XLSX.utils.encode_cell({ r: grandTotalRowIdx, c: 5 });
-    if (ws[grandTotalCellRef]) {
-      ws[grandTotalCellRef].t = 'n';
-      ws[grandTotalCellRef].z = '"R$"#,##0.00';
-    }
+    ws[grandTotalCellRef] = {
+      t: 'n',
+      f: `SUM(F${startDataRowExcel}:F${endDataRowExcel})`,
+      v: totalValue,
+      z: '"R$"#,##0.00'
+    };
+
+    // Format header metadata total formula (Cell H5)
+    const metaTotalCellRef = XLSX.utils.encode_cell({ r: 4, c: 7 });
+    ws[metaTotalCellRef] = {
+      t: 'n',
+      f: `F${grandTotalRowExcel}`,
+      v: totalValue,
+      z: '"R$"#,##0.00'
+    };
 
     // Iterate over all keys in the sheet and apply professional design
     Object.keys(ws).forEach((cellKey) => {
@@ -2498,10 +2509,11 @@ export default function ShoppingListView({
       { s: { r: 8 + completedPurchases.length, c: 0 }, e: { r: 8 + completedPurchases.length, c: 4 } } // Merge "VALOR TOTAL DE COMPRAS..." label cell
     ];
 
-    // Format numbers, currency
+    // Format numbers, currency and dynamic Excel formulas
     const startRow = 7; // Header row is at index 6, data starts at index 7
     completedPurchases.forEach((item, index) => {
       const rIdx = startRow + index;
+      const excelRow = rIdx + 1; // 1-based Excel row number (e.g. 8, 9, 10...)
 
       // Format unit cost as currency (BRL format)
       const unitCostCellRef = XLSX.utils.encode_cell({ r: rIdx, c: 4 });
@@ -2510,12 +2522,14 @@ export default function ShoppingListView({
         ws[unitCostCellRef].z = '"R$"#,##0.00';
       }
 
-      // Format total cost as currency
+      // Format total cost cell as dynamic formula: Quantidade (D) * Custo Unitário (E)
       const totalCostCellRef = XLSX.utils.encode_cell({ r: rIdx, c: 5 });
-      if (ws[totalCostCellRef]) {
-        ws[totalCostCellRef].t = 'n';
-        ws[totalCostCellRef].z = '"R$"#,##0.00';
-      }
+      ws[totalCostCellRef] = {
+        t: 'n',
+        f: `D${excelRow}*E${excelRow}`,
+        v: item.qtyNeeded * item.estUnitCost,
+        z: '"R$"#,##0.00'
+      };
 
       // Format qty as integer
       const qtyCellRef = XLSX.utils.encode_cell({ r: rIdx, c: 3 });
@@ -2525,13 +2539,28 @@ export default function ShoppingListView({
       }
     });
 
-    // Format grand total cell currency
+    const startDataRowExcel = startRow + 1; // Row 8
+    const endDataRowExcel = startRow + completedPurchases.length; // Row (7 + completedPurchases.length)
+
+    // Format grand total cell currency & dynamic SUM formula
     const grandTotalRowIdx = 8 + completedPurchases.length;
+    const grandTotalRowExcel = grandTotalRowIdx + 1;
     const grandTotalCellRef = XLSX.utils.encode_cell({ r: grandTotalRowIdx, c: 5 });
-    if (ws[grandTotalCellRef]) {
-      ws[grandTotalCellRef].t = 'n';
-      ws[grandTotalCellRef].z = '"R$"#,##0.00';
-    }
+    ws[grandTotalCellRef] = {
+      t: 'n',
+      f: `SUM(F${startDataRowExcel}:F${endDataRowExcel})`,
+      v: totalSpent,
+      z: '"R$"#,##0.00'
+    };
+
+    // Format header metadata total formula (Cell H5)
+    const metaTotalCellRef = XLSX.utils.encode_cell({ r: 4, c: 7 });
+    ws[metaTotalCellRef] = {
+      t: 'n',
+      f: `F${grandTotalRowExcel}`,
+      v: totalSpent,
+      z: '"R$"#,##0.00'
+    };
 
     // Iterate over all keys in the completed purchases sheet and apply beautiful formatting
     Object.keys(ws).forEach((cellKey) => {

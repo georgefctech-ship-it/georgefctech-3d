@@ -218,9 +218,9 @@ export function use3DState() {
     category: db.category || 'Outros',
     notes: db.notes || undefined,
     checked: !!db.checked,
-    requestedBy: db.requested_by || undefined,
-    department: db.department || undefined,
-    company: db.company || undefined,
+    requestedBy: db.requested_by || 'Colaborador',
+    department: db.department || 'Faturamento/Comercial',
+    company: db.company || 'Ftéx',
     barcode: db.barcode || undefined
   });
 
