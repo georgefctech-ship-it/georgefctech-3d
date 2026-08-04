@@ -83,7 +83,7 @@ export default function App() {
 
   useEffect(() => {
     if (isAuthenticated && userRole === 'colaborador') {
-      const adminOnlyViews = ['dashboard', 'pecas', 'suprimentos', 'relatorio', 'configuracoes', 'vercel'];
+      const adminOnlyViews = ['dashboard', 'pecas', 'relatorio', 'configuracoes', 'vercel'];
       if (adminOnlyViews.includes(currentView)) {
         setCurrentView('compras');
       }
