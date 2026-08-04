@@ -262,75 +262,59 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       return;
     }
 
-    // Pending role by default until administrator approves access
-    const finalRole = getPendingRole(registerRole); // 'colaborador_pendente' ou 'admin_pendente'
-    const localUsersStr = localStorage.getItem('g3d_local_users') || '[]';
-    let localUsers: any[] = [];
-    try {
-      localUsers = JSON.parse(localUsersStr);
-    } catch (e) {
-      localUsers = [];
+    const supabase = getSupabaseClient();
+    if (!supabase || !hasSupabaseConfigured()) {
+      setError('Erro: Conexão com o banco de dados remoto indisponível. A aplicação exige conexão ativa com o banco para realizar novos cadastros.');
+      setLoading(false);
+      return;
     }
 
-    const newUser = {
-      email: emailVal,
-      username: usernameVal,
-      password: passwordVal,
-      role: finalRole
-    };
+    const finalRole = getPendingRole(registerRole); // 'colaborador_pendente' ou 'admin_pendente'
 
-    const supabase = getSupabaseClient();
-    if (supabase && hasSupabaseConfigured()) {
-      try {
-        const { data: existingRemoteUser, error: remoteCheckErr } = await supabase
-          .from('g3d_user_roles')
-          .select('email')
-          .eq('email', emailVal)
-          .maybeSingle();
+    try {
+      const { data: existingRemoteUser, error: remoteCheckErr } = await supabase
+        .from('g3d_user_roles')
+        .select('email')
+        .eq('email', emailVal)
+        .maybeSingle();
 
-        if (remoteCheckErr) throw remoteCheckErr;
-        if (existingRemoteUser) {
-          setError('Este e-mail já está cadastrado no sistema.');
-          setLoading(false);
-          return;
-        }
-
-        const { error: upsertErr } = await supabase.from('g3d_user_roles').upsert({
-          email: newUser.email,
-          username: newUser.username,
-          password: newUser.password,
-          role: newUser.role
-        }, { onConflict: 'email' });
-
-        if (upsertErr) throw upsertErr;
-      } catch (upsertErr: any) {
-        console.error('Erro ao salvar no Supabase:', upsertErr);
-        setError(`Falha ao registrar no Supabase: ${upsertErr.message}`);
+      if (remoteCheckErr) throw remoteCheckErr;
+      if (existingRemoteUser) {
+        setError('Este e-mail já está cadastrado no banco de dados.');
         setLoading(false);
         return;
       }
+
+      const { error: upsertErr } = await supabase.from('g3d_user_roles').upsert({
+        email: emailVal,
+        username: usernameVal,
+        password: passwordVal,
+        role: finalRole
+      }, { onConflict: 'email' });
+
+      if (upsertErr) throw upsertErr;
+
+      setLoading(false);
+      setSuccessMsg('Cadastro realizado com sucesso no banco de dados remoto! Seu acesso está pendente de liberação pelo administrador.');
+
+      setRegisterEmail('');
+      setRegisterUsername('');
+      setPassword('');
+      setConfirmPassword('');
+
+      setTimeout(() => {
+        setIsRegister(false);
+        setIsFirstAccess(false);
+        setError(null);
+        setSuccessMsg(null);
+        setUserName(emailVal);
+      }, 2500);
+
+    } catch (upsertErr: any) {
+      console.error('Erro ao salvar no Supabase:', upsertErr);
+      setError(`Falha ao registrar no banco de dados remoto: ${upsertErr.message}`);
+      setLoading(false);
     }
-
-    const updatedLocal = localUsers.filter(u => u.email?.toLowerCase() !== emailVal);
-    updatedLocal.push(newUser);
-    localStorage.setItem('g3d_local_users', JSON.stringify(updatedLocal));
-
-    setLoading(false);
-    setSuccessMsg('Cadastro realizado com sucesso! Seu acesso está pendente de liberação pelo administrador.');
-
-    // Reset fields
-    setRegisterEmail('');
-    setRegisterUsername('');
-    setPassword('');
-    setConfirmPassword('');
-
-    setTimeout(() => {
-      setIsRegister(false);
-      setIsFirstAccess(false);
-      setError(null);
-      setSuccessMsg(null);
-      setUserName(emailVal);
-    }, 2500);
   };
 
   const handleMasterLogin = async (e: React.FormEvent) => {
@@ -349,157 +333,127 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
 
     const normalizedIdentifier = inputEmailOrUser.toLowerCase().trim();
 
-    // Check if identifier is explicitly admin-like
+    // System admin identity checks
     const isAdminIdentifier = 
       normalizedIdentifier === 'admin' ||
       normalizedIdentifier === 'administrador' ||
       normalizedIdentifier === 'georgefctec' ||
       normalizedIdentifier === 'georgefctec@gmail.com' ||
-      normalizedIdentifier.includes('georgefctec');
+      normalizedIdentifier === 'georgefctech';
 
-    // Load local users
-    const localUsersStr = localStorage.getItem('g3d_local_users') || '[]';
-    let localUsers: any[] = [];
-    try {
-      localUsers = JSON.parse(localUsersStr);
-    } catch (err) {
-      localUsers = [];
-    }
-
-    const savedMasterPassword = localStorage.getItem('g3d_master_password')?.trim();
-
-    // 1. QUERY SUPABASE DIRECTLY
     const supabase = getSupabaseClient();
-    if (supabase && hasSupabaseConfigured()) {
-      try {
-        const { data: remoteRows, error: remoteErr } = await supabase
-          .from('g3d_user_roles')
-          .select('*')
-          .or(`email.ilike.${normalizedIdentifier},username.ilike.${normalizedIdentifier},email.eq.system_master_password,role.eq.admin`);
+    const supabaseConfigured = hasSupabaseConfigured();
 
-        if (!remoteErr && remoteRows) {
-          // Check for master password entry
-          const masterRow = remoteRows.find(r => r.email === 'system_master_password');
-          const globalMasterPassword = String(masterRow?.role ?? '').trim() || savedMasterPassword || '123';
-
-          // Check for matching user entry
-          let dbUser = remoteRows.find(
-            r => String(r.email ?? '').toLowerCase().trim() === normalizedIdentifier ||
-                 String(r.username ?? '').toLowerCase().trim() === normalizedIdentifier
-          );
-
-          // Check password validity
-          const isMasterPassMatch = 
-            inputPassword === globalMasterPassword || 
-            (savedMasterPassword && inputPassword === savedMasterPassword) ||
-            inputPassword === '123' ||
-            inputPassword === '1234';
-
-          const storedRemotePassword = String(dbUser?.password ?? '').trim();
-          const isUserPassMatch = Boolean(storedRemotePassword && storedRemotePassword === inputPassword);
-
-          if (isMasterPassMatch || isUserPassMatch) {
-            // Determine Role:
-            // If user explicitly selected 'admin', or identifier is admin, or dbUser role is admin -> grant ADMIN
-            let grantedRole: 'admin' | 'colaborador' = 'colaborador';
-            if (
-              selectedRole === 'admin' ||
-              isAdminIdentifier ||
-              dbUser?.role === 'admin' ||
-              isMasterPassMatch
-            ) {
-              grantedRole = 'admin';
-            } else if (dbUser?.role) {
-              if (isPendingRole(dbUser.role)) {
-                setError('Acesso bloqueado. Seu cadastro está pendente de liberação pelo administrador.');
-                setLoading(false);
-                return;
-              }
-              grantedRole = getApprovedRole(dbUser.role) as 'admin' | 'colaborador';
-            }
-
-            // Save Master Password locally and to Supabase for consistency
-            if (isMasterPassMatch && inputPassword) {
-              localStorage.setItem('g3d_master_password', inputPassword);
-              try {
-                await supabase.from('g3d_user_roles').upsert({
-                  email: 'system_master_password',
-                  username: 'system_master_password',
-                  password: '',
-                  role: inputPassword
-                }, { onConflict: 'email' });
-              } catch (e) {}
-            }
-
-            // Keep user entry in Supabase updated
-            if (grantedRole === 'admin' && (!dbUser || dbUser.role !== 'admin')) {
-              try {
-                await supabase.from('g3d_user_roles').upsert({
-                  email: dbUser?.email || (inputEmailOrUser.includes('@') ? inputEmailOrUser : 'georgefctec@gmail.com'),
-                  username: dbUser?.username || inputEmailOrUser,
-                  password: storedRemotePassword || inputPassword,
-                  role: 'admin'
-                }, { onConflict: 'email' });
-              } catch (e) {}
-            }
-
-            sessionStorage.setItem('g3d_authenticated', 'true');
-            sessionStorage.setItem('g3d_user_role', grantedRole);
-            sessionStorage.setItem('g3d_username', dbUser?.username || inputEmailOrUser || (grantedRole === 'admin' ? 'georgefctech' : 'Colaborador'));
-            sessionStorage.setItem('g3d_user_email', dbUser?.email || (inputEmailOrUser.includes('@') ? inputEmailOrUser : (grantedRole === 'admin' ? 'georgefctec@gmail.com' : 'colaborador@ftex.com')));
-            
-            setLoading(false);
-            onLoginSuccess();
-            return;
-          }
-        }
-      } catch (err: any) {
-        console.error('Erro ao consultar Supabase durante login:', err);
-      }
-    }
-
-    // 2. Fallback (Offline / Emergency Local)
-    const fallbackMaster = savedMasterPassword || '123';
-    if (inputPassword === fallbackMaster || inputPassword === '123' || inputPassword === '1234') {
-      const grantedRole = (selectedRole === 'admin' || isAdminIdentifier) ? 'admin' : 'colaborador';
-      localStorage.setItem('g3d_master_password', inputPassword);
-      sessionStorage.setItem('g3d_authenticated', 'true');
-      sessionStorage.setItem('g3d_user_role', grantedRole);
-      sessionStorage.setItem('g3d_username', inputEmailOrUser || (grantedRole === 'admin' ? 'georgefctech' : 'Colaborador'));
-      sessionStorage.setItem('g3d_user_email', inputEmailOrUser.includes('@') ? inputEmailOrUser : (grantedRole === 'admin' ? 'georgefctec@gmail.com' : 'colaborador@ftex.com'));
+    // MANDATE: Database connection is strictly required! No local browser fallbacks.
+    if (!supabase || !supabaseConfigured) {
+      setError('Acesso negado: Falha na conexão com o banco de dados remoto (Supabase). A aplicação exige conexão ativa com o banco de dados externo para autenticar e abrir.');
       setLoading(false);
-      onLoginSuccess();
       return;
     }
 
-    // Check matched local user
-    const matchedLocalUser = localUsers.find(
-      u => u.email?.toLowerCase() === normalizedIdentifier || u.username?.toLowerCase() === normalizedIdentifier
-    );
+    try {
+      const { data: remoteRows, error: remoteErr } = await supabase
+        .from('g3d_user_roles')
+        .select('*')
+        .or(`email.ilike.${normalizedIdentifier},username.ilike.${normalizedIdentifier},email.eq.system_master_password`);
 
-    if (matchedLocalUser) {
-      const storedLocalPassword = String(matchedLocalUser.password ?? '').trim();
-      if (storedLocalPassword === inputPassword) {
-        if (isPendingRole(matchedLocalUser.role)) {
-          setError('Acesso bloqueado. Seu cadastro está pendente de liberação pelo administrador.');
+      if (remoteErr) {
+        setError(`Erro ao consultar o banco de dados remoto: ${remoteErr.message}. O sistema não pode abrir sem conexão ativa com o banco.`);
+        setLoading(false);
+        return;
+      }
+
+      if (!remoteRows) {
+        setError('Sem resposta do banco de dados remoto.');
+        setLoading(false);
+        return;
+      }
+
+      const masterRow = remoteRows.find(r => String(r.email ?? '').toLowerCase().trim() === 'system_master_password');
+      const savedMasterPassword = localStorage.getItem('g3d_master_password')?.trim();
+      const globalMasterPassword = String(masterRow?.role ?? '').trim() || savedMasterPassword || '123';
+
+      const dbUser = remoteRows.find(
+        r => String(r.email ?? '').toLowerCase().trim() === normalizedIdentifier ||
+             String(r.username ?? '').toLowerCase().trim() === normalizedIdentifier
+      );
+
+      if (dbUser) {
+        // 1. Check if user is pending
+        if (isPendingRole(dbUser.role)) {
+          setError('Acesso bloqueado. Seu cadastro está pendente de liberação pelo administrador no banco de dados.');
           setLoading(false);
           return;
         }
 
-        const activeRole = (selectedRole === 'admin' || isAdminIdentifier) ? 'admin' : getApprovedRole(matchedLocalUser.role);
+        const registeredRole = getApprovedRole(dbUser.role); // 'admin' or 'colaborador'
+
+        // 2. ENFORCE COLLABORATOR SECURITY: Collaborator account CANNOT log in as Administrator
+        if (registeredRole === 'colaborador' && selectedRole === 'admin') {
+          setError('Acesso negado: Sua conta está cadastrada como Colaborador e não possui privilégios de Administrador. Por favor, selecione a opção "Colaborador".');
+          setLoading(false);
+          return;
+        }
+
+        // 3. Password check
+        const storedRemotePassword = String(dbUser.password ?? '').trim();
+        const isMasterMatch = (registeredRole === 'admin' || isAdminIdentifier) && (inputPassword === globalMasterPassword);
+        const isPasswordCorrect = (storedRemotePassword && storedRemotePassword === inputPassword) || isMasterMatch;
+
+        if (!isPasswordCorrect) {
+          setError('Senha incorreta para o usuário especificado.');
+          setLoading(false);
+          return;
+        }
+
+        // 4. Final Granted Role:
+        // If registered as collaborator OR selected collaborator -> MUST BE 'colaborador'
+        // Only grant 'admin' if registered as 'admin' AND selected 'admin'
+        const finalRole: 'admin' | 'colaborador' = 
+          (registeredRole === 'admin' && selectedRole === 'admin') ? 'admin' : 'colaborador';
 
         sessionStorage.setItem('g3d_authenticated', 'true');
-        sessionStorage.setItem('g3d_user_role', activeRole);
-        sessionStorage.setItem('g3d_username', matchedLocalUser.username);
-        sessionStorage.setItem('g3d_user_email', matchedLocalUser.email);
+        sessionStorage.setItem('g3d_user_role', finalRole);
+        sessionStorage.setItem('g3d_username', dbUser.username || inputEmailOrUser);
+        sessionStorage.setItem('g3d_user_email', dbUser.email || inputEmailOrUser);
+
         setLoading(false);
         onLoginSuccess();
         return;
       }
-    }
 
-    setError('Usuário ou senha incorretos. Por favor, verifique suas credenciais.');
-    setLoading(false);
+      // 5. If no dbUser record found, check if it's the system master account
+      const isMasterPassMatch = inputPassword === globalMasterPassword;
+
+      if (isMasterPassMatch) {
+        if (selectedRole === 'admin' && !isAdminIdentifier) {
+          setError('Acesso negado: Este e-mail/usuário não possui privilégios de Administrador cadastrados no banco de dados.');
+          setLoading(false);
+          return;
+        }
+
+        const finalRole: 'admin' | 'colaborador' = (selectedRole === 'admin' && isAdminIdentifier) ? 'admin' : 'colaborador';
+
+        sessionStorage.setItem('g3d_authenticated', 'true');
+        sessionStorage.setItem('g3d_user_role', finalRole);
+        sessionStorage.setItem('g3d_username', inputEmailOrUser || (finalRole === 'admin' ? 'georgefctech' : 'Colaborador'));
+        sessionStorage.setItem('g3d_user_email', inputEmailOrUser.includes('@') ? inputEmailOrUser : (finalRole === 'admin' ? 'georgefctec@gmail.com' : 'colaborador@ftex.com'));
+
+        setLoading(false);
+        onLoginSuccess();
+        return;
+      }
+
+      setError('Usuário não cadastrado no banco de dados remoto ou senha incorreta.');
+      setLoading(false);
+      return;
+
+    } catch (err: any) {
+      console.error('Erro ao consultar Supabase durante login:', err);
+      setError('Falha de conexão com o banco de dados remoto. A aplicação exige conexão externa ativa para autenticar.');
+      setLoading(false);
+      return;
+    }
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
@@ -1207,11 +1161,11 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
 
         {/* SECURITY INFO FOOTER */}
         <div className="mt-6 p-4 rounded-xl bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-850/80 text-center flex items-center justify-center gap-3 shadow-xs">
-          <Database className="w-4 h-4 text-slate-400 dark:text-slate-500 flex-shrink-0" />
-          <span className="text-[10px] text-slate-500 dark:text-slate-500 leading-relaxed">
+          <Database className="w-4 h-4 text-blue-500 flex-shrink-0" />
+          <span className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed font-medium">
             {supabaseActive 
-              ? 'Conectado de forma segura à nuvem Supabase. Dados sincronizados em tempo real.' 
-              : 'Executando em modo local offline. Seus dados cadastrados ficam salvos localmente neste navegador.'}
+              ? 'Conectado com segurança ao banco de dados externo (Supabase). Autenticação e acessos validados via rede externa.' 
+              : 'Atenção: Sem conexão com o banco de dados remoto. A aplicação exige rede externa e banco de dados ativo para abrir.'}
           </span>
         </div>
 
