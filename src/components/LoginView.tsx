@@ -18,6 +18,7 @@ import {
   UserPlus,
   LogIn,
   Users,
+  User,
   Sun,
   Moon
 } from 'lucide-react';
@@ -48,6 +49,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
   const [email, setEmail] = useState('');
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const [foundUserForReset, setFoundUserForReset] = useState<{ email: string; username: string; role: string } | null>(null);
   
   // Feedback states
   const [error, setError] = useState<string | null>(null);
@@ -461,48 +463,117 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     setError(null);
     setSuccessMsg(null);
 
-    const userEmail = email.trim().toLowerCase();
-    if (!userEmail) {
-      setError('Por favor, informe seu endereço de e-mail cadastrado.');
+    const identifier = email.trim().toLowerCase();
+    if (!identifier) {
+      setError('Por favor, informe seu e-mail ou nome de usuário cadastrado.');
       return;
     }
 
     setLoading(true);
     const supabase = getSupabaseClient();
-    if (!supabase) {
-      setError('O cliente Supabase não pôde ser iniciado.');
+    if (!supabase || !hasSupabaseConfigured()) {
+      setError('Conexão com o banco de dados remoto indisponível.');
       setLoading(false);
       return;
     }
 
     try {
-      // Verification: Check if the email belongs to an administrator or collaborator to prevent arbitrary requests
-      const { data: roleData, error: roleErr } = await supabase
+      // Find account in g3d_user_roles in Supabase
+      const { data: rows, error: checkErr } = await supabase
         .from('g3d_user_roles')
-        .select('role')
-        .eq('email', userEmail)
-        .maybeSingle();
+        .select('*')
+        .or(`email.ilike.${identifier},username.ilike.${identifier}`);
 
-      if (roleErr) throw roleErr;
+      if (checkErr) throw checkErr;
 
-      // Allow recovery for registered system users (like georgefctec@gmail.com)
-      if (!roleData) {
-        setError('Este e-mail não está cadastrado ou autorizado no sistema GeorgeFctech-3D.');
+      const userRow = rows?.find(r => 
+        String(r.email ?? '').toLowerCase().trim() === identifier ||
+        String(r.username ?? '').toLowerCase().trim() === identifier
+      );
+
+      if (!userRow) {
+        setError('Este e-mail ou nome de usuário não foi encontrado no banco de dados remoto.');
         setLoading(false);
         return;
       }
 
-      // Supabase Auth reset password call
-      const { error: resetErr } = await supabase.auth.resetPasswordForEmail(userEmail, {
-        redirectTo: window.location.origin
+      // Try sending Supabase auth email in background if email format is present
+      if (userRow.email && userRow.email.includes('@')) {
+        try {
+          await supabase.auth.resetPasswordForEmail(userRow.email, {
+            redirectTo: window.location.origin
+          });
+        } catch (e) {
+          console.warn('Aviso no envio do e-mail via Supabase Auth:', e);
+        }
+      }
+
+      setFoundUserForReset({
+        email: userRow.email,
+        username: userRow.username || userRow.email,
+        role: userRow.role
       });
 
-      if (resetErr) throw resetErr;
-
-      setSuccessMsg('E-mail enviado! Verifique sua caixa de entrada para redefinir a senha do sistema.');
-      setEmail('');
+      setSuccessMsg(`Conta localizada (${userRow.username || userRow.email})! Digite abaixo sua nova senha.`);
     } catch (err: any) {
-      setError(err.message || 'Erro ao enviar e-mail de recuperação.');
+      setError(err.message || 'Erro ao consultar a conta no banco de dados.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveNewUserPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccessMsg(null);
+
+    if (!foundUserForReset) {
+      setError('Nenhuma conta selecionada para redefinição.');
+      return;
+    }
+
+    const cleanPass = password.trim();
+    const cleanConfirm = confirmPassword.trim();
+
+    if (cleanPass.length < 4) {
+      setError('A nova senha deve possuir pelo menos 4 caracteres.');
+      return;
+    }
+
+    if (cleanPass !== cleanConfirm) {
+      setError('A confirmação da senha não coincide.');
+      return;
+    }
+
+    setLoading(true);
+    const supabase = getSupabaseClient();
+    if (!supabase || !hasSupabaseConfigured()) {
+      setError('Conexão com o banco de dados remoto indisponível.');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      // Update user password in remote g3d_user_roles table
+      const { error: updateErr } = await supabase
+        .from('g3d_user_roles')
+        .update({ password: cleanPass })
+        .eq('email', foundUserForReset.email);
+
+      if (updateErr) throw updateErr;
+
+      setSuccessMsg('Sua senha foi redefinida e salva com sucesso no banco de dados remoto! Você já pode realizar o login.');
+      setPassword('');
+      setConfirmPassword('');
+
+      setTimeout(() => {
+        setIsForgotPassword(false);
+        setFoundUserForReset(null);
+        setSuccessMsg(null);
+        setError(null);
+      }, 2200);
+    } catch (err: any) {
+      setError(err.message || 'Erro ao gravar a nova senha no banco de dados.');
     } finally {
       setLoading(false);
     }
@@ -982,66 +1053,153 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
               </button>
             </form>
           ) : isForgotPassword ? (
-            // FORGOT PASSWORD EMAIL REQUEST VIEW
-            <form onSubmit={handleForgotPassword} className="space-y-4">
-              <div className="space-y-1">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 text-[10px] font-bold uppercase tracking-wider">
-                  Recuperação de Acesso
-                </span>
-                <h3 className="text-slate-900 dark:text-white font-extrabold text-sm mt-1">Recuperar Senha do Sistema</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Insira o seu e-mail cadastrado (de Administrador ou Colaborador) para receber um link de redefinição de senha por e-mail.
-                </p>
-              </div>
-
-              {error && (
-                <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/40 text-rose-700 dark:text-rose-300 text-xs rounded-xl flex items-start gap-2.5">
-                  <ShieldAlert className="w-4 h-4 text-rose-500 dark:text-rose-400 flex-shrink-0 mt-0.5" />
-                  <span>{error}</span>
-                </div>
-              )}
-
-              {successMsg && (
-                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/40 text-emerald-700 dark:text-emerald-300 text-xs rounded-xl flex items-start gap-2.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
-                  <span>{successMsg}</span>
-                </div>
-              )}
-
-              <div className="space-y-3.5">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Seu E-mail Cadastrado</label>
-                  <div className="relative flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-blue-500/50 transition-all px-3 py-1">
-                    <Mail className="w-5 h-5 text-blue-500 dark:text-blue-400 flex-shrink-0 mr-3" />
-                    <input
-                      type="email"
-                      required
-                      placeholder="seu-email@provedor.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-sm py-2"
-                    />
+            // FORGOT / REDEFINE PASSWORD VIEW
+            foundUserForReset ? (
+              // STEP 2: ENTER NEW PASSWORD FOR FOUND USER
+              <form onSubmit={handleSaveNewUserPassword} className="space-y-4">
+                <div className="space-y-1">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 text-[10px] font-bold uppercase tracking-wider">
+                    Passo 2 de 2: Definição da Nova Senha
+                  </span>
+                  <h3 className="text-slate-900 dark:text-white font-extrabold text-sm mt-1">Redefinir Senha de Acesso</h3>
+                  <div className="p-2.5 bg-blue-50/80 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/40 rounded-xl text-xs text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                    <User className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                    <span>Conta: <strong className="text-slate-900 dark:text-white">{foundUserForReset.username}</strong> ({foundUserForReset.email})</span>
                   </div>
                 </div>
-              </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full flex items-center justify-center gap-2 mt-4 px-5 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl disabled:opacity-50 cursor-pointer transition-all"
-              >
-                {loading ? 'Enviando...' : 'Enviar Link de Redefinição'}
-                <ArrowRight className="w-4 h-4" />
-              </button>
+                {error && (
+                  <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/40 text-rose-700 dark:text-rose-300 text-xs rounded-xl flex items-start gap-2.5">
+                    <ShieldAlert className="w-4 h-4 text-rose-500 dark:text-rose-400 flex-shrink-0 mt-0.5" />
+                    <span>{error}</span>
+                  </div>
+                )}
 
-              <button
-                type="button"
-                onClick={() => { setIsForgotPassword(false); setError(null); setSuccessMsg(null); }}
-                className="w-full text-center mt-2 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-semibold transition cursor-pointer"
-              >
-                Voltar para o Login
-              </button>
-            </form>
+                {successMsg && (
+                  <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/40 text-emerald-700 dark:text-emerald-300 text-xs rounded-xl flex items-start gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
+                    <span>{successMsg}</span>
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Nova Senha</label>
+                    <div className="relative flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-blue-500/50 transition-all px-3 py-1">
+                      <Lock className="w-5 h-5 text-blue-500 dark:text-blue-400 flex-shrink-0 mr-3" />
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        required
+                        placeholder="Mínimo 4 caracteres"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-sm py-2"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs font-semibold px-1 py-0.5 cursor-pointer"
+                      >
+                        {showPassword ? "Ocultar" : "Mostrar"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Confirmar Nova Senha</label>
+                    <div className="relative flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-blue-500/50 transition-all px-3 py-1">
+                      <Lock className="w-5 h-5 text-blue-500 dark:text-blue-400 flex-shrink-0 mr-3" />
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        required
+                        placeholder="Repita a nova senha"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-sm py-2"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full flex items-center justify-center gap-2 mt-4 px-5 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl disabled:opacity-50 cursor-pointer transition-all shadow-md shadow-blue-600/10"
+                >
+                  {loading ? 'Gravando Nova Senha...' : 'Salvar Nova Senha no Banco'}
+                  <CheckCircle2 className="w-4 h-4" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setFoundUserForReset(null); setError(null); setSuccessMsg(null); }}
+                  className="w-full text-center mt-2 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 font-semibold transition cursor-pointer"
+                >
+                  Cancelar / Buscar Outra Conta
+                </button>
+              </form>
+            ) : (
+              // STEP 1: FIND ACCOUNT BY EMAIL OR USERNAME
+              <form onSubmit={handleForgotPassword} className="space-y-4">
+                <div className="space-y-1">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 text-[10px] font-bold uppercase tracking-wider">
+                    Recuperação de Acesso
+                  </span>
+                  <h3 className="text-slate-900 dark:text-white font-extrabold text-sm mt-1">Localizar Conta no Banco de Dados</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                    Insira seu e-mail ou nome de usuário cadastrado para redefinir sua senha diretamente no banco de dados.
+                  </p>
+                </div>
+
+                {error && (
+                  <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/40 text-rose-700 dark:text-rose-300 text-xs rounded-xl flex items-start gap-2.5">
+                    <ShieldAlert className="w-4 h-4 text-rose-500 dark:text-rose-400 flex-shrink-0 mt-0.5" />
+                    <span>{error}</span>
+                  </div>
+                )}
+
+                {successMsg && (
+                  <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/40 text-emerald-700 dark:text-emerald-300 text-xs rounded-xl flex items-start gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
+                    <span>{successMsg}</span>
+                  </div>
+                )}
+
+                <div className="space-y-3.5">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Seu E-mail ou Nome de Usuário Cadastrado</label>
+                    <div className="relative flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-blue-500/50 transition-all px-3 py-1">
+                      <Mail className="w-5 h-5 text-blue-500 dark:text-blue-400 flex-shrink-0 mr-3" />
+                      <input
+                        type="text"
+                        required
+                        placeholder="seu-email@provedor.com ou seu_usuario"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-sm py-2"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full flex items-center justify-center gap-2 mt-4 px-5 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl disabled:opacity-50 cursor-pointer transition-all shadow-md shadow-blue-600/10"
+                >
+                  {loading ? 'Buscando Conta...' : 'Localizar Conta e Redefinir'}
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setIsForgotPassword(false); setFoundUserForReset(null); setError(null); setSuccessMsg(null); }}
+                  className="w-full text-center mt-2 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-semibold transition cursor-pointer"
+                >
+                  Voltar para o Login
+                </button>
+              </form>
+            )
           ) : (
             // SINGLE UNIQUE SYSTEM LOGIN
             <form onSubmit={handleMasterLogin} className="space-y-5">
