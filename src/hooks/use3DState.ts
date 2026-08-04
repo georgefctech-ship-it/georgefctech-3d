@@ -70,6 +70,7 @@ const DEFAULT_INVENTORY: InventoryItem[] = [
     unitCost: 210.00,
     gramCost: 0.21,
     status: 'Em Estoque',
+    category: 'Filamento',
     image: 'https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?w=300&q=80',
     purchaseLink: 'https://www.mercadolivre.com.br/filamento-creality-petg-1-kg-175-mm-para-impresso-3d-em-cor-preta/p/MLB51382966'
   },
@@ -80,28 +81,53 @@ const DEFAULT_INVENTORY: InventoryItem[] = [
     unitCost: 140.00,
     gramCost: 0.14,
     status: 'Em Estoque',
+    category: 'Filamento',
     image: 'https://images.unsplash.com/photo-1615840287214-7fe58a8b668f?w=300&q=80',
     purchaseLink: 'https://www.mercadolivre.com.br/filamento-creality-petg-1-kg-175-mm-para-impresso-3d-em-cor-preta/p/MLB51382966'
   },
   {
     id: 'INV-003',
-    material: 'ABS Alta Performance 1kg',
-    qty: 1,
-    unitCost: 180.00,
-    gramCost: 0.18,
-    status: 'Poucas Unidades',
-    image: 'https://images.unsplash.com/photo-1535813547-99c456a41d4a?w=300&q=80',
-    purchaseLink: 'https://www.mercadolivre.com.br/filamento-creality-petg-1-kg-175-mm-para-impresso-3d-em-cor-preta/p/MLB51382966'
+    material: 'Placa Controladora Silenciosa 32-Bits Creality V4.2.7',
+    qty: 2,
+    unitCost: 280.00,
+    gramCost: 280.00,
+    status: 'Em Estoque',
+    category: 'Placas',
+    image: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=300&q=80',
+    purchaseLink: 'https://www.mercadolivre.com.br/'
   },
   {
     id: 'INV-004',
-    material: 'PETG Standard 1kg',
-    qty: 0,
-    unitCost: 130.00,
-    gramCost: 0.13,
-    status: 'Esgotado',
-    image: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=300&q=80',
-    purchaseLink: 'https://www.mercadolivre.com.br/filamento-creality-petg-1-kg-175-mm-para-impresso-3d-em-cor-preta/p/MLB51382966'
+    material: 'Sensor de Nivelamento Automático BLTouch V3.1',
+    qty: 3,
+    unitCost: 195.00,
+    gramCost: 195.00,
+    status: 'Em Estoque',
+    category: 'Componentes Eletrônicos',
+    image: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=300&q=80',
+    purchaseLink: 'https://www.mercadolivre.com.br/'
+  },
+  {
+    id: 'INV-005',
+    material: 'Jogo de Bicos de Latão 0.4mm Creality (Lote 10un)',
+    qty: 4,
+    unitCost: 45.00,
+    gramCost: 4.50,
+    status: 'Em Estoque',
+    category: 'Peças Geral',
+    image: 'https://images.unsplash.com/photo-1581092334247-44dfa8c569ca?w=300&q=80',
+    purchaseLink: 'https://www.mercadolivre.com.br/'
+  },
+  {
+    id: 'INV-006',
+    material: 'Fita Kapton Térmica de Isolamento 30mm x 33m',
+    qty: 5,
+    unitCost: 38.00,
+    gramCost: 38.00,
+    status: 'Em Estoque',
+    category: 'Outros',
+    image: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=300&q=80',
+    purchaseLink: 'https://www.mercadolivre.com.br/'
   }
 ];
 
@@ -204,7 +230,8 @@ export function use3DState() {
     gramCost: Number(db.gram_cost),
     status: db.status,
     image: db.image || undefined,
-    purchaseLink: db.purchase_link || undefined
+    purchaseLink: db.purchase_link || undefined,
+    category: db.category || 'Filamento'
   });
 
   const mapInventoryToDb = (app: InventoryItem) => ({
@@ -215,7 +242,8 @@ export function use3DState() {
     gram_cost: app.gramCost,
     status: app.status,
     image: app.image || null,
-    purchase_link: app.purchaseLink || null
+    purchase_link: app.purchaseLink || null,
+    category: app.category || 'Filamento'
   });
 
   const mapDbShopping = (db: any): ShoppingItem => ({
@@ -559,12 +587,13 @@ export function use3DState() {
   };
 
   // Inventory managers
-  const addInventoryItem = async (item: Omit<InventoryItem, 'id' | 'gramCost' | 'status'> & { id?: string }) => {
+  const addInventoryItem = async (item: Omit<InventoryItem, 'id' | 'gramCost' | 'status'> & { id?: string; category?: string }) => {
     isMutating.current = true;
     const nextId = item.id || `INV-${Date.now()}-${Math.floor(Math.random() * 100)}`;
     const gramCost = item.unitCost / 1000;
     const status = item.qty === 0 ? 'Esgotado' : item.qty <= 1 ? 'Poucas Unidades' : 'Em Estoque';
-    const fullItem: InventoryItem = { ...item, id: nextId, gramCost, status };
+    const category = item.category || 'Filamento';
+    const fullItem: InventoryItem = { ...item, category, id: nextId, gramCost, status };
 
     try {
       const updated = [...inventory, fullItem];

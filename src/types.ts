@@ -19,15 +19,18 @@ export interface ProjectOrder {
   image?: string; // foto da peça imprimida (Base64 ou URL)
 }
 
+export type ItemCategory = 'Filamento' | 'Placas' | 'Componentes Eletrônicos' | 'Peças Geral' | 'Outros';
+
 export interface InventoryItem {
   id: string; // ID único do insumo
   material: string; // Especificação / Marca (ex: PETG Fibra de Carbono CF10 1kg)
-  qty: number; // Quantidade em Rolos
-  unitCost: number; // Custo do rolo (R$)
-  gramCost: number; // Custo por grama de filamento (R$/g) (unitCost / roloSizeGrams)
+  qty: number; // Quantidade em Rolos / Unidades
+  unitCost: number; // Custo do rolo ou unidade (R$)
+  gramCost: number; // Custo por grama ou unidade (R$/g) (unitCost / roloSizeGrams)
   status: 'Em Estoque' | 'Esgotado' | 'Poucas Unidades';
-  image?: string; // foto do filamento (Base64 ou URL)
+  image?: string; // foto do insumo (Base64 ou URL)
   purchaseLink?: string; // Link de compra (ex: Mercado Livre, Amazon...)
+  category?: ItemCategory | string; // Categoria: Filamento, Placas, Componentes Eletrônicos, Peças Geral, Outros
 }
 
 export interface ShoppingItem {

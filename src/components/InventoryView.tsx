@@ -31,6 +31,30 @@ import {
 import { InventoryItem, ShoppingItem } from '../types';
 import { Html5Qrcode } from 'html5-qrcode';
 
+const CATEGORIES = [
+  'Filamento',
+  'Placas',
+  'Componentes Eletrônicos',
+  'Peças Geral',
+  'Outros'
+] as const;
+
+const getCategoryBadgeStyle = (cat?: string) => {
+  switch (cat) {
+    case 'Filamento':
+      return 'bg-indigo-50 text-indigo-700 border border-indigo-200';
+    case 'Placas':
+      return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+    case 'Componentes Eletrônicos':
+      return 'bg-purple-50 text-purple-700 border border-purple-200';
+    case 'Peças Geral':
+      return 'bg-blue-50 text-blue-700 border border-blue-200';
+    case 'Outros':
+    default:
+      return 'bg-slate-100 text-slate-700 border border-slate-200';
+  }
+};
+
 const ensureAbsoluteUrl = (url: string | undefined): string => {
   if (!url) return '';
   const trimmed = url.trim();
@@ -42,7 +66,7 @@ const ensureAbsoluteUrl = (url: string | undefined): string => {
 
 interface InventoryViewProps {
   inventory: InventoryItem[];
-  onAddInventoryItem: (item: Omit<InventoryItem, 'id' | 'gramCost' | 'status'> & { id?: string; image?: string; purchaseLink?: string }) => void;
+  onAddInventoryItem: (item: Omit<InventoryItem, 'id' | 'gramCost' | 'status'> & { id?: string; image?: string; purchaseLink?: string; category?: string }) => void;
   onDeleteInventoryItem: (id: string) => void;
   onUpdateQty: (id: string, newQty: number) => void;
   onEditInventoryItem?: (id: string, updatedFields: Partial<InventoryItem>) => void;
@@ -63,8 +87,12 @@ export default function InventoryView({
 }: InventoryViewProps) {
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   
+  // Category filter state
+  const [activeCategoryFilter, setActiveCategoryFilter] = useState<string>('Todos');
+
   // Add item state
   const [materialName, setMaterialName] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('Filamento');
   const [qty, setQty] = useState('1');
   const [unitCost, setUnitCost] = useState('150.00');
   const [purchaseLink, setPurchaseLink] = useState('');
@@ -155,6 +183,7 @@ export default function InventoryView({
   // Edit item state
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [editName, setEditName] = useState('');
+  const [editCategory, setEditCategory] = useState<string>('Filamento');
   const [editQty, setEditQty] = useState(0);
   const [editUnitCost, setEditUnitCost] = useState(0);
   const [editLink, setEditLink] = useState('');
@@ -173,14 +202,20 @@ export default function InventoryView({
   const handleAddToShopping = () => {
     if (!purchasingItem) return;
     
+    // Map item category to shopping category if supported
+    const itemCat = purchasingItem.category || 'Filamento';
+    let shopCat: 'Filamento' | 'Peças de Reposição' | 'Acessórios/Insumos' | 'Outros' = 'Outros';
+    if (itemCat === 'Filamento') shopCat = 'Filamento';
+    else if (itemCat === 'Placas' || itemCat === 'Componentes Eletrônicos' || itemCat === 'Peças Geral') shopCat = 'Peças de Reposição';
+    
     if (onAddShoppingItem) {
       onAddShoppingItem({
         materialName: purchasingItem.material,
         qtyNeeded: purchaseQty,
         estUnitCost: purchasingItem.unitCost,
         purchaseLink: purchasingItem.purchaseLink || '',
-        category: 'Filamento',
-        notes: purchaseNotes ? `Solicitado via inventário. Obs: ${purchaseNotes}` : 'Solicitado via inventário.',
+        category: shopCat,
+        notes: purchaseNotes ? `Solicitado via inventário (${itemCat}). Obs: ${purchaseNotes}` : `Solicitado via inventário (${itemCat}).`,
         requestedBy: userRole === 'colaborador' ? 'Colaborador' : 'Administrador',
         company: userRole === 'colaborador' ? 'Ftéx' : 'GeorgeFctech-3D'
       });
@@ -246,7 +281,7 @@ export default function InventoryView({
     setSuccess(false);
 
     if (!materialName.trim()) {
-      setErrorMsg('Informe as especificações do filamento (ex: PETG CF10 Premium 1kg).');
+      setErrorMsg('Informe as especificações do insumo (ex: PETG CF10, Placa V4.2.7...).');
       return;
     }
 
@@ -254,12 +289,12 @@ export default function InventoryView({
     const costNum = parseFloat(unitCost) || 0;
 
     if (qtyNum < 0) {
-      setErrorMsg('A quantidade em rolos deve ser igual ou superior a zero.');
+      setErrorMsg('A quantidade em estoque deve ser igual ou superior a zero.');
       return;
     }
 
     if (costNum <= 0) {
-      setErrorMsg('O preço pago por rolo deve ser superior a zero.');
+      setErrorMsg('O preço pago unitário/rolo deve ser superior a zero.');
       return;
     }
 
@@ -271,11 +306,13 @@ export default function InventoryView({
       qty: qtyNum,
       unitCost: costNum,
       image: finalImage,
-      purchaseLink: purchaseLink.trim()
+      purchaseLink: purchaseLink.trim(),
+      category: selectedCategory
     });
 
     // Reset Form
     setMaterialName('');
+    setSelectedCategory('Filamento');
     setQty('1');
     setUnitCost('150.00');
     setPurchaseLink('');
@@ -290,6 +327,7 @@ export default function InventoryView({
     if (onEditInventoryItem) {
       onEditInventoryItem(editingItem.id, {
         material: editName,
+        category: editCategory,
         qty: editQty,
         unitCost: editUnitCost,
         purchaseLink: editLink,
@@ -428,11 +466,35 @@ export default function InventoryView({
                 <div className="flex items-center gap-2 mb-6 pb-3 border-b border-slate-100">
                   <Package className="w-4 h-4 text-indigo-500" />
                   <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800">
-                    Cadastrar Novo Filamento
+                    Cadastrar Novo Insumo
                   </h3>
                 </div>
 
                 <form onSubmit={handleAdditem} className="space-y-4">
+                  {/* Category Selector */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-slate-500">
+                      Categoria do Insumo *
+                    </label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {CATEGORIES.map((cat) => (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => setSelectedCategory(cat)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition duration-150 text-left flex items-center justify-between cursor-pointer ${
+                            selectedCategory === cat
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                              : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          <span className="truncate">{cat}</span>
+                          {selectedCategory === cat && <Check className="w-3.5 h-3.5 shrink-0" />}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   {/* ID / Barcode Field */}
                   <div className="flex flex-col gap-1.5 p-3 rounded-lg bg-slate-50 border border-slate-200/60">
                     <label className="text-xs font-semibold text-slate-500 flex items-center justify-between">
@@ -461,14 +523,14 @@ export default function InventoryView({
 
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-semibold text-slate-500">
-                      Nome do Insumo / Fabricante / Tipo *
+                      Nome do Insumo / Fabricante / Especificação *
                     </label>
                     <input
                       type="text"
                       required
                       value={materialName}
                       onChange={(e) => setMaterialName(e.target.value)}
-                      placeholder="Ex: PETG Creality Preto 1kg"
+                      placeholder="Ex: Placa V4.2.7 ou PETG Creality 1kg"
                       className="px-4 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-800 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white placeholder-slate-400 transition-all font-sans"
                     />
                   </div>
@@ -476,7 +538,7 @@ export default function InventoryView({
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-xs font-semibold text-slate-500">
-                        Rolos em Estoque
+                        Qtd em Estoque
                       </label>
                       <input
                         type="number"
@@ -489,7 +551,7 @@ export default function InventoryView({
 
                     <div className="flex flex-col gap-1.5">
                       <label className="text-xs font-semibold text-slate-500">
-                        Preço por Rolo (R$)
+                        Preço Unitário (R$)
                       </label>
                       <input
                         type="number"
@@ -605,208 +667,159 @@ export default function InventoryView({
 
         {/* RIGHT COMPONENT: GALLERIES AND DETAILS */}
         <div className="lg:col-span-2 p-6 rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex items-center gap-2 mb-6 pb-3 border-b border-slate-100">
-            <Database className="w-4 h-4 text-indigo-500" />
-            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800">
-              Insumos Disponíveis para Faturamento ({inventory.length})
-            </h3>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <Database className="w-4 h-4 text-indigo-500" />
+              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800">
+                Insumos no Estoque ({inventory.length})
+              </h3>
+            </div>
+            
+            <div className="flex items-center gap-1.5 self-end sm:self-auto">
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-1.5 rounded-md border text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition ${
+                  viewMode === 'grid'
+                    ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                    : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                Cards
+              </button>
+              <button
+                onClick={() => setViewMode('table')}
+                className={`p-1.5 rounded-md border text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition ${
+                  viewMode === 'table'
+                    ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                    : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                Tabela
+              </button>
+            </div>
           </div>
 
-          {viewMode === 'grid' ? (
-            /* GRID COMPONET LAYOUT */
-            inventory.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                {inventory.map((item) => (
-                  <div key={item.id} className="border border-slate-200 rounded-xl overflow-hidden hover:shadow-md transition duration-200 flex flex-col bg-white">
-                    {/* Filament spool representation */}
-                    <div className="relative aspect-video bg-slate-900 overflow-hidden flex items-center justify-center group select-none">
-                      {item.image ? (
-                        <img
-                          src={item.image}
-                          alt={item.material}
-                          className="w-full h-full object-cover select-none group-hover:scale-105 duration-300 pointer-events-none"
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <div className="absolute inset-0 bg-gradient-to-tr from-slate-950 to-indigo-950 flex flex-col items-center justify-center">
-                          <Plus className="w-10 h-10 text-indigo-400 stroke-1" />
-                        </div>
-                      )}
-                      
-                      {/* Zoom Trigger Button */}
-                      {item.image && (
-                        <button
-                          onClick={() => setZoomImage(item.image || null)}
-                          className="absolute right-3.5 bottom-3.5 p-2 bg-black/60 rounded-lg text-white backdrop-blur-sm opacity-0 group-hover:opacity-100 duration-150 shadow-sm"
-                          title="Visualizar Detalhes"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </button>
-                      )}
+          {/* CATEGORY FILTER TABS */}
+          <div className="flex flex-wrap items-center gap-1.5 mb-6 pb-2">
+            <button
+              onClick={() => setActiveCategoryFilter('Todos')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                activeCategoryFilter === 'Todos'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              <span>Todos</span>
+              <span className="px-1.5 py-0.2 bg-black/15 rounded-full text-[10px] font-mono">
+                {inventory.length}
+              </span>
+            </button>
 
-                      <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-sm text-white px-2.5 py-1 rounded-full text-[10px] font-mono font-bold border border-white/10 uppercase">
-                        {item.id}
-                      </div>
+            {CATEGORIES.map((cat) => {
+              const count = inventory.filter(i => (i.category || 'Filamento') === cat).length;
+              return (
+                <button
+                  key={cat}
+                  onClick={() => setActiveCategoryFilter(cat)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                    activeCategoryFilter === cat
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  <span>{cat}</span>
+                  <span className="px-1.5 py-0.2 bg-black/15 rounded-full text-[10px] font-mono">
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
 
-                      <div className="absolute top-3 right-3">
-                        <span className={`px-2.5 py-1 text-[10px] font-extrabold rounded-full ${getStatusStyle(item.status)}`}>
-                          {item.status}
-                        </span>
-                      </div>
-                    </div>
+          {(() => {
+            const filteredInventory = inventory.filter(item => {
+              if (activeCategoryFilter === 'Todos') return true;
+              return (item.category || 'Filamento') === activeCategoryFilter;
+            });
 
-                    {/* Meta info body */}
-                    <div className="p-4 flex-1 flex flex-col justify-between space-y-4">
-                      <div>
-                        <h4 className="font-bold text-slate-900 text-sm leading-snug tracking-tight truncate-2-lines">{item.material}</h4>
-                        
-                        <div className="grid grid-cols-2 gap-4 mt-3 pt-3 border-t border-slate-100 text-xs">
-                          <div>
-                            <span className="text-[10px] uppercase font-mono font-semibold text-slate-400 block">Estoque</span>
-                            <span className="font-bold text-slate-800 text-sm">{item.qty} Rolos</span>
-                          </div>
-                          <div>
-                            <span className="text-[10px] uppercase font-mono font-semibold text-slate-400 block">Custo por Rolo</span>
-                            <span className="font-semibold text-slate-800 text-sm">{formatBRL(item.unitCost)}</span>
-                          </div>
-                          <div>
-                            <span className="text-[10px] uppercase font-mono font-semibold text-slate-400 block">Custo por Grama</span>
-                            <span className="font-bold font-mono text-indigo-600 text-sm">R$ {item.gramCost?.toFixed(3)}/g</span>
-                          </div>
-                          <div>
-                            <span className="text-[10px] uppercase font-mono font-semibold text-slate-400 block">Tipo Insumo</span>
-                            <span className="font-semibold text-slate-500 font-mono">1.000g Rolo</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Card Buttons */}
-                      <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
-                        {item.purchaseLink ? (
-                          <button
-                            onClick={() => {
-                              setPurchasingItem(item);
-                              setPurchaseQty(1);
-                              setPurchaseNotes('');
-                            }}
-                            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 text-indigo-700 text-xs font-bold rounded-lg transition cursor-pointer"
-                          >
-                            <ExternalLink className="w-3 h-3" />
-                            Link de Compra
-                          </button>
+            return viewMode === 'grid' ? (
+              /* GRID COMPONET LAYOUT */
+              filteredInventory.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  {filteredInventory.map((item) => (
+                    <div key={item.id} className="border border-slate-200 rounded-xl overflow-hidden hover:shadow-md transition duration-200 flex flex-col bg-white">
+                      {/* Filament spool / item representation */}
+                      <div className="relative aspect-video bg-slate-900 overflow-hidden flex items-center justify-center group select-none">
+                        {item.image ? (
+                          <img
+                            src={item.image}
+                            alt={item.material}
+                            className="w-full h-full object-cover select-none group-hover:scale-105 duration-300 pointer-events-none"
+                            referrerPolicy="no-referrer"
+                          />
                         ) : (
-                          <span className="flex-1 text-[11px] text-slate-400 italic text-center py-2">Sem Link Cadastrado</span>
+                          <div className="absolute inset-0 bg-gradient-to-tr from-slate-950 to-indigo-950 flex flex-col items-center justify-center">
+                            <Plus className="w-10 h-10 text-indigo-400 stroke-1" />
+                          </div>
+                        )}
+                        
+                        {/* Zoom Trigger Button */}
+                        {item.image && (
+                          <button
+                            onClick={() => setZoomImage(item.image || null)}
+                            className="absolute right-3.5 bottom-3.5 p-2 bg-black/60 rounded-lg text-white backdrop-blur-sm opacity-0 group-hover:opacity-100 duration-150 shadow-sm"
+                            title="Visualizar Detalhes"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
                         )}
 
-                        {userRole !== 'colaborador' && (
-                          <div className="flex gap-1">
-                            <button
-                              onClick={() => setEditingItem(item)}
-                              className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg border border-slate-100"
-                              title="Editar Insumo"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                            
-                            <button
-                              onClick={() => {
-                                if (confirm(`Deseja realmente apagar o insumo "${item.material}"?`)) {
-                                  onDeleteInventoryItem(item.id);
-                                }
-                              }}
-                              className="p-2 text-slate-400 hover:text-rose-605 hover:bg-rose-50 rounded-lg border border-slate-100"
-                              title="Remover"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-16">
-                <Database className="w-12 h-12 text-slate-200 mx-auto mb-3" />
-                <p className="text-slate-400 text-sm">Nenhum filamento comercial cadastrado em sua conta.</p>
-              </div>
-            )
-          ) : (
-            /* STANDARD DATA TABLE LAYOUT */
-            <div className="overflow-x-auto">
-              {inventory.length > 0 ? (
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wider text-slate-400 font-mono">
-                      <th className="py-3 px-4">Foto/Nome</th>
-                      <th className="py-3 px-4 text-center">Volume Estoque</th>
-                      <th className="py-3 px-4 text-right">Rolo unitário</th>
-                      <th className="py-3 px-4 text-right">Custo por Grama</th>
-                      <th className="py-3 px-4 text-center">Status</th>
-                      <th className="py-3 px-4 text-center">Mercado Livre</th>
-                      {userRole !== 'colaborador' && <th className="py-3 px-4 text-center">Ações</th>}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-sm">
-                    {inventory.map((item) => (
-                      <tr key={item.id} className="hover:bg-slate-50 text-sm transition-colors duration-150">
-                        <td className="py-3 px-4 font-semibold text-slate-800 max-w-[240px]">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded border border-slate-200 overflow-hidden flex-shrink-0 bg-slate-100 cursor-pointer" onClick={() => item.image && setZoomImage(item.image)}>
-                              {item.image ? (
-                                <img
-                                  src={item.image}
-                                  alt={item.material}
-                                  className="w-full h-full object-cover"
-                                  referrerPolicy="no-referrer"
-                                />
-                              ) : (
-                                <div className="w-full h-full bg-indigo-50 text-indigo-500 font-mono text-[10px] font-bold flex items-center justify-center">3D</div>
-                              )}
-                            </div>
-                            <span className="truncate block" title={item.material}>
-                              {item.material}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4 whitespace-nowrap text-center">
-                          {userRole === 'colaborador' ? (
-                            <span className="font-mono font-semibold text-slate-700 px-2 min-w-[50px] inline-block text-center">
-                              {item.qty} Rolos
-                            </span>
-                          ) : (
-                            <div className="flex items-center justify-center gap-2">
-                              <button
-                                onClick={() => onUpdateQty(item.id, Math.max(0, item.qty - 1))}
-                                className="w-6 h-6 rounded bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200 transition-colors"
-                              >
-                                -
-                              </button>
-                              <span className="font-mono font-semibold text-slate-700 px-2 min-w-[50px] inline-block text-center">
-                                {item.qty} Rolos
-                              </span>
-                              <button
-                                onClick={() => onUpdateQty(item.id, item.qty + 1)}
-                                className="w-6 h-6 rounded bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200 transition-colors"
-                              >
-                                +
-                              </button>
-                            </div>
-                          )}
-                        </td>
-                        <td className="py-3 px-4 whitespace-nowrap text-right font-mono text-slate-600">
-                          {formatBRL(item.unitCost)}
-                        </td>
-                        <td className="py-3 px-4 whitespace-nowrap text-right font-mono text-indigo-650 font-semibold">
-                          {item.gramCost ? `R$ ${item.gramCost.toFixed(3)}/g` : '--'}
-                        </td>
-                        <td className="py-3 px-4 whitespace-nowrap text-center">
+                        <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-sm text-white px-2.5 py-1 rounded-full text-[10px] font-mono font-bold border border-white/10 uppercase">
+                          {item.id}
+                        </div>
+
+                        <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                          <span className={`px-2.5 py-0.5 text-[9px] font-extrabold rounded-full ${getCategoryBadgeStyle(item.category)}`}>
+                            {item.category || 'Filamento'}
+                          </span>
                           <span className={`px-2.5 py-1 text-[10px] font-extrabold rounded-full ${getStatusStyle(item.status)}`}>
                             {item.status}
                           </span>
-                        </td>
-                        <td className="py-3 px-4 whitespace-nowrap text-center">
+                        </div>
+                      </div>
+
+                      {/* Meta info body */}
+                      <div className="p-4 flex-1 flex flex-col justify-between space-y-4">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md ${getCategoryBadgeStyle(item.category)}`}>
+                              {item.category || 'Filamento'}
+                            </span>
+                          </div>
+                          <h4 className="font-bold text-slate-900 text-sm leading-snug tracking-tight truncate-2-lines">{item.material}</h4>
+                          
+                          <div className="grid grid-cols-2 gap-4 mt-3 pt-3 border-t border-slate-100 text-xs">
+                            <div>
+                              <span className="text-[10px] uppercase font-mono font-semibold text-slate-400 block">Estoque</span>
+                              <span className="font-bold text-slate-800 text-sm">{item.qty} Un/Rolos</span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] uppercase font-mono font-semibold text-slate-400 block">Preço Unitário</span>
+                              <span className="font-semibold text-slate-800 text-sm">{formatBRL(item.unitCost)}</span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] uppercase font-mono font-semibold text-slate-400 block">Custo por Grama</span>
+                              <span className="font-bold font-mono text-indigo-600 text-sm">R$ {item.gramCost?.toFixed(3)}/g</span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] uppercase font-mono font-semibold text-slate-400 block">Categoria</span>
+                              <span className="font-semibold text-slate-600 font-mono text-[11px] truncate block">{item.category || 'Filamento'}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Card Buttons */}
+                        <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
                           {item.purchaseLink ? (
                             <button
                               onClick={() => {
@@ -814,50 +827,198 @@ export default function InventoryView({
                                 setPurchaseQty(1);
                                 setPurchaseNotes('');
                               }}
-                              className="inline-flex p-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded cursor-pointer"
-                              title="Adicionar à lista de compras e ver link"
+                              className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 text-indigo-700 text-xs font-bold rounded-lg transition cursor-pointer"
                             >
-                              <ExternalLink className="w-3.5 h-3.5" />
+                              <ExternalLink className="w-3 h-3" />
+                              Link de Compra
                             </button>
                           ) : (
-                            <span className="text-slate-400 text-xs">-</span>
+                            <span className="flex-1 text-[11px] text-slate-400 italic text-center py-2">Sem Link Cadastrado</span>
                           )}
-                        </td>
-                        {userRole !== 'colaborador' && (
-                          <td className="py-3 px-4 whitespace-nowrap text-center">
-                            <div className="flex items-center justify-center gap-1.5">
+
+                          {userRole !== 'colaborador' && (
+                            <div className="flex gap-1">
                               <button
-                                onClick={() => setEditingItem(item)}
-                                className="p-1.5 text-slate-400 hover:text-indigo-600 rounded hover:bg-indigo-50"
+                                onClick={() => {
+                                  setEditingItem(item);
+                                  setEditName(item.material);
+                                  setEditCategory(item.category || 'Filamento');
+                                  setEditQty(item.qty);
+                                  setEditUnitCost(item.unitCost);
+                                  setEditLink(item.purchaseLink || '');
+                                  setEditImg(item.image || '');
+                                }}
+                                className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg border border-slate-100"
                                 title="Editar Insumo"
                               >
                                 <Edit2 className="w-3.5 h-3.5" />
                               </button>
+                              
                               <button
                                 onClick={() => {
-                                  if (confirm(`Deseja realmente remover o material "${item.material}" do inventário?`)) {
+                                  if (confirm(`Deseja realmente apagar o insumo "${item.material}"?`)) {
                                     onDeleteInventoryItem(item.id);
                                   }
                                 }}
-                                className="p-1.5 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 transition"
-                                title="Remover Material"
+                                className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg border border-slate-100"
+                                title="Remover"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
-                          </td>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <div className="text-center py-12">
-                  <p className="text-slate-400 text-sm">Nenhum estoque ou filamento cadastrado.</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              )}
-            </div>
-          )}
+              ) : (
+                <div className="text-center py-16">
+                  <Database className="w-12 h-12 text-slate-200 mx-auto mb-3" />
+                  <p className="text-slate-400 text-sm">Nenhum insumo cadastrado na categoria "{activeCategoryFilter}".</p>
+                </div>
+              )
+            ) : (
+              /* STANDARD DATA TABLE LAYOUT */
+              <div className="overflow-x-auto">
+                {filteredInventory.length > 0 ? (
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wider text-slate-400 font-mono">
+                        <th className="py-3 px-4">Foto/Nome</th>
+                        <th className="py-3 px-4 text-center">Categoria</th>
+                        <th className="py-3 px-4 text-center">Volume Estoque</th>
+                        <th className="py-3 px-4 text-right">Preço Un.</th>
+                        <th className="py-3 px-4 text-right">Custo p/ Grama</th>
+                        <th className="py-3 px-4 text-center">Status</th>
+                        <th className="py-3 px-4 text-center">Mercado/Link</th>
+                        {userRole !== 'colaborador' && <th className="py-3 px-4 text-center">Ações</th>}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-sm">
+                      {filteredInventory.map((item) => (
+                        <tr key={item.id} className="hover:bg-slate-50 text-sm transition-colors duration-150">
+                          <td className="py-3 px-4 font-semibold text-slate-800 max-w-[240px]">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded border border-slate-200 overflow-hidden flex-shrink-0 bg-slate-100 cursor-pointer" onClick={() => item.image && setZoomImage(item.image)}>
+                                {item.image ? (
+                                  <img
+                                    src={item.image}
+                                    alt={item.material}
+                                    className="w-full h-full object-cover"
+                                    referrerPolicy="no-referrer"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full bg-indigo-50 text-indigo-500 font-mono text-[10px] font-bold flex items-center justify-center">3D</div>
+                                )}
+                              </div>
+                              <span className="truncate block" title={item.material}>
+                                {item.material}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 whitespace-nowrap text-center">
+                            <span className={`px-2.5 py-0.5 text-[10px] font-bold rounded-full ${getCategoryBadgeStyle(item.category)}`}>
+                              {item.category || 'Filamento'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 whitespace-nowrap text-center">
+                            {userRole === 'colaborador' ? (
+                              <span className="font-mono font-semibold text-slate-700 px-2 min-w-[50px] inline-block text-center">
+                                {item.qty} Un
+                              </span>
+                            ) : (
+                              <div className="flex items-center justify-center gap-2">
+                                <button
+                                  onClick={() => onUpdateQty(item.id, Math.max(0, item.qty - 1))}
+                                  className="w-6 h-6 rounded bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200 transition-colors"
+                                >
+                                  -
+                                </button>
+                                <span className="font-mono font-semibold text-slate-700 px-2 min-w-[50px] inline-block text-center">
+                                  {item.qty} Un
+                                </span>
+                                <button
+                                  onClick={() => onUpdateQty(item.id, item.qty + 1)}
+                                  className="w-6 h-6 rounded bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200 transition-colors"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 whitespace-nowrap text-right font-mono text-slate-600">
+                            {formatBRL(item.unitCost)}
+                          </td>
+                          <td className="py-3 px-4 whitespace-nowrap text-right font-mono text-indigo-650 font-semibold">
+                            {item.gramCost ? `R$ ${item.gramCost.toFixed(3)}/g` : '--'}
+                          </td>
+                          <td className="py-3 px-4 whitespace-nowrap text-center">
+                            <span className={`px-2.5 py-1 text-[10px] font-extrabold rounded-full ${getStatusStyle(item.status)}`}>
+                              {item.status}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 whitespace-nowrap text-center">
+                            {item.purchaseLink ? (
+                              <button
+                                onClick={() => {
+                                  setPurchasingItem(item);
+                                  setPurchaseQty(1);
+                                  setPurchaseNotes('');
+                                }}
+                                className="inline-flex p-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded cursor-pointer"
+                                title="Adicionar à lista de compras e ver link"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </button>
+                            ) : (
+                              <span className="text-slate-400 text-xs">-</span>
+                            )}
+                          </td>
+                          {userRole !== 'colaborador' && (
+                            <td className="py-3 px-4 whitespace-nowrap text-center">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  onClick={() => {
+                                    setEditingItem(item);
+                                    setEditName(item.material);
+                                    setEditCategory(item.category || 'Filamento');
+                                    setEditQty(item.qty);
+                                    setEditUnitCost(item.unitCost);
+                                    setEditLink(item.purchaseLink || '');
+                                    setEditImg(item.image || '');
+                                  }}
+                                  className="p-1.5 text-slate-400 hover:text-indigo-600 rounded hover:bg-indigo-50"
+                                  title="Editar Insumo"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    if (confirm(`Deseja realmente remover o material "${item.material}" do inventário?`)) {
+                                      onDeleteInventoryItem(item.id);
+                                    }
+                                  }}
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 transition"
+                                  title="Remover Material"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="text-center py-12">
+                    <p className="text-slate-400 text-sm">Nenhum estoque ou insumo cadastrado para esta categoria.</p>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </div>
 
@@ -893,7 +1054,7 @@ export default function InventoryView({
             <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <h3 className="font-bold text-slate-850 text-md flex items-center gap-2">
                 <Edit2 className="w-4 h-4 text-indigo-500" />
-                Editar Filamento: {editingItem.id}
+                Editar Insumo: {editingItem.id}
               </h3>
               <button onClick={() => setEditingItem(null)} className="p-1 text-slate-400 hover:text-slate-600">
                 <X className="w-5 h-5" />
@@ -902,11 +1063,25 @@ export default function InventoryView({
             
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Especificação do Filamento</label>
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Categoria do Insumo</label>
+                <select
+                  value={editCategory}
+                  onChange={(e) => setEditCategory(e.target.value)}
+                  className="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg text-slate-800 bg-white font-semibold"
+                >
+                  {CATEGORIES.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Especificação do Insumo</label>
                 <input
                   type="text"
-                  defaultValue={editingItem.material}
-                  value={editName === '' && editName !== editingItem.material ? (setEditName(editingItem.material), editingItem.material) : editName}
+                  value={editName}
                   onChange={(e) => setEditName(e.target.value)}
                   className="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg text-slate-800 bg-white"
                 />
@@ -914,22 +1089,22 @@ export default function InventoryView({
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Rolos em Estoque</label>
+                  <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Qtd em Estoque</label>
                   <input
                     type="number"
                     min="0"
-                    value={editQty === 0 && editingItem.qty !== editQty ? (setEditQty(editingItem.qty), editingItem.qty) : editQty}
+                    value={editQty}
                     onChange={(e) => setEditQty(parseInt(e.target.value) || 0)}
                     className="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg text-slate-800 bg-white"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Preço por Rolo (R$)</label>
+                  <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Preço Unitário (R$)</label>
                   <input
                     type="number"
                     min="0.01"
                     step="0.01"
-                    value={editUnitCost === 0 ? (setEditUnitCost(editingItem.unitCost), editingItem.unitCost) : editUnitCost}
+                    value={editUnitCost}
                     onChange={(e) => setEditUnitCost(parseFloat(e.target.value) || 0)}
                     className="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg text-slate-800 bg-white"
                   />
@@ -940,7 +1115,7 @@ export default function InventoryView({
                 <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Link de Compra</label>
                 <input
                   type="url"
-                  value={editLink === '' && editingItem.purchaseLink ? (setEditLink(editingItem.purchaseLink), editingItem.purchaseLink) : editLink}
+                  value={editLink}
                   onChange={(e) => setEditLink(e.target.value)}
                   className="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg text-slate-800 bg-white"
                   placeholder="Se houver, ex: https://www.mercadolivre.com.br/..."
