@@ -128,6 +128,17 @@ const DEFAULT_INVENTORY: InventoryItem[] = [
     category: 'Outros',
     image: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=300&q=80',
     purchaseLink: 'https://www.mercadolivre.com.br/'
+  },
+  {
+    id: 'INV-007',
+    material: 'Cooler Ventoinha 4010 24V Axial Duplo Rolamento (Hotend)',
+    qty: 6,
+    unitCost: 28.50,
+    gramCost: 28.50,
+    status: 'Em Estoque',
+    category: 'Refrigeração',
+    image: 'https://images.unsplash.com/photo-1581092334247-44dfa8c569ca?w=300&q=80',
+    purchaseLink: 'https://www.mercadolivre.com.br/'
   }
 ];
 
@@ -167,6 +178,19 @@ const DEFAULT_SHOPPING: ShoppingItem[] = [
     category: 'Acessórios/Insumos',
     notes: 'Limpeza e desengorduramento técnico das mesas de PEI texturizadas',
     checked: true,
+    requestedBy: 'Administrador',
+    company: 'GeorgeFctech-3D',
+    department: 'Oficina'
+  },
+  {
+    id: 'SHOP-004',
+    materialName: 'Ventoinha Radial 5015 24V Cooler de Refrigeração da Peça',
+    qtyNeeded: 3,
+    estUnitCost: 32.00,
+    purchaseLink: 'https://www.mercadolivre.com.br/',
+    category: 'Refrigeração',
+    notes: 'Refrigeração de camadas e pontes rápidas no cabeçote de impressão',
+    checked: false,
     requestedBy: 'Administrador',
     company: 'GeorgeFctech-3D',
     department: 'Oficina'

@@ -36,6 +36,7 @@ const CATEGORIES = [
   'Placas',
   'Componentes Eletrônicos',
   'Peças Geral',
+  'Refrigeração',
   'Outros'
 ] as const;
 
@@ -49,6 +50,8 @@ const getCategoryBadgeStyle = (cat?: string) => {
       return 'bg-purple-50 text-purple-700 border border-purple-200';
     case 'Peças Geral':
       return 'bg-blue-50 text-blue-700 border border-blue-200';
+    case 'Refrigeração':
+      return 'bg-cyan-50 text-cyan-700 border border-cyan-200';
     case 'Outros':
     default:
       return 'bg-slate-100 text-slate-700 border border-slate-200';
@@ -204,8 +207,9 @@ export default function InventoryView({
     
     // Map item category to shopping category if supported
     const itemCat = purchasingItem.category || 'Filamento';
-    let shopCat: 'Filamento' | 'Peças de Reposição' | 'Acessórios/Insumos' | 'Outros' = 'Outros';
+    let shopCat: 'Filamento' | 'Peças de Reposição' | 'Acessórios/Insumos' | 'Refrigeração' | 'Outros' = 'Outros';
     if (itemCat === 'Filamento') shopCat = 'Filamento';
+    else if (itemCat === 'Refrigeração') shopCat = 'Refrigeração';
     else if (itemCat === 'Placas' || itemCat === 'Componentes Eletrônicos' || itemCat === 'Peças Geral') shopCat = 'Peças de Reposição';
     
     if (onAddShoppingItem) {
@@ -421,7 +425,7 @@ export default function InventoryView({
 
       {success && (
         <div className="mb-6 p-4 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm shadow-sm">
-          Filamento cadastrado com sucesso com fotos e link de compra!
+          Insumo cadastrado com sucesso com fotos e link de compra!
         </div>
       )}
 
@@ -444,225 +448,205 @@ export default function InventoryView({
         
         {/* LEFT COMPONENT: ADD FORM */}
         <div className="p-6 rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col justify-between">
-          {userRole === 'colaborador' ? (
-            <div className="flex-1 flex flex-col items-center justify-center text-center p-4 py-8 space-y-4">
-              <div className="p-4 bg-amber-50 rounded-full text-amber-500 border border-amber-100 shadow-inner">
-                <AlertCircle className="w-8 h-8 animate-pulse" />
-              </div>
-              <h3 className="font-bold text-slate-800 text-sm uppercase tracking-wider">Acesso Restrito</h3>
-              <p className="text-xs text-slate-500 leading-relaxed max-w-[240px]">
-                Como <strong>Colaborador</strong>, você possui permissão apenas de visualização no estoque de insumos.
-              </p>
-              <p className="text-[11px] text-slate-400 leading-relaxed max-w-[240px]">
-                O cadastro e alteração de novos materiais e quantidades físicas são reservados exclusivamente para administradores.
-              </p>
-              <div className="pt-4 w-full border-t border-slate-100 text-[10px] font-mono text-slate-400">
-                GeorgeFctech-3D • Nível: Colaborador
-              </div>
+          <div>
+            <div className="flex items-center gap-2 mb-6 pb-3 border-b border-slate-100">
+              <Package className="w-4 h-4 text-indigo-500" />
+              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800">
+                Cadastrar Novo Insumo
+              </h3>
             </div>
-          ) : (
-            <>
-              <div>
-                <div className="flex items-center gap-2 mb-6 pb-3 border-b border-slate-100">
-                  <Package className="w-4 h-4 text-indigo-500" />
-                  <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800">
-                    Cadastrar Novo Insumo
-                  </h3>
+
+            <form onSubmit={handleAdditem} className="space-y-4">
+              {/* Category Selector */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-slate-500">
+                  Categoria do Insumo *
+                </label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {CATEGORIES.map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setSelectedCategory(cat)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition duration-150 text-left flex items-center justify-between cursor-pointer ${
+                        selectedCategory === cat
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span className="truncate">{cat}</span>
+                      {selectedCategory === cat && <Check className="w-3.5 h-3.5 shrink-0" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* ID / Barcode Field */}
+              <div className="flex flex-col gap-1.5 p-3 rounded-lg bg-slate-50 border border-slate-200/60">
+                <label className="text-xs font-semibold text-slate-500 flex items-center justify-between">
+                  <span>Código de Barras / SKU (Opcional)</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsScanning(true);
+                      setScannedCode('');
+                      setManualCode('');
+                    }}
+                    className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 cursor-pointer"
+                  >
+                    <Scan className="w-3 h-3 text-indigo-600 animate-pulse" />
+                    Escanear Câmera
+                  </button>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Código de barra ou gera automático"
+                  value={customBarcodeId}
+                  onChange={(e) => setCustomBarcodeId(e.target.value)}
+                  className="px-3 py-1.5 w-full border border-slate-200 rounded-md bg-white text-slate-800 text-sm focus:outline-none focus:border-indigo-500 transition-all font-mono"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-slate-500">
+                  Nome do Insumo / Fabricante / Especificação *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={materialName}
+                  onChange={(e) => setMaterialName(e.target.value)}
+                  placeholder="Ex: Placa V4.2.7 ou PETG Creality 1kg"
+                  className="px-4 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-800 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white placeholder-slate-400 transition-all font-sans"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-slate-500">
+                    Qtd em Estoque
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={qty}
+                    onChange={(e) => setQty(e.target.value)}
+                    className="px-4 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-800 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition-all font-mono"
+                  />
                 </div>
 
-                <form onSubmit={handleAdditem} className="space-y-4">
-                  {/* Category Selector */}
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-semibold text-slate-500">
-                      Categoria do Insumo *
-                    </label>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {CATEGORIES.map((cat) => (
-                        <button
-                          key={cat}
-                          type="button"
-                          onClick={() => setSelectedCategory(cat)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition duration-150 text-left flex items-center justify-between cursor-pointer ${
-                            selectedCategory === cat
-                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                              : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                          }`}
-                        >
-                          <span className="truncate">{cat}</span>
-                          {selectedCategory === cat && <Check className="w-3.5 h-3.5 shrink-0" />}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-slate-500">
+                    Preço Unitário (R$)
+                  </label>
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={unitCost}
+                    onChange={(e) => setUnitCost(e.target.value)}
+                    className="px-4 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-800 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition-all font-mono"
+                  />
+                </div>
+              </div>
 
-                  {/* ID / Barcode Field */}
-                  <div className="flex flex-col gap-1.5 p-3 rounded-lg bg-slate-50 border border-slate-200/60">
-                    <label className="text-xs font-semibold text-slate-500 flex items-center justify-between">
-                      <span>Código de Barras / SKU (Opcional)</span>
+              {/* PURCHASE LINK INPUT */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-slate-500">
+                  Link de Compra Direta
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-slate-400">
+                    <Link className="w-3.5 h-3.5" />
+                  </span>
+                  <input
+                    type="url"
+                    value={purchaseLink}
+                    onChange={(e) => setPurchaseLink(e.target.value)}
+                    placeholder="Ex: https://www.mercadolivre.com.br/..."
+                    className="px-4 pl-9 py-2 w-full border border-slate-200 rounded-lg bg-slate-50 text-slate-800 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white placeholder-slate-400 transition-all font-sans"
+                  />
+                </div>
+              </div>
+
+              {/* FILAMENT PHOTO UPLOADER */}
+              <div className="flex flex-col gap-2.5 pt-1.5">
+                <label className="text-xs font-semibold text-slate-500">
+                  Foto do Filamento
+                </label>
+                
+                {/* PRESETS SLIDER */}
+                <div>
+                  <div className="text-[10px] uppercase font-mono text-slate-400 mb-1.5">Escolher Presets de Cores:</div>
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {presetColors.map((preset, idx) => (
                       <button
+                        key={idx}
                         type="button"
-                        onClick={() => {
-                          setIsScanning(true);
-                          setScannedCode('');
-                          setManualCode('');
-                        }}
-                        className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 cursor-pointer"
+                        onClick={() => handlePresetSelect(preset.url)}
+                        title={preset.name}
+                        className={`h-7 px-2.5 rounded text-[11px] font-semibold border flex items-center gap-1.5 transition ${
+                          imgUrl === preset.url 
+                            ? 'border-indigo-600 bg-indigo-50 text-indigo-700' 
+                            : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700'
+                        }`}
                       >
-                        <Scan className="w-3 h-3 text-indigo-600 animate-pulse" />
-                        Escanear Câmera
+                        <span className="w-2.5 h-2.5 rounded-full inline-block shadow-inner" style={{ backgroundColor: preset.color }}></span>
+                        {preset.name.split(' ')[0]}
                       </button>
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Código de barra ou gera automático"
-                      value={customBarcodeId}
-                      onChange={(e) => setCustomBarcodeId(e.target.value)}
-                      className="px-3 py-1.5 w-full border border-slate-200 rounded-md bg-white text-slate-800 text-sm focus:outline-none focus:border-indigo-500 transition-all font-mono"
-                    />
+                    ))}
                   </div>
+                </div>
 
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-semibold text-slate-500">
-                      Nome do Insumo / Fabricante / Especificação *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={materialName}
-                      onChange={(e) => setMaterialName(e.target.value)}
-                      placeholder="Ex: Placa V4.2.7 ou PETG Creality 1kg"
-                      className="px-4 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-800 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white placeholder-slate-400 transition-all font-sans"
-                    />
-                  </div>
+                <div className="text-center py-1">
+                  <span className="text-[10px] font-mono text-slate-400">OU SUBIR FOTO REAL DO CELULAR ou ARQUIVO</span>
+                </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-semibold text-slate-500">
-                        Qtd em Estoque
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={qty}
-                        onChange={(e) => setQty(e.target.value)}
-                        className="px-4 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-800 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition-all font-mono"
+                {/* FILE UPLOAD DRAG/CLICK */}
+                <label className="border-2 border-dashed border-slate-200 hover:border-indigo-400 min-h-[70px] rounded-lg p-3 bg-slate-50 hover:bg-slate-100 flex flex-col items-center justify-center cursor-pointer transition select-none">
+                  {uploadedBase64 ? (
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={uploadedBase64}
+                        alt="Preview"
+                        className="w-10 h-10 object-cover rounded border border-slate-200"
+                        referrerPolicy="no-referrer"
                       />
+                      <span className="text-xs text-indigo-600 font-semibold truncate max-w-[120px]">Imagem Real Pronta</span>
                     </div>
-
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-semibold text-slate-500">
-                        Preço Unitário (R$)
-                      </label>
-                      <input
-                        type="number"
-                        min="0.01"
-                        step="0.01"
-                        value={unitCost}
-                        onChange={(e) => setUnitCost(e.target.value)}
-                        className="px-4 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-800 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition-all font-mono"
-                      />
-                    </div>
-                  </div>
-
-                  {/* PURCHASE LINK INPUT */}
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-semibold text-slate-500">
-                      Link de Compra Direta
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-2.5 text-slate-400">
-                        <Link className="w-3.5 h-3.5" />
-                      </span>
-                      <input
-                        type="url"
-                        value={purchaseLink}
-                        onChange={(e) => setPurchaseLink(e.target.value)}
-                        placeholder="Ex: https://www.mercadolivre.com.br/..."
-                        className="px-4 pl-9 py-2 w-full border border-slate-200 rounded-lg bg-slate-50 text-slate-800 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white placeholder-slate-400 transition-all font-sans"
-                      />
-                    </div>
-                  </div>
-
-                  {/* FILAMENT PHOTO UPLOADER */}
-                  <div className="flex flex-col gap-2.5 pt-1.5">
-                    <label className="text-xs font-semibold text-slate-500">
-                      Foto do Filamento
-                    </label>
-                    
-                    {/* PRESETS SLIDER */}
-                    <div>
-                      <div className="text-[10px] uppercase font-mono text-slate-400 mb-1.5">Escolher Presets de Cores:</div>
-                      <div className="flex flex-wrap gap-2 mb-2">
-                        {presetColors.map((preset, idx) => (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => handlePresetSelect(preset.url)}
-                            title={preset.name}
-                            className={`h-7 px-2.5 rounded text-[11px] font-semibold border flex items-center gap-1.5 transition ${
-                              imgUrl === preset.url 
-                                ? 'border-indigo-600 bg-indigo-50 text-indigo-700' 
-                                : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700'
-                            }`}
-                          >
-                            <span className="w-2.5 h-2.5 rounded-full inline-block shadow-inner" style={{ backgroundColor: preset.color }}></span>
-                            {preset.name.split(' ')[0]}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="text-center py-1">
-                      <span className="text-[10px] font-mono text-slate-400">OU SUBIR FOTO REAL DO CELULAR ou ARQUIVO</span>
-                    </div>
-
-                    {/* FILE UPLOAD DRAG/CLICK */}
-                    <label className="border-2 border-dashed border-slate-200 hover:border-indigo-400 min-h-[70px] rounded-lg p-3 bg-slate-50 hover:bg-slate-100 flex flex-col items-center justify-center cursor-pointer transition select-none">
-                      {uploadedBase64 ? (
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={uploadedBase64}
-                            alt="Preview"
-                            className="w-10 h-10 object-cover rounded border border-slate-200"
-                            referrerPolicy="no-referrer"
-                          />
-                          <span className="text-xs text-indigo-600 font-semibold truncate max-w-[120px]">Imagem Real Pronta</span>
-                        </div>
-                      ) : (
-                        <>
-                          <Upload className="w-5 h-5 text-slate-400 mb-1" />
-                          <span className="text-[11px] font-semibold text-slate-600">Procurar ou arrastar imagem</span>
-                        </>
-                      )}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => handleImageFileChange(e)}
-                        className="hidden"
-                      />
-                    </label>
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="w-full mt-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold uppercase tracking-wider rounded-lg shadow-sm hover:shadow-md transition-all duration-200"
-                  >
-                    Injetar ao Inventário
-                  </button>
-                </form>
+                  ) : (
+                    <>
+                      <Upload className="w-5 h-5 text-slate-400 mb-1" />
+                      <span className="text-[11px] font-semibold text-slate-600">Procurar ou arrastar imagem</span>
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleImageFileChange(e)}
+                    className="hidden"
+                  />
+                </label>
               </div>
 
-              {/* REALTIME TRIVIA */}
-              <div className="mt-8 p-4 rounded-lg bg-slate-50 border border-slate-100 space-y-3">
-                <h4 className="text-[10px] font-bold text-indigo-650 tracking-widest uppercase mb-1">
-                  ESTRUTURA DE COMPRA 3D
-                </h4>
-                <p className="text-[11px] text-slate-500 leading-relaxed">
-                  O software de precificação GeorgeFctech usará o valor por rolo de 1kg para encontrar de forma precisa a taxa por grama de cada material.
-                </p>
-              </div>
-            </>
-          )}
+              <button
+                type="submit"
+                className="w-full mt-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold uppercase tracking-wider rounded-lg shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer"
+              >
+                Injetar ao Inventário
+              </button>
+            </form>
+          </div>
+
+          {/* REALTIME TRIVIA */}
+          <div className="mt-8 p-4 rounded-lg bg-slate-50 border border-slate-100 space-y-3">
+            <h4 className="text-[10px] font-bold text-indigo-650 tracking-widest uppercase mb-1">
+              ESTRUTURA DE COMPRA 3D
+            </h4>
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              O software de precificação GeorgeFctech usará o valor por rolo ou unidade para encontrar de forma precisa a taxa de consumo de cada material.
+            </p>
+          </div>
         </div>
 
         {/* RIGHT COMPONENT: GALLERIES AND DETAILS */}
@@ -1323,16 +1307,17 @@ export default function InventoryView({
                             setManualCode('');
                             // Scroll to form smoothly
                             setTimeout(() => {
-                              const inputEl = document.querySelector('input[placeholder="Ex: PETG Creality Preto 1kg"]');
+                              const inputEl = document.querySelector('input[placeholder*="PETG Creality"]');
                               if (inputEl) {
-                                inputEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                (inputEl as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                (inputEl as HTMLInputElement).focus();
                               }
                             }, 300);
                           }}
                           className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider rounded-lg flex items-center justify-center gap-1.5 transition cursor-pointer"
                         >
                           <Plus className="w-3.5 h-3.5" />
-                          Cadastrar como Novo Filamento
+                          Cadastrar como Novo Insumo
                         </button>
                       </div>
                     )}

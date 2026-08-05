@@ -38,6 +38,7 @@ import {
   CheckSquare,
   FileClock,
   Calculator,
+  Fan,
   X
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
@@ -247,7 +248,7 @@ export default function ShoppingListView({
   const [qtyNeeded, setQtyNeeded] = useState(1);
   const [estUnitCost, setEstUnitCost] = useState(120.00);
   const [purchaseLink, setPurchaseLink] = useState('');
-  const [category, setCategory] = useState<'Filamento' | 'Peças de Reposição' | 'Acessórios/Insumos' | 'Outros'>(() => {
+  const [category, setCategory] = useState<'Filamento' | 'Peças de Reposição' | 'Acessórios/Insumos' | 'Refrigeração' | 'Outros' | string>(() => {
     return userRole === 'colaborador' ? 'Acessórios/Insumos' : 'Filamento';
   });
   const [notes, setNotes] = useState('');
@@ -275,6 +276,7 @@ export default function ShoppingListView({
   const [excelCompany, setExcelCompany] = useState('');
   const [excelRequestedBy, setExcelRequestedBy] = useState('');
   const [excelDepartment, setExcelDepartment] = useState('');
+  const [excelCategory, setExcelCategory] = useState<string>('Todos');
 
   const triggerExcelReportModal = (type: 'pending' | 'completed') => {
     setExcelModalType(type);
@@ -286,10 +288,12 @@ export default function ShoppingListView({
       
     const defaultRequestedBy = requestedBy || (userRole === 'colaborador' ? 'Colaborador' : 'Administrador');
     const defaultDepartment = department || (userRole === 'colaborador' ? 'Faturamento/Comercial' : 'Oficina');
+    const defaultCat = filterCategory !== 'Todos' ? filterCategory : 'Todos';
 
     setExcelCompany(defaultCompany);
     setExcelRequestedBy(defaultRequestedBy);
     setExcelDepartment(defaultDepartment);
+    setExcelCategory(defaultCat);
     setExcelModalOpen(true);
   };
 
@@ -329,7 +333,7 @@ export default function ShoppingListView({
   const [editCost, setEditCost] = useState(0);
   const [editLink, setEditLink] = useState('');
   const [editNotes, setEditNotes] = useState('');
-  const [editCategory, setEditCategory] = useState<'Filamento' | 'Peças de Reposição' | 'Acessórios/Insumos' | 'Outros'>('Filamento');
+  const [editCategory, setEditCategory] = useState<'Filamento' | 'Peças de Reposição' | 'Acessórios/Insumos' | 'Refrigeração' | 'Outros' | string>('Filamento');
   const [editRequestedBy, setEditRequestedBy] = useState('');
   const [editDepartment, setEditDepartment] = useState('');
   const [editCompany, setEditCompany] = useState('');
@@ -955,329 +959,345 @@ export default function ShoppingListView({
     downloadAnchor.click();
   };
 
-  const generateReportExcel = (customMetadata?: { company: string, requestedBy: string, department: string }) => {
-    const reportItems = userRole === 'colaborador' ? shopping.filter(item => !isAdministratorPurchase(item)) : shopping;
-    if (reportItems.length === 0) {
+  const generateReportExcel = (customMetadata?: { company: string, requestedBy: string, department: string, category?: string }) => {
+    const baseItems = userRole === 'colaborador' ? shopping.filter(item => !isAdministratorPurchase(item)) : shopping;
+    if (baseItems.length === 0) {
       setToastMessage("Aviso: Nenhum item de compra encontrado para gerar a planilha.");
       setTimeout(() => setToastMessage(null), 4000);
       return;
     }
 
-    const reportTotalValue = reportItems.reduce((acc, i) => acc + (i.qtyNeeded * i.estUnitCost), 0);
+    const targetCategory = customMetadata?.category || (filterCategory !== 'Todos' ? filterCategory : 'Todos');
     const metaCompany = customMetadata ? customMetadata.company : (filterCompany !== 'Todos' ? filterCompany : (userRole === 'colaborador' ? (company || 'Ftéx') : 'GeorgeFctech-3D'));
     const metaRequestedBy = customMetadata ? customMetadata.requestedBy : (requestedBy || (userRole === 'colaborador' ? 'Colaborador Ftéx' : 'Administrador'));
     const metaDepartment = customMetadata ? customMetadata.department : (department || (userRole === 'colaborador' ? 'Faturamento/Comercial' : 'Geral'));
     const dateFormatted = new Date().toLocaleDateString('pt-BR');
     const timeFormatted = new Date().toLocaleTimeString('pt-BR');
 
-    // Build array of arrays representation for the Excel sheet
-    const data: any[][] = [
-      [`PEDIDO DE COMPRA COMERCIAL - ${metaCompany.toUpperCase()}`],
-      [`Sistema Gestor de Insumos - GeorgeFctech 3D`],
-      [],
-      [`Data de Emissão:`, `${dateFormatted} às ${timeFormatted}`, ``, `Responsável:`, metaRequestedBy, ``, `Setor:`, metaDepartment],
-      [`Empresa / Cliente:`, metaCompany, ``, `Status Geral:`, `Pendente/Ativo`, ``, `Custo Estimado Total:`, reportTotalValue],
-      [], // Empty row spacer
-      [
-        'Material / Produto',
-        'Código / Modelo',
-        'Categoria',
-        'Quantidade',
-        'Custo Unitário',
-        'Custo Total',
-        'Fornecedor / Link de Compra',
-        'Observações / Notas',
-        'Status'
-      ]
-    ];
-
-    // Add item rows
-    reportItems.forEach(item => {
-      const itemTotal = item.qtyNeeded * item.estUnitCost;
-      const statusText = item.checked ? 'Adquirido' : 'Pendente';
+    // Helper to build a styled worksheet for a given list of items
+    const buildWorksheet = (items: ShoppingItem[], sheetCategoryTitle: string, isFilteredCategory: boolean) => {
+      const itemsTotal = items.reduce((acc, i) => acc + (i.qtyNeeded * i.estUnitCost), 0);
       
+      const titleBanner = isFilteredCategory 
+        ? `PEDIDO DE COMPRA - ${sheetCategoryTitle.toUpperCase()} - ${metaCompany.toUpperCase()}`
+        : `PEDIDO DE COMPRA COMERCIAL - ${metaCompany.toUpperCase()}`;
+        
+      const subtitle = isFilteredCategory
+        ? `Itens e Componentes da Categoria ${sheetCategoryTitle} - GeorgeFctech 3D`
+        : `Sistema Gestor de Insumos - GeorgeFctech 3D`;
+
+      const data: any[][] = [
+        [titleBanner],
+        [subtitle],
+        [],
+        [`Data de Emissão:`, `${dateFormatted} às ${timeFormatted}`, ``, `Responsável:`, metaRequestedBy, ``, `Setor:`, metaDepartment],
+        [`Empresa / Cliente:`, metaCompany, ``, `Categoria:`, sheetCategoryTitle, ``, `Custo Estimado Total:`, itemsTotal],
+        [], // Empty row spacer
+        [
+          'Material / Produto',
+          'Código / Modelo',
+          'Categoria',
+          'Quantidade',
+          'Custo Unitário',
+          'Custo Total',
+          'Fornecedor / Link de Compra',
+          'Observações / Notas',
+          'Status'
+        ]
+      ];
+
+      items.forEach(item => {
+        const itemTotal = item.qtyNeeded * item.estUnitCost;
+        const statusText = item.checked ? 'Adquirido' : 'Pendente';
+        
+        data.push([
+          item.materialName || '',
+          item.barcode || '',
+          item.category || 'Outros',
+          item.qtyNeeded,
+          item.estUnitCost,
+          itemTotal,
+          item.purchaseLink && item.purchaseLink.trim() !== '' ? 'Clique para Comprar ↗' : '',
+          item.notes || '',
+          statusText
+        ]);
+      });
+
+      // Add Grand Total Row
+      data.push([]);
       data.push([
-        item.materialName || '',
-        item.barcode || '',
-        item.category || 'Outros',
-        item.qtyNeeded,
-        item.estUnitCost,
-        itemTotal,
-        item.purchaseLink && item.purchaseLink.trim() !== '' ? 'Clique para Comprar ↗' : '',
-        item.notes || '',
-        statusText
+        isFilteredCategory ? `VALOR TOTAL DA CATEGORIA ${sheetCategoryTitle.toUpperCase()}` : 'VALOR TOTAL ESTIMADO DO PEDIDO',
+        '',
+        '',
+        '',
+        '',
+        itemsTotal,
+        '',
+        '',
+        ''
       ]);
-    });
 
-    // Add Grand Total Row
-    data.push([]);
-    data.push([
-      'VALOR TOTAL ESTIMADO DO PEDIDO',
-      '',
-      '',
-      '',
-      '',
-      reportTotalValue,
-      '',
-      '',
-      ''
-    ]);
+      const ws = XLSX.utils.aoa_to_sheet(data);
 
-    // Create worksheet
-    const ws = XLSX.utils.aoa_to_sheet(data);
+      ws['!cols'] = [
+        { wch: 35 }, // Material / Produto
+        { wch: 18 }, // Código / Modelo
+        { wch: 20 }, // Categoria
+        { wch: 12 }, // Quantidade
+        { wch: 16 }, // Custo Unitário
+        { wch: 16 }, // Custo Total
+        { wch: 25 }, // Link de Compra
+        { wch: 30 }, // Observações / Notas
+        { wch: 12 }  // Status
+      ];
 
-    // Set professional column widths
-    ws['!cols'] = [
-      { wch: 35 }, // Material / Produto
-      { wch: 18 }, // Código / Modelo
-      { wch: 20 }, // Categoria
-      { wch: 12 }, // Quantidade
-      { wch: 16 }, // Custo Unitário
-      { wch: 16 }, // Custo Total
-      { wch: 25 }, // Link de Compra
-      { wch: 30 }, // Observações / Notas
-      { wch: 12 }  // Status
-    ];
-
-    // Set professional row heights
-    const rowHeights = [
-      { hpt: 30 }, // Row 0 (Title)
-      { hpt: 20 }, // Row 1 (Subtitle)
-      { hpt: 12 }, // Row 2 (Spacer)
-      { hpt: 22 }, // Row 3 (Metadata 1)
-      { hpt: 22 }, // Row 4 (Metadata 2)
-      { hpt: 12 }, // Row 5 (Spacer)
-      { hpt: 28 }, // Row 6 (Headers)
-    ];
-    for (let i = 0; i < shopping.length; i++) {
-      rowHeights.push({ hpt: 24 }); // Data Rows
-    }
-    rowHeights.push({ hpt: 12 }); // Total Spacer Row
-    rowHeights.push({ hpt: 30 }); // Grand Total Row
-    ws['!rows'] = rowHeights;
-
-    // Enable gridlines explicitly so they are visible
-    ws['!views'] = [{ showGridLines: true }];
-
-    // Merge cells for title block & grand total label
-    ws['!merges'] = [
-      { s: { r: 0, c: 0 }, e: { r: 0, c: 8 } }, // Title span
-      { s: { r: 1, c: 0 }, e: { r: 1, c: 8 } }, // Subtitle span
-      { s: { r: 8 + shopping.length, c: 0 }, e: { r: 8 + shopping.length, c: 4 } } // Merge "VALOR TOTAL ESTIMADO DO PEDIDO" cell
-    ];
-
-    // Format numbers, currency and add clickable hyperlinks with dynamic Excel formulas
-    const startRow = 7; // Header row is at index 6, data starts at index 7
-    shopping.forEach((item, index) => {
-      const rIdx = startRow + index;
-      const excelRow = rIdx + 1; // 1-based Excel row number (e.g. 8, 9, 10...)
-
-      // Format unit cost as currency (BRL format)
-      const unitCostCellRef = XLSX.utils.encode_cell({ r: rIdx, c: 4 });
-      if (ws[unitCostCellRef]) {
-        ws[unitCostCellRef].t = 'n';
-        ws[unitCostCellRef].z = '"R$"#,##0.00';
+      const rowHeights = [
+        { hpt: 30 }, // Row 0 (Title)
+        { hpt: 20 }, // Row 1 (Subtitle)
+        { hpt: 12 }, // Row 2 (Spacer)
+        { hpt: 22 }, // Row 3 (Metadata 1)
+        { hpt: 22 }, // Row 4 (Metadata 2)
+        { hpt: 12 }, // Row 5 (Spacer)
+        { hpt: 28 }, // Row 6 (Headers)
+      ];
+      for (let i = 0; i < items.length; i++) {
+        rowHeights.push({ hpt: 24 });
       }
+      rowHeights.push({ hpt: 12 }); // Total Spacer Row
+      rowHeights.push({ hpt: 30 }); // Grand Total Row
+      ws['!rows'] = rowHeights;
 
-      // Format total cost cell as dynamic formula: Quantidade (D) * Custo Unitário (E)
-      const totalCostCellRef = XLSX.utils.encode_cell({ r: rIdx, c: 5 });
-      ws[totalCostCellRef] = {
+      ws['!views'] = [{ showGridLines: true }];
+
+      ws['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 8 } },
+        { s: { r: 1, c: 0 }, e: { r: 1, c: 8 } },
+        { s: { r: 8 + items.length, c: 0 }, e: { r: 8 + items.length, c: 4 } }
+      ];
+
+      const startRow = 7;
+      items.forEach((item, index) => {
+        const rIdx = startRow + index;
+        const excelRow = rIdx + 1;
+
+        const unitCostCellRef = XLSX.utils.encode_cell({ r: rIdx, c: 4 });
+        if (ws[unitCostCellRef]) {
+          ws[unitCostCellRef].t = 'n';
+          ws[unitCostCellRef].z = '"R$"#,##0.00';
+        }
+
+        const totalCostCellRef = XLSX.utils.encode_cell({ r: rIdx, c: 5 });
+        ws[totalCostCellRef] = {
+          t: 'n',
+          f: `D${excelRow}*E${excelRow}`,
+          v: item.qtyNeeded * item.estUnitCost,
+          z: '"R$"#,##0.00'
+        };
+
+        const qtyCellRef = XLSX.utils.encode_cell({ r: rIdx, c: 3 });
+        if (ws[qtyCellRef]) {
+          ws[qtyCellRef].t = 'n';
+          ws[qtyCellRef].z = '#,##0';
+        }
+
+        if (item.purchaseLink && item.purchaseLink.trim() !== '') {
+          const linkCellRef = XLSX.utils.encode_cell({ r: rIdx, c: 6 });
+          const absoluteUrl = ensureAbsoluteUrl(item.purchaseLink, item.materialName);
+          if (ws[linkCellRef]) {
+            ws[linkCellRef].l = {
+              Target: absoluteUrl,
+              Tooltip: 'Clique para abrir o link do fornecedor no seu navegador'
+            };
+          }
+        }
+      });
+
+      const startDataRowExcel = startRow + 1;
+      const endDataRowExcel = startRow + items.length;
+
+      const grandTotalRowIdx = 8 + items.length;
+      const grandTotalRowExcel = grandTotalRowIdx + 1;
+      const grandTotalCellRef = XLSX.utils.encode_cell({ r: grandTotalRowIdx, c: 5 });
+      ws[grandTotalCellRef] = {
         t: 'n',
-        f: `D${excelRow}*E${excelRow}`,
-        v: item.qtyNeeded * item.estUnitCost,
+        f: `SUM(F${startDataRowExcel}:F${endDataRowExcel})`,
+        v: itemsTotal,
         z: '"R$"#,##0.00'
       };
 
-      // Format qty as integer
-      const qtyCellRef = XLSX.utils.encode_cell({ r: rIdx, c: 3 });
-      if (ws[qtyCellRef]) {
-        ws[qtyCellRef].t = 'n';
-        ws[qtyCellRef].z = '#,##0';
-      }
+      const metaTotalCellRef = XLSX.utils.encode_cell({ r: 4, c: 7 });
+      ws[metaTotalCellRef] = {
+        t: 'n',
+        f: `F${grandTotalRowExcel}`,
+        v: itemsTotal,
+        z: '"R$"#,##0.00'
+      };
 
-      // Create hyperlink for purchase links
-      if (item.purchaseLink && item.purchaseLink.trim() !== '') {
-        const linkCellRef = XLSX.utils.encode_cell({ r: rIdx, c: 6 });
-        const absoluteUrl = ensureAbsoluteUrl(item.purchaseLink, item.materialName);
-        if (ws[linkCellRef]) {
-          ws[linkCellRef].l = {
-            Target: absoluteUrl,
-            Tooltip: 'Clique para abrir o link do fornecedor no seu navegador'
+      // Styling loop
+      Object.keys(ws).forEach((cellKey) => {
+        if (cellKey.startsWith('!')) return;
+        const cell = ws[cellKey];
+        const parsedCell = XLSX.utils.decode_cell(cellKey);
+        const r = parsedCell.r;
+        const c = parsedCell.c;
+
+        let font = { name: 'Segoe UI', sz: 10, color: { rgb: '1E293B' }, bold: false, italic: false };
+        let fill = {};
+        let alignment = { vertical: 'center', horizontal: 'left', wrapText: true };
+        let border = {
+          top: { style: 'thin', color: { rgb: 'E2E8F0' } },
+          bottom: { style: 'thin', color: { rgb: 'E2E8F0' } },
+          left: { style: 'thin', color: { rgb: 'E2E8F0' } },
+          right: { style: 'thin', color: { rgb: 'E2E8F0' } }
+        };
+
+        if (r === 0) {
+          font = { name: 'Segoe UI', sz: 14, color: { rgb: 'FFFFFF' }, bold: true, italic: false };
+          fill = { patternType: 'solid', fgColor: { rgb: isFilteredCategory && sheetCategoryTitle === 'Refrigeração' ? '0E7490' : '1E3A8A' } };
+          alignment = { vertical: 'center', horizontal: 'center', wrapText: false };
+          border = {
+            top: { style: 'medium', color: { rgb: '1E293B' } },
+            bottom: { style: 'none', color: { rgb: 'FFFFFF' } },
+            left: { style: 'medium', color: { rgb: '1E293B' } },
+            right: { style: 'medium', color: { rgb: '1E293B' } }
           };
-        }
-      }
-    });
-
-    const startDataRowExcel = startRow + 1; // Row 8
-    const endDataRowExcel = startRow + shopping.length; // Row (7 + shopping.length)
-
-    // Format grand total cell currency & dynamic SUM formula
-    const grandTotalRowIdx = 8 + shopping.length;
-    const grandTotalRowExcel = grandTotalRowIdx + 1;
-    const grandTotalCellRef = XLSX.utils.encode_cell({ r: grandTotalRowIdx, c: 5 });
-    ws[grandTotalCellRef] = {
-      t: 'n',
-      f: `SUM(F${startDataRowExcel}:F${endDataRowExcel})`,
-      v: totalValue,
-      z: '"R$"#,##0.00'
-    };
-
-    // Format header metadata total formula (Cell H5)
-    const metaTotalCellRef = XLSX.utils.encode_cell({ r: 4, c: 7 });
-    ws[metaTotalCellRef] = {
-      t: 'n',
-      f: `F${grandTotalRowExcel}`,
-      v: totalValue,
-      z: '"R$"#,##0.00'
-    };
-
-    // Iterate over all keys in the sheet and apply professional design
-    Object.keys(ws).forEach((cellKey) => {
-      if (cellKey.startsWith('!')) return; // skip metadata like !ref, !merges, !cols, !rows, !views
-      
-      const cell = ws[cellKey];
-      const parsedCell = XLSX.utils.decode_cell(cellKey);
-      const r = parsedCell.r; // 0-based row index
-      const c = parsedCell.c; // 0-based column index
-
-      // Default font and borders
-      let font = { name: 'Segoe UI', sz: 10, color: { rgb: '1E293B' }, bold: false, italic: false };
-      let fill = {};
-      let alignment = { vertical: 'center', horizontal: 'left', wrapText: true };
-      let border = {
-        top: { style: 'thin', color: { rgb: 'E2E8F0' } },
-        bottom: { style: 'thin', color: { rgb: 'E2E8F0' } },
-        left: { style: 'thin', color: { rgb: 'E2E8F0' } },
-        right: { style: 'thin', color: { rgb: 'E2E8F0' } }
-      };
-
-      // 1. STYLE MAIN TITLE BLOCK (Row 0 & Row 1)
-      if (r === 0) {
-        font = { name: 'Segoe UI', sz: 14, color: { rgb: 'FFFFFF' }, bold: true, italic: false };
-        fill = { patternType: 'solid', fgColor: { rgb: '1E3A8A' } }; // Deep Navy Blue
-        alignment = { vertical: 'center', horizontal: 'center', wrapText: false };
-        border = {
-          top: { style: 'medium', color: { rgb: '1E293B' } },
-          bottom: { style: 'none', color: { rgb: 'FFFFFF' } },
-          left: { style: 'medium', color: { rgb: '1E293B' } },
-          right: { style: 'medium', color: { rgb: '1E293B' } }
-        };
-      } else if (r === 1) {
-        font = { name: 'Segoe UI', sz: 10, color: { rgb: '93C5FD' }, bold: true, italic: true }; // Light blue text
-        fill = { patternType: 'solid', fgColor: { rgb: '1E3A8A' } }; // Deep Navy Blue
-        alignment = { vertical: 'center', horizontal: 'center', wrapText: false };
-        border = {
-          top: { style: 'none', color: { rgb: 'FFFFFF' } },
-          bottom: { style: 'medium', color: { rgb: '1E293B' } },
-          left: { style: 'medium', color: { rgb: '1E293B' } },
-          right: { style: 'medium', color: { rgb: '1E293B' } }
-        };
-      }
-      // 2. STYLE METADATA CELLS (Row 3 & Row 4)
-      else if (r === 3 || r === 4) {
-        const isLabelCell = (c === 0 || c === 3 || c === 6);
-        if (isLabelCell) {
-          font = { name: 'Segoe UI', sz: 9.5, color: { rgb: '475569' }, bold: true, italic: false };
-          fill = { patternType: 'solid', fgColor: { rgb: 'F1F5F9' } }; // Slate 100 label background
-          alignment = { vertical: 'center', horizontal: 'left', wrapText: false };
-        } else {
-          font = { name: 'Segoe UI', sz: 9.5, color: { rgb: '0F172A' }, bold: (r === 4 && c === 7), italic: false }; // Bold total cost value
-          fill = { patternType: 'solid', fgColor: { rgb: 'FFFFFF' } };
-          alignment = { vertical: 'center', horizontal: (r === 4 && c === 7) ? 'right' : 'left', wrapText: false };
-        }
-        border = {
-          top: { style: 'thin', color: { rgb: 'CBD5E1' } },
-          bottom: { style: 'thin', color: { rgb: 'CBD5E1' } },
-          left: { style: 'thin', color: { rgb: 'CBD5E1' } },
-          right: { style: 'thin', color: { rgb: 'CBD5E1' } }
-        };
-      }
-      // 3. STYLE TABLE HEADER ROW (Row 6)
-      else if (r === 6) {
-        font = { name: 'Segoe UI', sz: 10, color: { rgb: 'FFFFFF' }, bold: true, italic: false };
-        fill = { patternType: 'solid', fgColor: { rgb: '334155' } }; // Slate 700 header
-        alignment = { vertical: 'center', horizontal: (c === 0 || c === 7) ? 'left' : 'center', wrapText: false };
-        border = {
-          top: { style: 'medium', color: { rgb: '1E293B' } },
-          bottom: { style: 'medium', color: { rgb: '1E293B' } },
-          left: { style: 'thin', color: { rgb: '475569' } },
-          right: { style: 'thin', color: { rgb: '475569' } }
-        };
-      }
-      // 4. STYLE DATA ROWS (Row 7 to 7 + shopping.length - 1)
-      else if (r >= 7 && r < 7 + shopping.length) {
-        // Alternating row background
-        const isOddRow = (r % 2 !== 0);
-        fill = { patternType: 'solid', fgColor: { rgb: isOddRow ? 'F8FAFC' : 'FFFFFF' } };
-
-        // Column specific alignment
-        if (c === 0) {
-          alignment = { vertical: 'center', horizontal: 'left', wrapText: true };
-          font.bold = true; // Make material name bold
-        } else if (c === 1 || c === 2) {
+        } else if (r === 1) {
+          font = { name: 'Segoe UI', sz: 10, color: { rgb: '93C5FD' }, bold: true, italic: true };
+          fill = { patternType: 'solid', fgColor: { rgb: isFilteredCategory && sheetCategoryTitle === 'Refrigeração' ? '0E7490' : '1E3A8A' } };
           alignment = { vertical: 'center', horizontal: 'center', wrapText: false };
-        } else if (c === 3) {
-          alignment = { vertical: 'center', horizontal: 'center', wrapText: false };
-        } else if (c === 4 || c === 5) {
-          alignment = { vertical: 'center', horizontal: 'right', wrapText: false };
-        } else if (c === 6) {
-          alignment = { vertical: 'center', horizontal: 'center', wrapText: false };
-          font = { name: 'Segoe UI', sz: 9.5, color: { rgb: '2563EB' }, bold: true, italic: false }; // Hyperlink color
-        } else if (c === 7) {
-          alignment = { vertical: 'center', horizontal: 'left', wrapText: true };
-          font.italic = true;
-          font.color = { rgb: '64748B' }; // Slate 500 for notes
-        } else if (c === 8) {
-          // Status cell
-          const val = String(cell.v);
-          alignment = { vertical: 'center', horizontal: 'center', wrapText: false };
-          if (val === 'Adquirido') {
-            fill = { patternType: 'solid', fgColor: { rgb: 'D1FAE5' } }; // Soft green
-            font = { name: 'Segoe UI', sz: 9, color: { rgb: '065F46' }, bold: true, italic: false };
+          border = {
+            top: { style: 'none', color: { rgb: 'FFFFFF' } },
+            bottom: { style: 'medium', color: { rgb: '1E293B' } },
+            left: { style: 'medium', color: { rgb: '1E293B' } },
+            right: { style: 'medium', color: { rgb: '1E293B' } }
+          };
+        } else if (r === 3 || r === 4) {
+          const isLabelCell = (c === 0 || c === 3 || c === 6);
+          if (isLabelCell) {
+            font = { name: 'Segoe UI', sz: 9.5, color: { rgb: '475569' }, bold: true, italic: false };
+            fill = { patternType: 'solid', fgColor: { rgb: 'F1F5F9' } };
+            alignment = { vertical: 'center', horizontal: 'left', wrapText: false };
           } else {
-            fill = { patternType: 'solid', fgColor: { rgb: 'FEF3C7' } }; // Soft amber
-            font = { name: 'Segoe UI', sz: 9, color: { rgb: '92400E' }, bold: true, italic: false };
+            font = { name: 'Segoe UI', sz: 9.5, color: { rgb: '0F172A' }, bold: (r === 4 && c === 7) || (r === 4 && c === 4), italic: false };
+            fill = { patternType: 'solid', fgColor: { rgb: 'FFFFFF' } };
+            alignment = { vertical: 'center', horizontal: (r === 4 && c === 7) ? 'right' : 'left', wrapText: false };
           }
+          border = {
+            top: { style: 'thin', color: { rgb: 'CBD5E1' } },
+            bottom: { style: 'thin', color: { rgb: 'CBD5E1' } },
+            left: { style: 'thin', color: { rgb: 'CBD5E1' } },
+            right: { style: 'thin', color: { rgb: 'CBD5E1' } }
+          };
+        } else if (r === 6) {
+          font = { name: 'Segoe UI', sz: 10, color: { rgb: 'FFFFFF' }, bold: true, italic: false };
+          fill = { patternType: 'solid', fgColor: { rgb: '334155' } };
+          alignment = { vertical: 'center', horizontal: (c === 0 || c === 7) ? 'left' : 'center', wrapText: false };
+          border = {
+            top: { style: 'medium', color: { rgb: '1E293B' } },
+            bottom: { style: 'medium', color: { rgb: '1E293B' } },
+            left: { style: 'thin', color: { rgb: '475569' } },
+            right: { style: 'thin', color: { rgb: '475569' } }
+          };
+        } else if (r >= 7 && r < 7 + items.length) {
+          const isOddRow = (r % 2 !== 0);
+          fill = { patternType: 'solid', fgColor: { rgb: isOddRow ? 'F8FAFC' : 'FFFFFF' } };
+
+          if (c === 0) {
+            alignment = { vertical: 'center', horizontal: 'left', wrapText: true };
+            font.bold = true;
+          } else if (c === 1 || c === 2) {
+            alignment = { vertical: 'center', horizontal: 'center', wrapText: false };
+          } else if (c === 3) {
+            alignment = { vertical: 'center', horizontal: 'center', wrapText: false };
+          } else if (c === 4 || c === 5) {
+            alignment = { vertical: 'center', horizontal: 'right', wrapText: false };
+          } else if (c === 6) {
+            alignment = { vertical: 'center', horizontal: 'center', wrapText: false };
+            font = { name: 'Segoe UI', sz: 9.5, color: { rgb: '2563EB' }, bold: true, italic: false };
+          } else if (c === 7) {
+            alignment = { vertical: 'center', horizontal: 'left', wrapText: true };
+            font.italic = true;
+            font.color = { rgb: '64748B' };
+          } else if (c === 8) {
+            const val = String(cell.v);
+            alignment = { vertical: 'center', horizontal: 'center', wrapText: false };
+            if (val === 'Adquirido') {
+              fill = { patternType: 'solid', fgColor: { rgb: 'D1FAE5' } };
+              font = { name: 'Segoe UI', sz: 9, color: { rgb: '065F46' }, bold: true, italic: false };
+            } else {
+              fill = { patternType: 'solid', fgColor: { rgb: 'FEF3C7' } };
+              font = { name: 'Segoe UI', sz: 9, color: { rgb: '92400E' }, bold: true, italic: false };
+            }
+          }
+        } else if (r === 8 + items.length) {
+          font = { name: 'Segoe UI', sz: 10.5, color: { rgb: '0F172A' }, bold: true, italic: false };
+          fill = { patternType: 'solid', fgColor: { rgb: 'E2E8F0' } };
+          alignment = { vertical: 'center', horizontal: (c === 5) ? 'right' : 'left', wrapText: false };
+          border = {
+            top: { style: 'thin', color: { rgb: '94A3B8' } },
+            bottom: { style: 'double', color: { rgb: '0F172A' } },
+            left: { style: 'thin', color: { rgb: 'CBD5E1' } },
+            right: { style: 'thin', color: { rgb: 'CBD5E1' } }
+          };
+        } else {
+          border = {
+            top: { style: 'none', color: { rgb: 'FFFFFF' } },
+            bottom: { style: 'none', color: { rgb: 'FFFFFF' } },
+            left: { style: 'none', color: { rgb: 'FFFFFF' } },
+            right: { style: 'none', color: { rgb: 'FFFFFF' } }
+          };
+          fill = { patternType: 'none' };
         }
-      }
-      // 5. STYLE GRAND TOTAL ROW
-      else if (r === 8 + shopping.length) {
-        font = { name: 'Segoe UI', sz: 10.5, color: { rgb: '0F172A' }, bold: true, italic: false };
-        fill = { patternType: 'solid', fgColor: { rgb: 'E2E8F0' } }; // Highlight total
-        alignment = { vertical: 'center', horizontal: (c === 5) ? 'right' : 'left', wrapText: false };
-        border = {
-          top: { style: 'thin', color: { rgb: '94A3B8' } },
-          bottom: { style: 'double', color: { rgb: '0F172A' } },
-          left: { style: 'thin', color: { rgb: 'CBD5E1' } },
-          right: { style: 'thin', color: { rgb: 'CBD5E1' } }
-        };
-      }
-      // Skip spacer cells/rows by leaving borders empty or non-existent
-      else {
-        border = {
-          top: { style: 'none', color: { rgb: 'FFFFFF' } },
-          bottom: { style: 'none', color: { rgb: 'FFFFFF' } },
-          left: { style: 'none', color: { rgb: 'FFFFFF' } },
-          right: { style: 'none', color: { rgb: 'FFFFFF' } }
-        };
-        fill = { patternType: 'none' };
-      }
 
-      // Assign styles back to cell object
-      cell.s = {
-        font,
-        fill,
-        alignment,
-        border
-      };
-    });
+        cell.s = { font, fill, alignment, border };
+      });
 
-    // Build workbook and write
+      return ws;
+    };
+
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Pedido de Compra');
-    XLSX.writeFile(wb, `Pedido_Comercial_${new Date().toISOString().split('T')[0]}.xlsx`);
+    const sanitizeSheetName = (name: string) => name.replace(/[\\/*?:[\]]/g, '').slice(0, 31);
+    const dateStr = new Date().toISOString().split('T')[0];
 
-    setToastMessage("Sucesso! A planilha Excel (.xlsx) profissional foi baixada.");
+    if (targetCategory && targetCategory !== 'Todos') {
+      const filtered = baseItems.filter(item => (item.category || 'Outros') === targetCategory);
+      if (filtered.length === 0) {
+        setToastMessage(`Aviso: Nenhum item de compra pendente encontrado para a categoria "${targetCategory}".`);
+        setTimeout(() => setToastMessage(null), 4500);
+        return;
+      }
+
+      const ws = buildWorksheet(filtered, targetCategory, true);
+      const sheetName = sanitizeSheetName(targetCategory);
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+
+      const catFileSlug = targetCategory.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]/g, "_");
+      XLSX.writeFile(wb, `Pedido_Comercial_${catFileSlug}_${dateStr}.xlsx`);
+      setToastMessage(`Sucesso! Planilha Excel gerada exclusivamente para a categoria "${targetCategory}".`);
+    } else {
+      // "Todos" selected: generate separated sheets per category + consolidated overview sheet
+      const uniqueCats = Array.from(new Set(baseItems.map(i => i.category || 'Outros')));
+      
+      // 1. Dedicated tab for each category that has items
+      uniqueCats.forEach(cat => {
+        const catItems = baseItems.filter(i => (i.category || 'Outros') === cat);
+        if (catItems.length > 0) {
+          const ws = buildWorksheet(catItems, cat, true);
+          XLSX.utils.book_append_sheet(wb, ws, sanitizeSheetName(cat));
+        }
+      });
+
+      // 2. If there are multiple categories, also append a Consolidated Overview tab
+      if (uniqueCats.length > 1) {
+        const sortedItems = [...baseItems].sort((a, b) => (a.category || '').localeCompare(b.category || ''));
+        const wsAll = buildWorksheet(sortedItems, 'Todas as Categorias', false);
+        XLSX.utils.book_append_sheet(wb, wsAll, 'Geral Consolidado');
+      }
+
+      XLSX.writeFile(wb, `Pedido_Comercial_Completo_${dateStr}.xlsx`);
+      setToastMessage("Sucesso! Planilha Excel (.xlsx) profissional baixada com produtos organizados por categoria.");
+    }
+
     setTimeout(() => setToastMessage(null), 5000);
   };
 
@@ -1463,6 +1483,7 @@ export default function ShoppingListView({
     .badge-filamento { background-color: #eef2ff; color: #4338ca; }
     .badge-pecas { background-color: #fef2f2; color: #b91c1c; }
     .badge-acessorios { background-color: #f0fdfa; color: #0d9488; }
+    .badge-refrigeracao { background-color: #ecfeff; color: #0891b2; }
     .badge-outros { background-color: #f1f5f9; color: #475569; }
     
     .badge-status-comprado { background-color: #ecfdf5; color: #047857; }
@@ -1644,6 +1665,7 @@ export default function ShoppingListView({
           if (item.category === 'Filamento') catClass = 'badge-filamento';
           else if (item.category === 'Peças de Reposição') catClass = 'badge-pecas';
           else if (item.category === 'Acessórios/Insumos') catClass = 'badge-acessorios';
+          else if (item.category === 'Refrigeração') catClass = 'badge-refrigeracao';
 
           return `
             <tr>
@@ -2093,6 +2115,7 @@ export default function ShoppingListView({
     .badge-filamento { background-color: #eef2ff; color: #4338ca; }
     .badge-pecas { background-color: #fef2f2; color: #b91c1c; }
     .badge-acessorios { background-color: #f0fdfa; color: #0d9488; }
+    .badge-refrigeracao { background-color: #ecfeff; color: #0891b2; }
     .badge-outros { background-color: #f1f5f9; color: #475569; }
 
     .price-col {
@@ -2291,6 +2314,7 @@ export default function ShoppingListView({
           if (item.category === 'Filamento') catClass = 'badge-filamento';
           else if (item.category === 'Peças de Reposição') catClass = 'badge-pecas';
           else if (item.category === 'Acessórios/Insumos') catClass = 'badge-acessorios';
+          else if (item.category === 'Refrigeração') catClass = 'badge-refrigeracao';
 
           htmlContent += `
             <tr>
@@ -2824,7 +2848,7 @@ export default function ShoppingListView({
   });
 
   // Calculate stats per category
-  const categoriesList = ['Filamento', 'Peças de Reposição', 'Acessórios/Insumos', 'Outros'];
+  const categoriesList = ['Filamento', 'Peças de Reposição', 'Acessórios/Insumos', 'Refrigeração', 'Outros'];
   const getCategoryStats = (cat: string) => {
     const items = shopping.filter(i => i.category === cat);
     const count = items.length;
@@ -2841,6 +2865,8 @@ export default function ShoppingListView({
         return <Wrench className={`${sizeClass} text-rose-500`} />;
       case 'Acessórios/Insumos':
         return <Package className={`${sizeClass} text-sky-500`} />;
+      case 'Refrigeração':
+        return <Fan className={`${sizeClass} text-cyan-500`} />;
       default:
         return <Tag className={`${sizeClass} text-slate-500`} />;
     }
@@ -3144,6 +3170,7 @@ export default function ShoppingListView({
                   <option value="Filamento">Filamento de Impressão</option>
                   <option value="Peças de Reposição">Peças de Reposição (Bicos, Correias)</option>
                   <option value="Acessórios/Insumos">Acessórios / Outros Insumos</option>
+                  <option value="Refrigeração">Refrigeração (Coolers, Fans, Dutos)</option>
                   <option value="Outros">Outras Despesas</option>
                 </select>
               </div>
@@ -3584,6 +3611,7 @@ export default function ShoppingListView({
                             item.category === 'Filamento' ? 'bg-indigo-50 text-indigo-700' :
                             item.category === 'Peças de Reposição' ? 'bg-rose-50 text-rose-700' :
                             item.category === 'Acessórios/Insumos' ? 'bg-sky-50 text-sky-700' :
+                            item.category === 'Refrigeração' ? 'bg-cyan-50 text-cyan-700' :
                             'bg-slate-100 text-slate-700'
                           }`}>
                             {getCategoryIcon(item.category, "w-3.5 h-3.5")}
@@ -4904,7 +4932,8 @@ export default function ShoppingListView({
               const meta = {
                 company: excelCompany.trim(),
                 requestedBy: excelRequestedBy.trim(),
-                department: excelDepartment.trim()
+                department: excelDepartment.trim(),
+                category: excelCategory
               };
               if (excelModalType === 'pending') {
                 generateReportExcel(meta);
@@ -4916,6 +4945,30 @@ export default function ShoppingListView({
               <p className="text-xs text-slate-500 dark:text-slate-400 leading-normal">
                 Confirme ou altere os dados organizacionais abaixo. Eles serão incluídos no cabeçalho formal da planilha Excel gerada (.xlsx).
               </p>
+
+              {/* Filtro de Categoria na Exportação */}
+              {excelModalType === 'pending' && (
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                    Filtrar / Imprimir por Categoria
+                  </label>
+                  <select
+                    value={excelCategory}
+                    onChange={(e) => setExcelCategory(e.target.value)}
+                    className="w-full px-3.5 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-800 dark:text-white bg-white dark:bg-slate-950 focus:outline-none focus:border-indigo-500 text-xs transition"
+                  >
+                    <option value="Todos">Todas as Categorias (Abas Separadas por Categoria)</option>
+                    <option value="Refrigeração">❄️ Apenas Refrigeração (Coolers, Fans, Dutos)</option>
+                    <option value="Filamento">🧵 Apenas Filamento de Impressão</option>
+                    <option value="Peças de Reposição">🔧 Apenas Peças de Reposição</option>
+                    <option value="Acessórios/Insumos">📦 Apenas Acessórios / Insumos</option>
+                    <option value="Outros">🏷️ Apenas Outras Despesas</option>
+                  </select>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                    Selecione uma categoria específica para imprimir apenas seus produtos, sem misturar com outras categorias.
+                  </p>
+                </div>
+              )}
 
               {/* Empresa */}
               <div className="flex flex-col gap-1">
