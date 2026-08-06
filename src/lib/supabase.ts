@@ -93,7 +93,10 @@ CREATE TABLE IF NOT EXISTS g3d_shopping (
   requested_by TEXT,
   department TEXT,
   company TEXT,
-  barcode TEXT
+  barcode TEXT,
+  created_by_role TEXT,
+  created_by_user TEXT,
+  created_at TEXT
 );
 
 -- 4. Tabela de Funções / Cargos por Email (Admin vs Colaborador)
@@ -103,6 +106,21 @@ CREATE TABLE IF NOT EXISTS g3d_user_roles (
   username TEXT UNIQUE,
   password TEXT
 );
+
+-- 5. Atualização de Colunas em Tabelas Existentes (Migrações Automáticas)
+ALTER TABLE g3d_shopping ADD COLUMN IF NOT EXISTS requested_by TEXT;
+ALTER TABLE g3d_shopping ADD COLUMN IF NOT EXISTS department TEXT;
+ALTER TABLE g3d_shopping ADD COLUMN IF NOT EXISTS company TEXT;
+ALTER TABLE g3d_shopping ADD COLUMN IF NOT EXISTS barcode TEXT;
+ALTER TABLE g3d_shopping ADD COLUMN IF NOT EXISTS created_by_role TEXT;
+ALTER TABLE g3d_shopping ADD COLUMN IF NOT EXISTS created_by_user TEXT;
+ALTER TABLE g3d_shopping ADD COLUMN IF NOT EXISTS created_at TEXT;
+
+ALTER TABLE g3d_inventory ADD COLUMN IF NOT EXISTS created_by_role TEXT;
+ALTER TABLE g3d_inventory ADD COLUMN IF NOT EXISTS created_by_user TEXT;
+ALTER TABLE g3d_inventory ADD COLUMN IF NOT EXISTS created_at TEXT;
+ALTER TABLE g3d_inventory ADD COLUMN IF NOT EXISTS category TEXT;
+ALTER TABLE g3d_inventory ADD COLUMN IF NOT EXISTS purchase_link TEXT;
 
 -- Habilitar leitura pública ou autenticada de todos os registros
 -- (Para simplificar a integração profissional interna, ou sinta-se livre para customizar o RLS)

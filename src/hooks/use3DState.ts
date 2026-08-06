@@ -277,8 +277,40 @@ export const saveCreatorToLocalCache = (id: string, role?: string, user?: string
 export const saveShoppingCreatorToLocalCache = (id: string, role?: string, user?: string, createdAt?: string) => {
   try {
     const map = JSON.parse(localStorage.getItem('g3d_shopping_creator_map') || '{}');
-    map[id] = { role, user, createdAt };
+    if (role || user || createdAt) {
+      map[id] = { role, user, createdAt };
+    } else {
+      delete map[id];
+    }
     localStorage.setItem('g3d_shopping_creator_map', JSON.stringify(map));
+  } catch (e) {
+    // ignore
+  }
+};
+
+export interface ShoppingMetaCache {
+  company?: string;
+  department?: string;
+  requestedBy?: string;
+  barcode?: string;
+  role?: string;
+  user?: string;
+  createdAt?: string;
+}
+
+// Helper to save all shopping metadata (company, department, requestedBy, barcode, creator) in local storage cache
+export const saveShoppingMetaToLocalCache = (id: string, meta?: ShoppingMetaCache) => {
+  try {
+    const map = JSON.parse(localStorage.getItem('g3d_shopping_meta_map') || '{}');
+    if (meta) {
+      map[id] = {
+        ...(map[id] || {}),
+        ...Object.fromEntries(Object.entries(meta).filter(([_, v]) => v !== undefined))
+      };
+    } else {
+      delete map[id];
+    }
+    localStorage.setItem('g3d_shopping_meta_map', JSON.stringify(map));
   } catch (e) {
     // ignore
   }
@@ -480,17 +512,24 @@ export function use3DState() {
   const mapDbShopping = (db: any): ShoppingItem => {
     let localShoppingLinksMap: Record<string, string> = {};
     let localShoppingCreatorMap: Record<string, { role?: string; user?: string; createdAt?: string }> = {};
+    let localShoppingMetaMap: Record<string, ShoppingMetaCache> = {};
     try {
       localShoppingLinksMap = JSON.parse(localStorage.getItem('g3d_shopping_links_map') || '{}');
       localShoppingCreatorMap = JSON.parse(localStorage.getItem('g3d_shopping_creator_map') || '{}');
+      localShoppingMetaMap = JSON.parse(localStorage.getItem('g3d_shopping_meta_map') || '{}');
     } catch (e) {
       // ignore
     }
 
+    const localMeta = localShoppingMetaMap[db.id] || {};
     const resolvedLink = db.purchase_link || localShoppingLinksMap[db.id] || '';
-    const resolvedRole = db.created_by_role || localShoppingCreatorMap[db.id]?.role;
-    const resolvedUser = db.created_by_user || localShoppingCreatorMap[db.id]?.user;
-    const resolvedCreatedAt = db.created_at || localShoppingCreatorMap[db.id]?.createdAt;
+    const resolvedRole = db.created_by_role || localMeta.role || localShoppingCreatorMap[db.id]?.role;
+    const resolvedUser = db.created_by_user || localMeta.user || localShoppingCreatorMap[db.id]?.user;
+    const resolvedCreatedAt = db.created_at || localMeta.createdAt || localShoppingCreatorMap[db.id]?.createdAt;
+    const resolvedRequestedBy = db.requested_by || localMeta.requestedBy || undefined;
+    const resolvedDepartment = db.department || localMeta.department || undefined;
+    const resolvedCompany = db.company || localMeta.company || undefined;
+    const resolvedBarcode = db.barcode || localMeta.barcode || undefined;
 
     return {
       id: db.id,
@@ -501,10 +540,10 @@ export function use3DState() {
       category: sanitizeShoppingCategory(db.material_name, db.category),
       notes: db.notes || undefined,
       checked: !!db.checked,
-      requestedBy: db.requested_by || undefined,
-      department: db.department || undefined,
-      company: db.company || undefined,
-      barcode: db.barcode || undefined,
+      requestedBy: resolvedRequestedBy,
+      department: resolvedDepartment,
+      company: resolvedCompany,
+      barcode: resolvedBarcode,
       createdByRole: resolvedRole,
       createdByUser: resolvedUser,
       createdAt: resolvedCreatedAt
@@ -574,31 +613,10 @@ export function use3DState() {
                 columnFound = true;
               }
             }
-
-            // Safe preventative fallback for known upgrades
-            if (table === 'g3d_shopping') {
-              for (const col of ['company', 'department', 'requested_by', 'barcode']) {
-                if (col in activePayload) {
-                  console.warn(`[SafeSync] Removendo preventivamente '${col}' devido a erro de schema em g3d_shopping`);
-                  delete activePayload[col];
-                  columnFound = true;
-                }
-              }
-            }
-
-            if (table === 'g3d_inventory') {
-              for (const col of ['created_by_role', 'created_by_user', 'created_at', 'category', 'purchase_link']) {
-                if (col in activePayload) {
-                  console.warn(`[SafeSync] Removendo preventivamente '${col}' devido a erro de schema em g3d_inventory`);
-                  delete activePayload[col];
-                  columnFound = true;
-                }
-              }
-            }
           }
 
           if (columnFound && attempt < 5) {
-            continue; // retry
+            continue; // retry with remaining payload
           }
         }
         throw new Error(res.error.message || JSON.stringify(res.error));
@@ -747,9 +765,11 @@ export function use3DState() {
       if (storedInventory) {
         let localCategoriesMap: Record<string, string> = {};
         let localCreatorMap: Record<string, { role?: string; user?: string; createdAt?: string }> = {};
+        let localInventoryLinksMap: Record<string, string> = {};
         try {
           localCategoriesMap = JSON.parse(localStorage.getItem('g3d_item_categories_map') || '{}');
           localCreatorMap = JSON.parse(localStorage.getItem('g3d_item_creator_map') || '{}');
+          localInventoryLinksMap = JSON.parse(localStorage.getItem('g3d_inventory_links_map') || '{}');
         } catch (e) {
           // ignore
         }
@@ -759,9 +779,11 @@ export function use3DState() {
           const resolvedRole = item.createdByRole || localCreatorMap[item.id]?.role;
           const resolvedUser = item.createdByUser || localCreatorMap[item.id]?.user;
           const resolvedCreatedAt = item.createdAt || localCreatorMap[item.id]?.createdAt;
+          const resolvedLink = item.purchaseLink || localInventoryLinksMap[item.id] || undefined;
 
           return {
             ...item,
+            purchaseLink: resolvedLink,
             category: sanitizeInventoryCategory(item.material, resolvedCat),
             createdByRole: resolvedRole,
             createdByUser: resolvedUser,
@@ -775,10 +797,41 @@ export function use3DState() {
       }
 
       if (storedShopping) {
-        const parsedShop = JSON.parse(storedShopping).map((item: ShoppingItem) => ({
-          ...item,
-          category: sanitizeShoppingCategory(item.materialName, item.category)
-        }));
+        let localShoppingLinksMap: Record<string, string> = {};
+        let localShoppingCreatorMap: Record<string, { role?: string; user?: string; createdAt?: string }> = {};
+        let localShoppingMetaMap: Record<string, ShoppingMetaCache> = {};
+        try {
+          localShoppingLinksMap = JSON.parse(localStorage.getItem('g3d_shopping_links_map') || '{}');
+          localShoppingCreatorMap = JSON.parse(localStorage.getItem('g3d_shopping_creator_map') || '{}');
+          localShoppingMetaMap = JSON.parse(localStorage.getItem('g3d_shopping_meta_map') || '{}');
+        } catch (e) {
+          // ignore
+        }
+
+        const parsedShop = JSON.parse(storedShopping).map((item: ShoppingItem) => {
+          const localMeta = localShoppingMetaMap[item.id] || {};
+          const resolvedLink = item.purchaseLink || localShoppingLinksMap[item.id] || '';
+          const resolvedRole = item.createdByRole || localMeta.role || localShoppingCreatorMap[item.id]?.role;
+          const resolvedUser = item.createdByUser || localMeta.user || localShoppingCreatorMap[item.id]?.user;
+          const resolvedCreatedAt = item.createdAt || localMeta.createdAt || localShoppingCreatorMap[item.id]?.createdAt;
+          const resolvedRequestedBy = item.requestedBy || localMeta.requestedBy || undefined;
+          const resolvedDepartment = item.department || localMeta.department || undefined;
+          const resolvedCompany = item.company || localMeta.company || undefined;
+          const resolvedBarcode = item.barcode || localMeta.barcode || undefined;
+
+          return {
+            ...item,
+            purchaseLink: resolvedLink,
+            category: sanitizeShoppingCategory(item.materialName, item.category),
+            createdByRole: resolvedRole,
+            createdByUser: resolvedUser,
+            createdAt: resolvedCreatedAt,
+            requestedBy: resolvedRequestedBy,
+            department: resolvedDepartment,
+            company: resolvedCompany,
+            barcode: resolvedBarcode
+          };
+        });
         setShopping(parsedShop);
       } else {
         setShopping(DEFAULT_SHOPPING);
@@ -810,16 +863,13 @@ export function use3DState() {
 
   // Save changes to localStorage (Backup/Fallback always ready)
   const backupToLocal = (projs: ProjectOrder[], inv: InventoryItem[], shop: ShoppingItem[]) => {
-    if (hasSupabaseConfigured()) {
-      // Se houver banco configurado, limpa do navegador para respeitar a privacidade
-      localStorage.removeItem(STORAGE_KEYS.PROJECTS);
-      localStorage.removeItem(STORAGE_KEYS.INVENTORY);
-      localStorage.removeItem(STORAGE_KEYS.SHOPPING);
-      return;
+    try {
+      localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projs));
+      localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify(inv));
+      localStorage.setItem(STORAGE_KEYS.SHOPPING, JSON.stringify(shop));
+    } catch (e) {
+      // ignore
     }
-    localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projs));
-    localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify(inv));
-    localStorage.setItem(STORAGE_KEYS.SHOPPING, JSON.stringify(shop));
   };
 
   // Sync state mutation helper
@@ -1035,6 +1085,15 @@ export function use3DState() {
       createdAt
     };
 
+    saveShoppingMetaToLocalCache(nextId, {
+      company: item.company,
+      department: item.department,
+      requestedBy: item.requestedBy,
+      barcode: item.barcode,
+      role: createdByRole,
+      user: createdByUser,
+      createdAt
+    });
     saveShoppingCreatorToLocalCache(nextId, createdByRole, createdByUser, createdAt);
 
     if (item.purchaseLink) {
@@ -1063,6 +1122,7 @@ export function use3DState() {
       backupToLocal(projects, inventory, updated);
       saveShoppingLinkToLocalCache(id, undefined);
       saveShoppingCreatorToLocalCache(id, undefined, undefined, undefined);
+      saveShoppingMetaToLocalCache(id, undefined);
 
       await syncOperation('g3d_shopping', 'delete', null, id);
       await loadData(true, true);
@@ -1079,6 +1139,16 @@ export function use3DState() {
       if (updatedFields.purchaseLink !== undefined) {
         saveShoppingLinkToLocalCache(id, updatedFields.purchaseLink);
       }
+
+      saveShoppingMetaToLocalCache(id, {
+        company: updatedFields.company,
+        department: updatedFields.department,
+        requestedBy: updatedFields.requestedBy,
+        barcode: updatedFields.barcode,
+        role: updatedFields.createdByRole,
+        user: updatedFields.createdByUser,
+        createdAt: updatedFields.createdAt
+      });
 
       const updated = shopping.map(item => {
         if (item.id === id) {
