@@ -40,6 +40,7 @@ import {
   Calculator,
   Fan,
   Cpu,
+  Lock,
   X
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
@@ -157,6 +158,15 @@ export function isAdministratorPurchase(item: ShoppingItem): boolean {
   return false;
 }
 
+function normalizeCollaboratorStr(str?: string | null): string {
+  if (!str) return '';
+  return String(str)
+    .toLowerCase()
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
 export function isOwnedByCurrentCollaborator(
   item: ShoppingItem,
   username: string,
@@ -169,29 +179,48 @@ export function isOwnedByCurrentCollaborator(
     return false;
   }
 
-  const reqBy = String(item.requestedBy || '').toLowerCase().trim();
-  const company = String(item.company || '').toLowerCase().trim();
-  const uName = String(username || '').toLowerCase().trim();
-  const uEmail = String(email || '').toLowerCase().trim();
+  const reqBy = normalizeCollaboratorStr(item.requestedBy);
+  const company = normalizeCollaboratorStr(item.company);
+  const uName = normalizeCollaboratorStr(username);
+  const uEmail = normalizeCollaboratorStr(email);
   const uEmailPrefix = uEmail ? uEmail.split('@')[0] : '';
 
-  // 2. Match requestedBy with user's name or email or generic collaborator fields
-  if (
-    !reqBy ||
-    (uName && (reqBy === uName || reqBy.includes(uName) || uName.includes(reqBy))) ||
-    (uEmail && (reqBy === uEmail || reqBy.includes(uEmail))) ||
-    (uEmailPrefix && (reqBy === uEmailPrefix || reqBy.includes(uEmailPrefix))) ||
-    reqBy.includes('colaborador') ||
-    reqBy.includes('ftex') ||
-    reqBy.includes('ftéx') ||
-    company.includes('ftex') ||
-    company.includes('ftéx') ||
-    company.includes('comercial')
-  ) {
+  // 2. Strict per-collaborator verification:
+  if (uName && (reqBy === uName || reqBy.includes(uName) || uName.includes(reqBy))) {
+    return true;
+  }
+  if (uEmail && (reqBy === uEmail || reqBy.includes(uEmail))) {
+    return true;
+  }
+  if (uEmailPrefix && (reqBy === uEmailPrefix || reqBy.includes(uEmailPrefix))) {
     return true;
   }
 
-  return true;
+  // If user is Ftéx / Ftex
+  if ((uName.includes('ftex') || uEmail.includes('ftex')) && (reqBy.includes('ftex') || company.includes('ftex') || !reqBy)) {
+    return true;
+  }
+
+  return false;
+}
+
+export function canUserEditOrDeleteShoppingItem(
+  item: ShoppingItem,
+  role?: string,
+  username?: string,
+  email?: string
+): boolean {
+  if (!item) return false;
+  const currentRole = role || sessionStorage.getItem('g3d_user_role') || 'colaborador';
+  if (currentRole === 'admin') return true;
+
+  // Finished / Baixa completed purchases cannot be altered or removed by collaborators
+  if (item.checked) return false;
+
+  const uName = username || sessionStorage.getItem('g3d_username') || '';
+  const uEmail = email || sessionStorage.getItem('g3d_user_email') || '';
+
+  return isOwnedByCurrentCollaborator(item, uName, uEmail);
 }
 
 interface ShoppingListViewProps {
@@ -609,6 +638,16 @@ export default function ShoppingListView({
   };
 
   const handleStartEdit = (item: ShoppingItem) => {
+    if (!canUserEditOrDeleteShoppingItem(item, userRole, currentUsername, currentUserEmail)) {
+      if (item.checked) {
+        setToastMessage("Acesso Restrito: Compras já concluídas/baixadas só podem ser alteradas por Administradores.");
+      } else {
+        setToastMessage("Acesso Restrito: Você só pode editar suas próprias solicitações de compras.");
+      }
+      setTimeout(() => setToastMessage(null), 4000);
+      return;
+    }
+
     setEditingId(item.id);
     setEditName(item.materialName);
     setEditQty(item.qtyNeeded);
@@ -624,8 +663,8 @@ export default function ShoppingListView({
 
   const handleSaveEdit = (id: string) => {
     const targetItem = allShopping.find(i => i.id === id);
-    if (targetItem && targetItem.checked && userRole === 'colaborador') {
-      setToastMessage("Erro: Colaboradores não podem editar compras já concluídas!");
+    if (targetItem && !canUserEditOrDeleteShoppingItem(targetItem, userRole, currentUsername, currentUserEmail)) {
+      setToastMessage("Acesso Restrito: Sem permissão para alterar este item de compra.");
       setTimeout(() => setToastMessage(null), 4000);
       return;
     }
@@ -647,8 +686,12 @@ export default function ShoppingListView({
 
   const handleDeleteShoppingItem = (id: string) => {
     const targetItem = allShopping.find(i => i.id === id);
-    if (targetItem && targetItem.checked && userRole === 'colaborador') {
-      setToastMessage("Erro: Colaboradores não podem excluir compras já concluídas!");
+    if (targetItem && !canUserEditOrDeleteShoppingItem(targetItem, userRole, currentUsername, currentUserEmail)) {
+      if (targetItem.checked) {
+        setToastMessage("Acesso Restrito: Compras já concluídas/baixadas não podem ser excluídas por Colaboradores.");
+      } else {
+        setToastMessage("Acesso Restrito: Você só pode excluir suas próprias solicitações de compras.");
+      }
       setTimeout(() => setToastMessage(null), 4000);
       return;
     }
@@ -3345,114 +3388,183 @@ export default function ShoppingListView({
         </div>
       )}
 
-      {/* FILTER & ADVANCED SEARCH BAR */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 mb-6 shadow-3xs no-print flex flex-col lg:flex-row lg:items-center gap-4 select-none">
+      {/* FILTER & ADVANCED SEARCH HUB */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 md:p-5 mb-6 shadow-sm no-print space-y-4 select-none">
         
-        {/* Search input with Barcode indication */}
-        <div className="relative flex-1">
-          <div className="relative">
-            <span className="absolute left-3.5 top-2.5 text-slate-400">
+        {/* ROW 1: SEARCH BAR & BARCODE SCANNER (RESPONSIVE FULL-WIDTH) */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <div className="relative flex-1">
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
               <Search className="w-4 h-4" />
             </span>
             <input
               type="text"
-              placeholder="🔍 Buscar pelo Código de Barras cadastrado (ex: 789...) ou Nome do Item..."
+              placeholder="🔍 Digite o nome do item, código de barras (ex: 789...), modelo ou solicitante..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full text-xs pl-10 pr-10 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 text-slate-800 bg-slate-50 focus:bg-white font-medium"
+              className="w-full text-xs md:text-sm pl-10 pr-24 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-950 focus:bg-white dark:focus:bg-slate-900 font-medium transition"
             />
-            {searchQuery ? (
+            <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+              {searchQuery ? (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-sm font-bold h-6 w-6 flex items-center justify-center rounded-full hover:bg-slate-200/60 dark:hover:bg-slate-800 transition cursor-pointer"
+                  title="Limpar busca"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/50" title="Pronto para leitor de código de barras ou digitação">
+                  <Barcode className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Leitor Ativo</span>
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Quick Scanner Camera Button or Clear Filters */}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                setScannerMode('search');
+                setScannerOpen(true);
+              }}
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800 rounded-xl transition cursor-pointer"
+              title="Abrir Câmera para Escanear Código de Barras / QR Code"
+            >
+              <QrCode className="w-4 h-4" />
+              <span>Escanear Câmera</span>
+            </button>
+
+            {(searchQuery || filterCategory !== 'Todos' || filterStatus !== 'Todos' || filterCompany !== 'Todos' || filterOnlyMine) && (
               <button
                 type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-2 text-slate-400 hover:text-slate-600 text-sm font-bold h-6 w-6 flex items-center justify-center rounded-full hover:bg-slate-200/50 cursor-pointer"
+                onClick={() => {
+                  setSearchQuery('');
+                  setFilterCategory('Todos');
+                  setFilterStatus('Todos');
+                  setFilterCompany('Todos');
+                  setFilterOnlyMine(false);
+                }}
+                className="inline-flex items-center justify-center gap-1 px-3 py-2.5 text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 border border-rose-200 dark:border-rose-900 rounded-xl transition cursor-pointer"
+                title="Limpar todos os filtros"
               >
-                ×
+                <X className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Limpar</span>
               </button>
-            ) : (
-              <span className="absolute right-3.5 top-2.5 text-slate-400" title="Busca por Código de Barras Ativa">
-                <Barcode className="w-4 h-4" />
-              </span>
             )}
           </div>
-          <div className="mt-1 flex items-center gap-1.5 text-[10px] text-indigo-600 font-bold px-1">
-            <Barcode className="w-3.5 h-3.5 text-indigo-500" />
-            <span>Colaborador: Digite ou use o leitor de código de barras para filtrar instantaneamente.</span>
+        </div>
+
+        {/* SUBTEXT / HELPER FOR BARCODE SCANNING */}
+        <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 px-1 border-b border-slate-100 dark:border-slate-800 pb-3">
+          <div className="flex items-center gap-1.5">
+            <Barcode className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+            <span><strong>Busca por Código de Barras ou Nome:</strong> compatível com leitor USB/Bluetooth e digitação instantânea.</span>
+          </div>
+          <div className="hidden md:block font-mono text-[10px] text-slate-400 shrink-0">
+            {filteredShopping.length} de {shopping.length} {shopping.length === 1 ? 'item' : 'itens'}
           </div>
         </div>
 
-        {/* Categories selector Buttons */}
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[10px] font-bold font-mono uppercase text-slate-400 mr-1 flex items-center gap-1">
-            <Filter className="w-3 h-3" /> CATEGORIA:
+        {/* ROW 2: CATEGORY FILTER CHIPS (CLEAN HORIZONTAL WRAP WITH ICONS & COUNTS) */}
+        <div className="space-y-1.5">
+          <span className="text-[10px] font-bold font-mono uppercase tracking-wider text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
+            <Filter className="w-3 h-3 text-indigo-500" /> CATEGORIA:
           </span>
-          {['Todos', ...categoriesList].map((cat) => {
-            const stats = cat !== 'Todos' ? getCategoryStats(cat) : { count: shopping.length };
-            return (
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+            {['Todos', ...categoriesList].map((cat) => {
+              const stats = cat !== 'Todos' ? getCategoryStats(cat) : { count: shopping.length };
+              const isSelected = filterCategory === cat;
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setFilterCategory(cat)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer select-none ${
+                    isSelected
+                      ? 'border-indigo-600 bg-indigo-600 text-white shadow-xs font-bold'
+                      : 'border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-950 text-slate-650 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-900 hover:border-slate-300'
+                  }`}
+                >
+                  {cat !== 'Todos' && getCategoryIcon(cat, isSelected ? "w-3.5 h-3.5 text-white" : "w-3.5 h-3.5")}
+                  <span>{cat}</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                    isSelected 
+                      ? 'bg-white/20 text-white' 
+                      : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                  }`}>
+                    {stats.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ROW 3: STATUS, COLLABORATOR & COMPANY FILTERS */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+          
+          {/* Status Tabs */}
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
+            {[
+              { key: 'Todos', label: 'Todos', count: shopping.length },
+              { key: 'Pendentes', label: 'Pendentes', count: shopping.filter(i => !i.checked).length },
+              { key: 'Comprados', label: 'Comprados', count: shopping.filter(i => i.checked).length }
+            ].map(({ key, label, count }) => (
               <button
-                key={cat}
-                onClick={() => setFilterCategory(cat)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
-                  filterCategory === cat
-                    ? 'border-indigo-600 bg-indigo-50 text-indigo-700' 
-                    : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                key={key}
+                type="button"
+                onClick={() => setFilterStatus(key)}
+                className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-lg transition cursor-pointer select-none ${
+                  filterStatus === key
+                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-3xs'
+                    : 'text-slate-550 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
                 }`}
               >
-                {cat} {stats.count > 0 && <span className="text-[10px] ml-1 opacity-70 font-mono">({stats.count})</span>}
+                <span>{label}</span>
+                <span className="text-[10px] opacity-70 font-mono">({count})</span>
               </button>
-            );
-          })}
-        </div>
-
-        {/* Status filters */}
-        <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-lg">
-          {['Todos', 'Pendentes', 'Comprados'].map((st) => (
-            <button
-              key={st}
-              onClick={() => setFilterStatus(st)}
-              className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${
-                filterStatus === st 
-                  ? 'bg-white text-slate-900 shadow-3xs' 
-                  : 'text-slate-550 hover:text-slate-800'
-              }`}
-            >
-              {st}
-            </button>
-          ))}
-        </div>
-
-        {/* Toggle Apenas Minhas Solicitações if colaborador */}
-        {userRole === 'colaborador' && (
-          <button
-            type="button"
-            onClick={() => setFilterOnlyMine(!filterOnlyMine)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition flex items-center gap-1.5 cursor-pointer ${
-              filterOnlyMine
-                ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 font-bold shadow-3xs'
-                : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-650 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900'
-            }`}
-          >
-            <CheckSquare className="w-3.5 h-3.5" />
-            <span>Apenas Minhas Solicitações</span>
-          </button>
-        )}
-
-        {/* Company filter dropdown */}
-        <div className="flex items-center gap-1.5 bg-slate-150 p-1 rounded-lg">
-          <span className="text-[10px] font-bold font-mono uppercase text-slate-500 px-1.5">
-            Empresa:
-          </span>
-          <select
-            value={filterCompany}
-            onChange={(e) => setFilterCompany(e.target.value)}
-            className="text-xs font-semibold bg-white border border-slate-200 rounded-md py-1 px-2.5 focus:outline-none focus:border-indigo-500 text-slate-800"
-          >
-            <option value="Todos">Todas</option>
-            {userRole !== 'colaborador' && <option value="georgefctech-3d">GeorgeFctech-3D</option>}
-            {companiesList.filter(c => c.toLowerCase() !== 'georgefctech-3d').map(c => (
-              <option key={c} value={c}>{c}</option>
             ))}
-          </select>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Toggle Apenas Minhas Solicitações if colaborador */}
+            {userRole === 'colaborador' && (
+              <button
+                type="button"
+                onClick={() => setFilterOnlyMine(!filterOnlyMine)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 cursor-pointer select-none ${
+                  filterOnlyMine
+                    ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 shadow-3xs'
+                    : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-650 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900'
+                }`}
+              >
+                <CheckSquare className={`w-3.5 h-3.5 ${filterOnlyMine ? 'text-indigo-600' : 'text-slate-400'}`} />
+                <span>Apenas Minhas Solicitações</span>
+              </button>
+            )}
+
+            {/* Company Filter Dropdown */}
+            <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-950 px-2 py-1 rounded-xl border border-slate-200 dark:border-slate-800">
+              <span className="text-[10px] font-bold font-mono uppercase text-slate-500 dark:text-slate-400">
+                Empresa:
+              </span>
+              <select
+                value={filterCompany}
+                onChange={(e) => setFilterCompany(e.target.value)}
+                className="text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg py-1 px-2.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-800 dark:text-slate-100"
+              >
+                <option value="Todos">Todas</option>
+                {userRole !== 'colaborador' && <option value="georgefctech-3d">GeorgeFctech-3D</option>}
+                {companiesList.filter(c => c.toLowerCase() !== 'georgefctech-3d').map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -3761,21 +3873,39 @@ export default function ShoppingListView({
                                 </button>
                               )}
 
-                              <button
-                                onClick={() => handleStartEdit(item)}
-                                title="Editar entrada técnico comercial"
-                                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition cursor-pointer"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </button>
-                              
-                              <button
-                                onClick={() => handleDeleteShoppingItem(item.id)}
-                                title="Remover do cronograma"
-                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                              {(() => {
+                                const canEdit = canUserEditOrDeleteShoppingItem(item, userRole, currentUsername, currentUserEmail);
+                                if (!canEdit && userRole === 'colaborador') {
+                                  return (
+                                    <span 
+                                      title={item.checked ? "Item concluído/baixado - Apenas Administradores podem editar ou excluir" : "Solicitação restrita ao autor ou Administrador"} 
+                                      className="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 rounded text-[10px] font-mono cursor-not-allowed select-none"
+                                    >
+                                      <Lock className="w-3 h-3 text-slate-400" />
+                                      <span>Bloqueado</span>
+                                    </span>
+                                  );
+                                }
+                                return (
+                                  <>
+                                    <button
+                                      onClick={() => handleStartEdit(item)}
+                                      title="Editar entrada técnico comercial"
+                                      className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition cursor-pointer"
+                                    >
+                                      <Edit2 className="w-4 h-4" />
+                                    </button>
+                                    
+                                    <button
+                                      onClick={() => handleDeleteShoppingItem(item.id)}
+                                      title="Remover do cronograma"
+                                      className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition cursor-pointer"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </>
+                                );
+                              })()}
                             </div>
                           )}
                         </td>
@@ -3983,18 +4113,36 @@ export default function ShoppingListView({
                             Validar
                           </button>
                         )}
-                        <button
-                          onClick={() => handleStartEdit(item)}
-                          className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded transition cursor-pointer"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteShoppingItem(item.id)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {(() => {
+                          const canEdit = canUserEditOrDeleteShoppingItem(item, userRole, currentUsername, currentUserEmail);
+                          if (!canEdit && userRole === 'colaborador') {
+                            return (
+                              <span 
+                                title={item.checked ? "Item concluído/baixado - Apenas Administradores podem editar ou excluir" : "Solicitação restrita ao autor ou Administrador"} 
+                                className="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 rounded text-[10px] font-mono cursor-not-allowed select-none"
+                              >
+                                <Lock className="w-3 h-3 text-slate-400" />
+                                <span>Bloqueado</span>
+                              </span>
+                            );
+                          }
+                          return (
+                            <>
+                              <button
+                                onClick={() => handleStartEdit(item)}
+                                className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition cursor-pointer"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteShoppingItem(item.id)}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded transition cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          );
+                        })()}
                       </div>
                     </div>
                   )}
