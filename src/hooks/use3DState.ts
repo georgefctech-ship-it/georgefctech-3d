@@ -92,12 +92,23 @@ const DEFAULT_INVENTORY: InventoryItem[] = [
     unitCost: 280.00,
     gramCost: 280.00,
     status: 'Em Estoque',
-    category: 'Placas',
+    category: 'Placas & Fontes',
     image: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=300&q=80',
     purchaseLink: 'https://www.mercadolivre.com.br/'
   },
   {
     id: 'INV-004',
+    material: 'Fonte Chaveada 24V 350W MeanWell LRS-350-24',
+    qty: 2,
+    unitCost: 240.00,
+    gramCost: 240.00,
+    status: 'Em Estoque',
+    category: 'Placas & Fontes',
+    image: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=300&q=80',
+    purchaseLink: 'https://www.mercadolivre.com.br/'
+  },
+  {
+    id: 'INV-005',
     material: 'Sensor de Nivelamento Automático BLTouch V3.1',
     qty: 3,
     unitCost: 195.00,
@@ -108,7 +119,7 @@ const DEFAULT_INVENTORY: InventoryItem[] = [
     purchaseLink: 'https://www.mercadolivre.com.br/'
   },
   {
-    id: 'INV-005',
+    id: 'INV-006',
     material: 'Jogo de Bicos de Latão 0.4mm Creality (Lote 10un)',
     qty: 4,
     unitCost: 45.00,
@@ -116,17 +127,6 @@ const DEFAULT_INVENTORY: InventoryItem[] = [
     status: 'Em Estoque',
     category: 'Peças Geral',
     image: 'https://images.unsplash.com/photo-1581092334247-44dfa8c569ca?w=300&q=80',
-    purchaseLink: 'https://www.mercadolivre.com.br/'
-  },
-  {
-    id: 'INV-006',
-    material: 'Fita Kapton Térmica de Isolamento 30mm x 33m',
-    qty: 5,
-    unitCost: 38.00,
-    gramCost: 38.00,
-    status: 'Em Estoque',
-    category: 'Outros',
-    image: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=300&q=80',
     purchaseLink: 'https://www.mercadolivre.com.br/'
   },
   {
@@ -138,6 +138,17 @@ const DEFAULT_INVENTORY: InventoryItem[] = [
     status: 'Em Estoque',
     category: 'Refrigeração',
     image: 'https://images.unsplash.com/photo-1581092334247-44dfa8c569ca?w=300&q=80',
+    purchaseLink: 'https://www.mercadolivre.com.br/'
+  },
+  {
+    id: 'INV-008',
+    material: 'Fita Kapton Térmica de Isolamento 30mm x 33m',
+    qty: 5,
+    unitCost: 38.00,
+    gramCost: 38.00,
+    status: 'Em Estoque',
+    category: 'Acessórios/Insumos',
+    image: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=300&q=80',
     purchaseLink: 'https://www.mercadolivre.com.br/'
   }
 ];
@@ -158,6 +169,19 @@ const DEFAULT_SHOPPING: ShoppingItem[] = [
   },
   {
     id: 'SHOP-002',
+    materialName: 'Placa Controladora Silenciosa 32-Bits Creality V4.2.7',
+    qtyNeeded: 1,
+    estUnitCost: 280.00,
+    purchaseLink: 'https://www.mercadolivre.com.br/',
+    category: 'Placas & Fontes',
+    notes: 'Upgrade e reposição para impressora Ender-3 da bancada 2',
+    checked: false,
+    requestedBy: 'Administrador',
+    company: 'GeorgeFctech-3D',
+    department: 'Oficina'
+  },
+  {
+    id: 'SHOP-003',
     materialName: 'Jogo de Bicos de Latão Extrusor Premium 0.4mm (M6)',
     qtyNeeded: 1,
     estUnitCost: 45.00,
@@ -170,7 +194,7 @@ const DEFAULT_SHOPPING: ShoppingItem[] = [
     department: 'Oficina'
   },
   {
-    id: 'SHOP-003',
+    id: 'SHOP-004',
     materialName: 'Álcool Isopropílico 99.8% 1 Litro',
     qtyNeeded: 1,
     estUnitCost: 35.00,
@@ -183,7 +207,7 @@ const DEFAULT_SHOPPING: ShoppingItem[] = [
     department: 'Oficina'
   },
   {
-    id: 'SHOP-004',
+    id: 'SHOP-005',
     materialName: 'Ventoinha Radial 5015 24V Cooler de Refrigeração da Peça',
     qtyNeeded: 3,
     estUnitCost: 32.00,
@@ -201,6 +225,54 @@ const DEFAULT_SETTINGS: SettingsConfig = {
   defaultHourlyRate: 50.00,
   defaultMaterialRate: 0.35,
   defaultProfitMargin: 15.00
+};
+
+export const sanitizeInventoryCategory = (material: string, currentCategory?: string): string => {
+  const name = (material || '').toLowerCase();
+  if (currentCategory && currentCategory !== 'Filamento') {
+    if (currentCategory === 'Placas') return 'Placas & Fontes';
+    return currentCategory;
+  }
+  if (name.includes('placa') || name.includes('fonte') || name.includes('motherboard') || name.includes('controladora') || name.includes('meanwell') || name.includes('lrs-') || name.includes('v4.2.7') || name.includes('skr')) {
+    return 'Placas & Fontes';
+  }
+  if (name.includes('sensor') || name.includes('bltouch') || name.includes('termistor') || name.includes('aquecedor') || name.includes('driver') || name.includes('cabo')) {
+    return 'Componentes Eletrônicos';
+  }
+  if (name.includes('cooler') || name.includes('fan') || name.includes('ventoinha') || name.includes('refrigera')) {
+    return 'Refrigeração';
+  }
+  if (name.includes('bico') || name.includes('nozzle') || name.includes('correia') || name.includes('polia') || name.includes('extrusor') || name.includes('ptfe') || name.includes('mesa') || name.includes('pei')) {
+    return 'Peças Geral';
+  }
+  if (name.includes('kapton') || name.includes('isopropílico') || name.includes('álcool') || name.includes('fita') || name.includes('cola') || name.includes('graxa') || name.includes('spray')) {
+    return 'Acessórios/Insumos';
+  }
+  return currentCategory || 'Filamento';
+};
+
+export const sanitizeShoppingCategory = (materialName: string, currentCategory?: string): string => {
+  const name = (materialName || '').toLowerCase();
+  if (currentCategory && currentCategory !== 'Outros' && currentCategory !== 'Filamento') {
+    if (currentCategory === 'Placas') return 'Placas & Fontes';
+    return currentCategory;
+  }
+  if (name.includes('placa') || name.includes('fonte') || name.includes('motherboard') || name.includes('controladora') || name.includes('meanwell') || name.includes('lrs-') || name.includes('v4.2.7') || name.includes('skr')) {
+    return 'Placas & Fontes';
+  }
+  if (name.includes('sensor') || name.includes('bltouch') || name.includes('termistor') || name.includes('aquecedor') || name.includes('driver')) {
+    return 'Componentes Eletrônicos';
+  }
+  if (name.includes('cooler') || name.includes('fan') || name.includes('ventoinha') || name.includes('refrigera')) {
+    return 'Refrigeração';
+  }
+  if (name.includes('bico') || name.includes('nozzle') || name.includes('correia') || name.includes('polia') || name.includes('extrusor') || name.includes('ptfe')) {
+    return 'Peças de Reposição';
+  }
+  if (name.includes('kapton') || name.includes('isopropílico') || name.includes('álcool') || name.includes('fita') || name.includes('cola') || name.includes('graxa')) {
+    return 'Acessórios/Insumos';
+  }
+  return currentCategory || 'Filamento';
 };
 
 export function use3DState() {
@@ -255,7 +327,7 @@ export function use3DState() {
     status: db.status,
     image: db.image || undefined,
     purchaseLink: db.purchase_link || undefined,
-    category: db.category || 'Filamento'
+    category: sanitizeInventoryCategory(db.material, db.category)
   });
 
   const mapInventoryToDb = (app: InventoryItem) => ({
@@ -276,7 +348,7 @@ export function use3DState() {
     qtyNeeded: Number(db.qty_needed),
     estUnitCost: Number(db.est_unit_cost),
     purchaseLink: db.purchase_link || '',
-    category: db.category || 'Outros',
+    category: sanitizeShoppingCategory(db.material_name, db.category),
     notes: db.notes || undefined,
     checked: !!db.checked,
     requestedBy: db.requested_by || undefined,
@@ -513,14 +585,24 @@ export function use3DState() {
         localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(DEFAULT_PROJECTS));
       }
 
-      if (storedInventory) setInventory(JSON.parse(storedInventory));
-      else {
+      if (storedInventory) {
+        const parsedInv = JSON.parse(storedInventory).map((item: InventoryItem) => ({
+          ...item,
+          category: sanitizeInventoryCategory(item.material, item.category)
+        }));
+        setInventory(parsedInv);
+      } else {
         setInventory(DEFAULT_INVENTORY);
         localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify(DEFAULT_INVENTORY));
       }
 
-      if (storedShopping) setShopping(JSON.parse(storedShopping));
-      else {
+      if (storedShopping) {
+        const parsedShop = JSON.parse(storedShopping).map((item: ShoppingItem) => ({
+          ...item,
+          category: sanitizeShoppingCategory(item.materialName, item.category)
+        }));
+        setShopping(parsedShop);
+      } else {
         setShopping(DEFAULT_SHOPPING);
         localStorage.setItem(STORAGE_KEYS.SHOPPING, JSON.stringify(DEFAULT_SHOPPING));
       }

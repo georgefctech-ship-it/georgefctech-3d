@@ -12,7 +12,7 @@ import {
   Package, 
   AlertCircle,
   Link,
-  Image,
+  Image as ImageIcon,
   Upload,
   ExternalLink,
   Edit2,
@@ -26,36 +26,127 @@ import {
   Minus,
   Camera,
   Search,
-  Sparkles
+  Sparkles,
+  Printer,
+  FileSpreadsheet,
+  Download,
+  Layers,
+  Cpu,
+  Wrench,
+  Fan,
+  Tag,
+  Globe,
+  RefreshCw,
+  FileText
 } from 'lucide-react';
 import { InventoryItem, ShoppingItem } from '../types';
 import { Html5Qrcode } from 'html5-qrcode';
+// @ts-ignore
+import XLSX from 'xlsx-js-style';
 
 const CATEGORIES = [
   'Filamento',
-  'Placas',
+  'Placas & Fontes',
   'Componentes Eletrônicos',
   'Peças Geral',
   'Refrigeração',
+  'Acessórios/Insumos',
   'Outros'
 ] as const;
 
-const getCategoryBadgeStyle = (cat?: string) => {
-  switch (cat) {
-    case 'Filamento':
-      return 'bg-indigo-50 text-indigo-700 border border-indigo-200';
-    case 'Placas':
-      return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
-    case 'Componentes Eletrônicos':
-      return 'bg-purple-50 text-purple-700 border border-purple-200';
-    case 'Peças Geral':
-      return 'bg-blue-50 text-blue-700 border border-blue-200';
-    case 'Refrigeração':
-      return 'bg-cyan-50 text-cyan-700 border border-cyan-200';
-    case 'Outros':
-    default:
-      return 'bg-slate-100 text-slate-700 border border-slate-200';
+export const matchItemCategory = (item: InventoryItem, filterCategory: string): boolean => {
+  if (!filterCategory || filterCategory === 'Todos') return true;
+
+  const itemCat = (item.category || '').trim();
+  const name = (item.material || '').toLowerCase();
+
+  if (filterCategory === 'Filamento') {
+    if (itemCat === 'Filamento') return true;
+    if (!itemCat && (name.includes('pla') || name.includes('petg') || name.includes('abs') || name.includes('tpu') || name.includes('nylon') || name.includes('filamento') || name.includes('resina') || name.includes('asa') || name.includes('hips') || name.includes('pc') || name.includes('peek') || name.includes('pvb'))) {
+      return true;
+    }
+    return false;
   }
+
+  if (filterCategory === 'Placas & Fontes' || filterCategory === 'Placas') {
+    if (itemCat === 'Placas & Fontes' || itemCat === 'Placas') return true;
+    if (name.includes('placa') || name.includes('fonte') || name.includes('motherboard') || name.includes('skr') || name.includes('mks') || name.includes('btt') || name.includes('chaveada') || name.includes('meanwell') || name.includes('v4.2.7') || name.includes('silent board') || name.includes('mainboard')) {
+      return true;
+    }
+    return false;
+  }
+
+  if (filterCategory === 'Componentes Eletrônicos') {
+    if (itemCat === 'Componentes Eletrônicos') return true;
+    if (name.includes('sensor') || name.includes('driver') || name.includes('tmc') || name.includes('motor') || name.includes('termistor') || name.includes('aquecedor') || name.includes('bltouch') || name.includes('3dtouch') || name.includes('cabo') || name.includes('mosfet') || name.includes('display') || name.includes('lcd')) {
+      return true;
+    }
+    return false;
+  }
+
+  if (filterCategory === 'Peças Geral' || filterCategory === 'Peças de Reposição') {
+    if (itemCat === 'Peças Geral' || itemCat === 'Peças de Reposição') return true;
+    if (name.includes('bico') || name.includes('nozzle') || name.includes('correia') || name.includes('polia') || name.includes('heatbreak') || name.includes('bloco') || name.includes('garganta') || name.includes('tubo ptfe') || name.includes('engrenagem') || name.includes('extrusora') || name.includes('extrusor') || name.includes('rolamento') || name.includes('fuso') || name.includes('acoplador') || name.includes('mola') || name.includes('mesa') || name.includes('vidro') || name.includes('pei')) {
+      return true;
+    }
+    return false;
+  }
+
+  if (filterCategory === 'Refrigeração') {
+    if (itemCat === 'Refrigeração') return true;
+    if (name.includes('cooler') || name.includes('fan') || name.includes('ventoinha') || name.includes('ventilador') || name.includes('duto') || name.includes('dissipador') || name.includes('5015') || name.includes('4010') || name.includes('4020')) {
+      return true;
+    }
+    return false;
+  }
+
+  if (filterCategory === 'Acessórios/Insumos') {
+    if (itemCat === 'Acessórios/Insumos' || itemCat === 'Acessórios') return true;
+    if (name.includes('álcool') || name.includes('spray') || name.includes('cola') || name.includes('adesivo') || name.includes('espátula') || name.includes('alicate') || name.includes('chave') || name.includes('graxa') || name.includes('lubrificante') || name.includes('silicone') || name.includes('organizador')) {
+      return true;
+    }
+    return false;
+  }
+
+  if (filterCategory === 'Outros') {
+    return itemCat === 'Outros' || (!itemCat && !matchItemCategory(item, 'Filamento') && !matchItemCategory(item, 'Placas & Fontes') && !matchItemCategory(item, 'Componentes Eletrônicos') && !matchItemCategory(item, 'Peças Geral') && !matchItemCategory(item, 'Refrigeração') && !matchItemCategory(item, 'Acessórios/Insumos'));
+  }
+
+  return itemCat === filterCategory;
+};
+
+const getCategoryBadgeStyle = (cat?: string) => {
+  const c = cat?.toLowerCase() || '';
+  if (c.includes('filamento')) {
+    return 'bg-indigo-50 text-indigo-700 border border-indigo-200';
+  }
+  if (c.includes('placa') || c.includes('fonte')) {
+    return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+  }
+  if (c.includes('componente') || c.includes('eletr')) {
+    return 'bg-purple-50 text-purple-700 border border-purple-200';
+  }
+  if (c.includes('peça') || c.includes('peca')) {
+    return 'bg-blue-50 text-blue-700 border border-blue-200';
+  }
+  if (c.includes('refrigera') || c.includes('cooler') || c.includes('fan')) {
+    return 'bg-cyan-50 text-cyan-700 border border-cyan-200';
+  }
+  if (c.includes('acess') || c.includes('insumo')) {
+    return 'bg-amber-50 text-amber-700 border border-amber-200';
+  }
+  return 'bg-slate-100 text-slate-700 border border-slate-200';
+};
+
+const getCategoryIcon = (cat?: string, className = "w-3.5 h-3.5") => {
+  const c = cat?.toLowerCase() || '';
+  if (c.includes('filamento')) return <Layers className={`${className} text-indigo-500`} />;
+  if (c.includes('placa') || c.includes('fonte')) return <Cpu className={`${className} text-emerald-500`} />;
+  if (c.includes('componente') || c.includes('eletr')) return <Sparkles className={`${className} text-purple-500`} />;
+  if (c.includes('peça') || c.includes('peca')) return <Wrench className={`${className} text-blue-500`} />;
+  if (c.includes('refrigera') || c.includes('cooler') || c.includes('fan')) return <Fan className={`${className} text-cyan-500`} />;
+  if (c.includes('acess') || c.includes('insumo')) return <Package className={`${className} text-amber-500`} />;
+  return <Tag className={`${className} text-slate-500`} />;
 };
 
 const ensureAbsoluteUrl = (url: string | undefined): string => {
@@ -100,6 +191,7 @@ export default function InventoryView({
   const [unitCost, setUnitCost] = useState('150.00');
   const [purchaseLink, setPurchaseLink] = useState('');
   const [imgUrl, setImgUrl] = useState('');
+  const [manualImgUrl, setManualImgUrl] = useState('');
   const [uploadedBase64, setUploadedBase64] = useState('');
   const [selectedPresetColor, setSelectedPresetColor] = useState('#6366f1'); // default indigo brand
 
@@ -302,7 +394,7 @@ export default function InventoryView({
       return;
     }
 
-    const finalImage = uploadedBase64 || imgUrl || 'https://images.unsplash.com/photo-1612815154858-60aa4c59eae6?w=300&q=80';
+    const finalImage = uploadedBase64 || manualImgUrl.trim() || imgUrl || 'https://images.unsplash.com/photo-1612815154858-60aa4c59eae6?w=300&q=80';
 
     onAddInventoryItem({
       id: customBarcodeId.trim() ? customBarcodeId.trim() : undefined,
@@ -321,6 +413,7 @@ export default function InventoryView({
     setUnitCost('150.00');
     setPurchaseLink('');
     setImgUrl('');
+    setManualImgUrl('');
     setUploadedBase64('');
     setCustomBarcodeId('');
     setSuccess(true);
@@ -358,6 +451,592 @@ export default function InventoryView({
     return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
 
+  // EXCEL REPORT GENERATION WITH DEDICATED SHEETS FOR PLACAS, FILAMENTOS, ETC.
+  const downloadInventoryExcel = () => {
+    try {
+      const wb = XLSX.utils.book_new();
+      const reportDate = new Date().toLocaleDateString('pt-BR');
+
+      const styleTitle = {
+        font: { name: 'Calibri', sz: 14, bold: true, color: { rgb: 'FFFFFF' } },
+        fill: { fgColor: { rgb: '1E1B4B' } },
+        alignment: { horizontal: 'center', vertical: 'center' }
+      };
+
+      const styleHeader = {
+        font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: 'FFFFFF' } },
+        fill: { fgColor: { rgb: '4338CA' } },
+        alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+        border: {
+          top: { style: 'thin', color: { rgb: 'CBD5E1' } },
+          bottom: { style: 'thin', color: { rgb: 'CBD5E1' } },
+          left: { style: 'thin', color: { rgb: 'CBD5E1' } },
+          right: { style: 'thin', color: { rgb: 'CBD5E1' } }
+        }
+      };
+
+      const styleCell = {
+        font: { name: 'Calibri', sz: 10 },
+        alignment: { vertical: 'center' },
+        border: {
+          top: { style: 'thin', color: { rgb: 'E2E8F0' } },
+          bottom: { style: 'thin', color: { rgb: 'E2E8F0' } },
+          left: { style: 'thin', color: { rgb: 'E2E8F0' } },
+          right: { style: 'thin', color: { rgb: 'E2E8F0' } }
+        }
+      };
+
+      const styleNumber = {
+        ...styleCell,
+        alignment: { horizontal: 'right', vertical: 'center' },
+        numFmt: 'R$ #,##0.00'
+      };
+
+      const styleTotal = {
+        font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: '1E1B4B' } },
+        fill: { fgColor: { rgb: 'EEF2FF' } },
+        alignment: { horizontal: 'right', vertical: 'center' },
+        border: {
+          top: { style: 'medium', color: { rgb: '4338CA' } },
+          bottom: { style: 'double', color: { rgb: '4338CA' } }
+        },
+        numFmt: 'R$ #,##0.00'
+      };
+
+      // 1. GENERAL CONSOLIDATED SHEET
+      const generalData: any[][] = [
+        ['GEORGEFCTECH-3D — RELATÓRIO CONSOLIDADO DE ESTOQUE E INSUMOS'],
+        [`Data da Emissão: ${reportDate} | Total de Itens: ${inventory.length}`],
+        [],
+        ['ID / SKU', 'Categoria', 'Insumo / Especificação', 'Qtd Estoque', 'Preço Unitário (R$)', 'Custo p/ Grama (R$)', 'Total Imobilizado (R$)', 'Status', 'Link Fornecedor']
+      ];
+
+      inventory.forEach(item => {
+        const totalCost = (item.qty || 0) * (item.unitCost || 0);
+        generalData.push([
+          item.id || '-',
+          item.category || 'Filamento',
+          item.material || '-',
+          item.qty || 0,
+          item.unitCost || 0,
+          item.gramCost || (item.unitCost ? item.unitCost / 1000 : 0),
+          totalCost,
+          item.status || 'Em Estoque',
+          item.purchaseLink || 'Sem Link'
+        ]);
+      });
+
+      const totalGeneral = inventory.reduce((sum, i) => sum + ((i.qty || 0) * (i.unitCost || 0)), 0);
+      generalData.push([]);
+      generalData.push(['TOTAL GERAL IMOBILIZADO NO ESTOQUE', '', '', inventory.reduce((s, i) => s + (i.qty || 0), 0), '', '', totalGeneral, '', '']);
+
+      const wsGeneral = XLSX.utils.aoa_to_sheet(generalData);
+      wsGeneral['!cols'] = [
+        { wch: 14 }, { wch: 22 }, { wch: 38 }, { wch: 14 }, { wch: 18 }, { wch: 18 }, { wch: 22 }, { wch: 16 }, { wch: 35 }
+      ];
+      XLSX.utils.book_append_sheet(wb, wsGeneral, 'Estoque Geral');
+
+      // 2. DEDICATED SHEETS PER CATEGORY (Placas & Fontes, Filamentos, Componentes, etc.)
+      const reportCategories = ['Placas & Fontes', 'Filamento', 'Componentes Eletrônicos', 'Peças Geral', 'Refrigeração', 'Acessórios/Insumos', 'Outros'];
+
+      reportCategories.forEach(catName => {
+        const catItems = inventory.filter(item => matchItemCategory(item, catName));
+        if (catItems.length === 0) return;
+
+        const sheetTitle = catName.length > 28 ? catName.substring(0, 28) : catName;
+        const catData: any[][] = [
+          [`GEORGEFCTECH-3D — ESTOQUE: ${catName.toUpperCase()}`],
+          [`Data da Emissão: ${reportDate} | Itens Cadastrados: ${catItems.length}`],
+          [],
+          ['ID / SKU', 'Insumo / Especificação', 'Qtd em Estoque', 'Preço Unitário (R$)', 'Custo p/ g ou Un. (R$)', 'Total Imobilizado (R$)', 'Status', 'Link Fornecedor']
+        ];
+
+        catItems.forEach(item => {
+          const totalCost = (item.qty || 0) * (item.unitCost || 0);
+          catData.push([
+            item.id || '-',
+            item.material || '-',
+            item.qty || 0,
+            item.unitCost || 0,
+            item.gramCost || (item.unitCost ? item.unitCost / 1000 : 0),
+            totalCost,
+            item.status || 'Em Estoque',
+            item.purchaseLink || 'Sem Link'
+          ]);
+        });
+
+        const catTotalValue = catItems.reduce((sum, i) => sum + ((i.qty || 0) * (i.unitCost || 0)), 0);
+        const catTotalQty = catItems.reduce((sum, i) => sum + (i.qty || 0), 0);
+        catData.push([]);
+        catData.push([`SUBTOTAL ${catName.toUpperCase()}`, '', catTotalQty, '', '', catTotalValue, '', '']);
+
+        const wsCat = XLSX.utils.aoa_to_sheet(catData);
+        wsCat['!cols'] = [
+          { wch: 14 }, { wch: 38 }, { wch: 16 }, { wch: 18 }, { wch: 18 }, { wch: 22 }, { wch: 16 }, { wch: 35 }
+        ];
+        XLSX.utils.book_append_sheet(wb, wsCat, sheetTitle.replace('/', '-'));
+      });
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      XLSX.writeFile(wb, `Relatorio_Estoque_GeorgeFctech_3D_${todayStr}.xlsx`);
+    } catch (e) {
+      console.error("Erro ao gerar planilha Excel de estoque:", e);
+      alert("Houve um problema ao compilar o arquivo Excel. Verifique os dados e tente novamente.");
+    }
+  };
+
+  // PRINTABLE HTML / PDF REPORT GENERATOR WITH DEDICATED TABLES PER CATEGORY
+  const downloadInventoryHtmlReport = () => {
+    const reportDate = new Date().toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+    const isAll = activeCategoryFilter === 'Todos';
+    const categoriesToRender = isAll
+      ? ['Placas & Fontes', 'Filamento', 'Componentes Eletrônicos', 'Peças Geral', 'Refrigeração', 'Acessórios/Insumos', 'Outros']
+      : [activeCategoryFilter];
+
+    const totalItemsCount = inventory.length;
+    const totalStockValue = inventory.reduce((acc, i) => acc + ((i.qty || 0) * (i.unitCost || 0)), 0);
+    const lowStockCount = inventory.filter(i => i.qty <= 1).length;
+
+    let tablesHtml = '';
+
+    categoriesToRender.forEach(catName => {
+      const itemsInCat = inventory.filter(item => matchItemCategory(item, catName));
+      if (itemsInCat.length === 0) return;
+
+      const catSubtotal = itemsInCat.reduce((acc, i) => acc + ((i.qty || 0) * (i.unitCost || 0)), 0);
+      const catTotalQty = itemsInCat.reduce((acc, i) => acc + (i.qty || 0), 0);
+
+      tablesHtml += `
+        <div class="category-block">
+          <div class="category-header">
+            <div class="category-title">
+              <span class="category-badge">${catName}</span>
+              <span class="category-count">${itemsInCat.length} produto(s) • ${catTotalQty} unidade(s)</span>
+            </div>
+            <div class="category-total">
+              Subtotal: <strong>${formatBRL(catSubtotal)}</strong>
+            </div>
+          </div>
+          
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width: 55px; text-align: center;">FOTO</th>
+                <th style="text-align: left;">INSUMO / ESPECIFICAÇÃO</th>
+                <th style="width: 100px; text-align: center;">CÓDIGO / SKU</th>
+                <th style="width: 75px; text-align: center;">QTD</th>
+                <th style="width: 105px; text-align: right;">PREÇO UN.</th>
+                <th style="width: 110px; text-align: right;">CUSTO P/ G OU UN.</th>
+                <th style="width: 120px; text-align: right;">TOTAL ESTOQUE</th>
+                <th style="width: 95px; text-align: center;">STATUS</th>
+                <th style="width: 120px; text-align: center;">LINK FORNECEDOR</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsInCat.map(item => {
+                const itemTotal = (item.qty || 0) * (item.unitCost || 0);
+                const statusClass = item.qty === 0 ? 'status-esgotado' : (item.qty <= 1 ? 'status-pouco' : 'status-ok');
+                const costPerGramStr = item.gramCost ? `R$ ${item.gramCost.toFixed(3)}/g` : (item.unitCost ? `R$ ${(item.unitCost / 1000).toFixed(3)}/g` : '--');
+                const imageSrc = item.image || 'https://images.unsplash.com/photo-1612815154858-60aa4c59eae6?w=100&q=80';
+                
+                return `
+                  <tr>
+                    <td style="text-align: center;">
+                      <img src="${imageSrc}" alt="${item.material}" class="thumb-img" onerror="this.style.display='none'" />
+                    </td>
+                    <td>
+                      <div class="material-name">${item.material}</div>
+                      <div class="material-cat">${item.category || catName}</div>
+                    </td>
+                    <td style="text-align: center; font-family: monospace; font-size: 10.5px; font-weight: bold; color: #4338ca;">
+                      ${item.id || '-'}
+                    </td>
+                    <td style="text-align: center; font-weight: bold; font-family: monospace;">
+                      ${item.qty} un
+                    </td>
+                    <td style="text-align: right; font-family: monospace;">
+                      ${formatBRL(item.unitCost)}
+                    </td>
+                    <td style="text-align: right; font-family: monospace; color: #4338ca; font-weight: 600;">
+                      ${costPerGramStr}
+                    </td>
+                    <td style="text-align: right; font-weight: bold; font-family: monospace; color: #0f172a;">
+                      ${formatBRL(itemTotal)}
+                    </td>
+                    <td style="text-align: center;">
+                      <span class="status-pill ${statusClass}">${item.status || (item.qty === 0 ? 'Esgotado' : 'Em Estoque')}</span>
+                    </td>
+                    <td style="text-align: center; font-size: 10px;">
+                      ${item.purchaseLink ? `<a href="${ensureAbsoluteUrl(item.purchaseLink)}" target="_blank" class="buy-link">Acessar Loja ↗</a>` : '<span style="color: #94a3b8;">-</span>'}
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+            <tfoot>
+              <tr class="subtotal-row">
+                <td colspan="3" style="text-align: right; font-weight: bold;">SUBTOTAL ${catName.toUpperCase()}:</td>
+                <td style="text-align: center; font-weight: bold; font-family: monospace;">${catTotalQty} un</td>
+                <td colspan="2"></td>
+                <td style="text-align: right; font-weight: bold; font-family: monospace; color: #4338ca;">${formatBRL(catSubtotal)}</td>
+                <td colspan="2"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      `;
+    });
+
+    const printHtml = `
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8">
+        <title>Relatório Oficial de Estoque e Insumos — GeorgeFctech-3D</title>
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+          
+          * { box-sizing: border-box; margin: 0; padding: 0; }
+          body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #ffffff;
+            color: #0f172a;
+            padding: 30px;
+            font-size: 12px;
+            line-height: 1.4;
+          }
+          
+          .report-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 18px;
+            margin-bottom: 22px;
+          }
+          
+          .brand-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+          }
+          
+          .brand-badge {
+            background: #4338ca;
+            color: #ffffff;
+            font-weight: 800;
+            font-size: 16px;
+            padding: 8px 14px;
+            border-radius: 8px;
+            letter-spacing: 0.5px;
+          }
+          
+          .brand-info h1 {
+            font-size: 18px;
+            font-weight: 800;
+            color: #0f172a;
+            margin-bottom: 2px;
+          }
+          
+          .brand-info p {
+            font-size: 11px;
+            color: #64748b;
+          }
+          
+          .header-meta {
+            text-align: right;
+            font-size: 11px;
+            color: #475569;
+          }
+          
+          .header-meta strong {
+            color: #0f172a;
+          }
+
+          .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 24px;
+          }
+
+          .metric-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 12px 16px;
+          }
+
+          .metric-label {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #64748b;
+            margin-bottom: 4px;
+          }
+
+          .metric-value {
+            font-size: 18px;
+            font-weight: 800;
+            font-family: 'JetBrains Mono', monospace;
+            color: #0f172a;
+          }
+
+          .metric-value.highlight {
+            color: #4338ca;
+          }
+
+          .category-block {
+            margin-bottom: 28px;
+            page-break-inside: avoid;
+          }
+
+          .category-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f1f5f9;
+            padding: 8px 14px;
+            border-radius: 8px 8px 0 0;
+            border: 1px solid #cbd5e1;
+            border-bottom: none;
+          }
+
+          .category-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+          }
+
+          .category-badge {
+            background: #4338ca;
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 11px;
+            padding: 3px 10px;
+            border-radius: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+          }
+
+          .category-count {
+            font-size: 11px;
+            color: #475569;
+            font-weight: 600;
+          }
+
+          .category-total {
+            font-size: 12px;
+            color: #0f172a;
+          }
+
+          .category-total strong {
+            color: #4338ca;
+            font-family: 'JetBrains Mono', monospace;
+          }
+
+          .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1px solid #cbd5e1;
+            font-size: 11px;
+            background: #ffffff;
+          }
+
+          .data-table th {
+            background: #f8fafc;
+            color: #475569;
+            font-weight: 700;
+            font-size: 9.5px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 8px 10px;
+            border: 1px solid #cbd5e1;
+          }
+
+          .data-table td {
+            padding: 7px 10px;
+            border: 1px solid #e2e8f0;
+            vertical-align: middle;
+          }
+
+          .data-table tr:nth-child(even) {
+            background: #fafafa;
+          }
+
+          .thumb-img {
+            width: 32px;
+            height: 32px;
+            object-fit: cover;
+            border-radius: 6px;
+            border: 1px solid #cbd5e1;
+          }
+
+          .material-name {
+            font-weight: 700;
+            color: #0f172a;
+            font-size: 11.5px;
+          }
+
+          .material-cat {
+            font-size: 9.5px;
+            color: #64748b;
+          }
+
+          .status-pill {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 9.5px;
+            font-weight: 700;
+          }
+
+          .status-ok { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+          .status-pouco { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+          .status-esgotado { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+
+          .buy-link {
+            color: #4338ca;
+            text-decoration: none;
+            font-weight: 600;
+          }
+
+          .subtotal-row td {
+            background: #f8fafc;
+            border-top: 2px solid #cbd5e1;
+            padding: 8px 10px;
+          }
+
+          .report-footer {
+            margin-top: 36px;
+            border-top: 2px solid #e2e8f0;
+            padding-top: 18px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 10.5px;
+            color: #64748b;
+          }
+
+          .signatures {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            margin-top: 35px;
+          }
+
+          .sig-box {
+            border-top: 1px solid #94a3b8;
+            padding-top: 6px;
+            text-align: center;
+            font-size: 11px;
+            color: #334155;
+          }
+
+          .no-print {
+            margin-bottom: 20px;
+            background: #e0e7ff;
+            padding: 12px 16px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          }
+
+          .btn-print {
+            background: #4338ca;
+            color: #ffffff;
+            border: none;
+            padding: 8px 18px;
+            border-radius: 6px;
+            font-weight: 700;
+            cursor: pointer;
+            font-size: 12px;
+          }
+
+          @media print {
+            .no-print { display: none; }
+            body { padding: 10px; font-size: 10px; }
+            .category-block { page-break-inside: avoid; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="no-print">
+          <div>
+            <strong>Pré-visualização do Relatório de Estoque</strong> — Configure para salvar em PDF ou imprimir na sua impressora.
+          </div>
+          <button class="btn-print" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
+        </div>
+
+        <div class="report-header">
+          <div class="brand-logo">
+            <div class="brand-badge">GF3D</div>
+            <div class="brand-info">
+              <h1>GEORGEFCTECH-3D — RELATÓRIO OFICIAL DE ESTOQUE</h1>
+              <p>Controle de Insumos, Matéria-Prima, Placas e Componentes Eletrônicos</p>
+            </div>
+          </div>
+          <div class="header-meta">
+            <p><strong>Emissão:</strong> ${reportDate}</p>
+            <p><strong>Filtro Aplicado:</strong> ${isAll ? 'Todas as Categorias' : activeCategoryFilter}</p>
+            <p><strong>Emitido por:</strong> ${userRole === 'colaborador' ? 'Colaborador Ftéx' : 'Administrador GeorgeFctech'}</p>
+          </div>
+        </div>
+
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-label">Total de Itens Cadastrados</div>
+            <div class="metric-value">${totalItemsCount} produtos</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Valor Imobilizado em Estoque</div>
+            <div class="metric-value highlight">${formatBRL(totalStockValue)}</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Itens em Alerta / Reposição</div>
+            <div class="metric-value" style="color: ${lowStockCount > 0 ? '#b45309' : '#166534'};">${lowStockCount} itens</div>
+          </div>
+        </div>
+
+        ${tablesHtml}
+
+        <div class="signatures">
+          <div class="sig-box">
+            <strong>Responsável Técnico / Estoque</strong><br />
+            GeorgeFctech-3D — Controle Patrimonial
+          </div>
+          <div class="sig-box">
+            <strong>Auditoria e Conferência Física</strong><br />
+            Data: ____ / ____ / ________
+          </div>
+        </div>
+
+        <div class="report-footer">
+          <div>GeorgeFctech-3D & FTÉX Soluções Industriais — Gestão de Impressão 3D e Manufatura Aditiva</div>
+          <div>Página 1 de 1</div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const printWin = window.open('', '_blank');
+    if (printWin) {
+      printWin.document.write(printHtml);
+      printWin.document.close();
+      printWin.focus();
+    } else {
+      alert('O bloqueador de pop-ups impediu a abertura do relatório. Por favor, permita pop-ups para imprimir.');
+    }
+  };
+
   return (
     <div className="font-sans antialiased text-slate-800">
       {/* HEADER SECTION */}
@@ -371,26 +1050,46 @@ export default function InventoryView({
           </p>
         </div>
 
-        {/* VIEW MODE TOGGLER */}
-        <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-lg self-start mt-4 md:mt-0">
+        {/* ACTION BUTTONS & VIEW MODE TOGGLER */}
+        <div className="flex flex-wrap items-center gap-2 mt-4 md:mt-0">
           <button
-            onClick={() => setViewMode('grid')}
-            className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold tracking-wide transition duration-150 ${
-              viewMode === 'grid' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-800'
-            }`}
+            onClick={downloadInventoryHtmlReport}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-bold transition shadow-2xs hover:border-slate-300 cursor-pointer"
+            title="Imprimir ou gerar PDF formatado por categoria"
           >
-            <Grid className="w-3.5 h-3.5" />
-            Ver Galeria
+            <Printer className="w-3.5 h-3.5 text-indigo-600" />
+            Imprimir Relatório (PDF)
           </button>
+
           <button
-            onClick={() => setViewMode('table')}
-            className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold tracking-wide transition duration-150 ${
-              viewMode === 'table' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-800'
-            }`}
+            onClick={downloadInventoryExcel}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer"
+            title="Baixar planilha Excel com abas separadas por categoria (Placas, Filamentos...)"
           >
-            <List className="w-3.5 h-3.5" />
-            Ver Tabela
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+            Exportar Excel (.xlsx)
           </button>
+
+          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`flex items-center gap-1 px-3 py-1 rounded-md text-xs font-semibold tracking-wide transition duration-150 ${
+                viewMode === 'grid' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-800'
+              }`}
+            >
+              <Grid className="w-3.5 h-3.5" />
+              Galeria
+            </button>
+            <button
+              onClick={() => setViewMode('table')}
+              className={`flex items-center gap-1 px-3 py-1 rounded-md text-xs font-semibold tracking-wide transition duration-150 ${
+                viewMode === 'table' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-800'
+              }`}
+            >
+              <List className="w-3.5 h-3.5" />
+              Tabela
+            </button>
+          </div>
         </div>
       </div>
 
@@ -569,10 +1268,10 @@ export default function InventoryView({
                 </div>
               </div>
 
-              {/* FILAMENT PHOTO UPLOADER */}
+              {/* INSUMO PHOTO UPLOADER & URL INPUT */}
               <div className="flex flex-col gap-2.5 pt-1.5">
                 <label className="text-xs font-semibold text-slate-500">
-                  Foto do Filamento
+                  Foto / Imagem do Insumo
                 </label>
                 
                 {/* PRESETS SLIDER */}
@@ -583,10 +1282,13 @@ export default function InventoryView({
                       <button
                         key={idx}
                         type="button"
-                        onClick={() => handlePresetSelect(preset.url)}
+                        onClick={() => {
+                          handlePresetSelect(preset.url);
+                          setManualImgUrl('');
+                        }}
                         title={preset.name}
                         className={`h-7 px-2.5 rounded text-[11px] font-semibold border flex items-center gap-1.5 transition ${
-                          imgUrl === preset.url 
+                          imgUrl === preset.url && !uploadedBase64 && !manualImgUrl
                             ? 'border-indigo-600 bg-indigo-50 text-indigo-700' 
                             : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700'
                         }`}
@@ -598,7 +1300,59 @@ export default function InventoryView({
                   </div>
                 </div>
 
-                <div className="text-center py-1">
+                <div className="text-center py-0.5">
+                  <span className="text-[10px] font-mono text-slate-400">OU INSERIR URL / LINK DA IMAGEM NA WEB</span>
+                </div>
+
+                {/* MANUAL IMAGE URL INPUT */}
+                <div className="flex flex-col gap-1">
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-slate-400">
+                      <Globe className="w-3.5 h-3.5" />
+                    </span>
+                    <input
+                      type="url"
+                      value={manualImgUrl}
+                      onChange={(e) => {
+                        setManualImgUrl(e.target.value);
+                        if (e.target.value.trim()) {
+                          setUploadedBase64('');
+                          setImgUrl(e.target.value.trim());
+                        }
+                      }}
+                      placeholder="Ex: https://dominio.com/foto-placa-fonte.jpg"
+                      className="px-4 pl-9 py-2 w-full border border-slate-200 rounded-lg bg-slate-50 text-slate-800 text-xs focus:outline-none focus:border-indigo-500 focus:bg-white placeholder-slate-400 transition-all font-sans"
+                    />
+                    {manualImgUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setManualImgUrl('')}
+                        className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 p-0.5"
+                        title="Limpar URL"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  {manualImgUrl.trim() && (
+                    <div className="flex items-center gap-2 p-2 bg-indigo-50/60 rounded-lg border border-indigo-100 mt-1">
+                      <img
+                        src={manualImgUrl}
+                        alt="Preview da URL"
+                        className="w-10 h-10 object-cover rounded border border-indigo-200 shrink-0 bg-white"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          (e.target as HTMLElement).style.display = 'none';
+                        }}
+                      />
+                      <span className="text-[11px] text-indigo-700 font-medium truncate">
+                        Imagem carregada via URL
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="text-center py-0.5">
                   <span className="text-[10px] font-mono text-slate-400">OU SUBIR FOTO REAL DO CELULAR ou ARQUIVO</span>
                 </div>
 
@@ -612,18 +1366,24 @@ export default function InventoryView({
                         className="w-10 h-10 object-cover rounded border border-slate-200"
                         referrerPolicy="no-referrer"
                       />
-                      <span className="text-xs text-indigo-600 font-semibold truncate max-w-[120px]">Imagem Real Pronta</span>
+                      <div className="text-left">
+                        <span className="text-xs text-indigo-600 font-semibold truncate block max-w-[140px]">Foto Real Anexada</span>
+                        <span className="text-[10px] text-slate-400 block">Clique para alterar</span>
+                      </div>
                     </div>
                   ) : (
                     <>
                       <Upload className="w-5 h-5 text-slate-400 mb-1" />
-                      <span className="text-[11px] font-semibold text-slate-600">Procurar ou arrastar imagem</span>
+                      <span className="text-[11px] font-semibold text-slate-600">Procurar ou arrastar imagem do arquivo</span>
                     </>
                   )}
                   <input
                     type="file"
                     accept="image/*"
-                    onChange={(e) => handleImageFileChange(e)}
+                    onChange={(e) => {
+                      handleImageFileChange(e);
+                      setManualImgUrl('');
+                    }}
                     className="hidden"
                   />
                 </label>
@@ -700,7 +1460,7 @@ export default function InventoryView({
             </button>
 
             {CATEGORIES.map((cat) => {
-              const count = inventory.filter(i => (i.category || 'Filamento') === cat).length;
+              const count = inventory.filter(i => matchItemCategory(i, cat)).length;
               return (
                 <button
                   key={cat}
@@ -711,7 +1471,10 @@ export default function InventoryView({
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
-                  <span>{cat}</span>
+                  <span className="flex items-center gap-1">
+                    {getCategoryIcon(cat, "w-3 h-3")}
+                    {cat}
+                  </span>
                   <span className="px-1.5 py-0.2 bg-black/15 rounded-full text-[10px] font-mono">
                     {count}
                   </span>
@@ -723,7 +1486,7 @@ export default function InventoryView({
           {(() => {
             const filteredInventory = inventory.filter(item => {
               if (activeCategoryFilter === 'Todos') return true;
-              return (item.category || 'Filamento') === activeCategoryFilter;
+              return matchItemCategory(item, activeCategoryFilter);
             });
 
             return viewMode === 'grid' ? (
@@ -1107,7 +1870,34 @@ export default function InventoryView({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Atualizar Foto (Upload / File)</label>
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">URL / Link da Imagem</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-slate-400">
+                    <Globe className="w-3.5 h-3.5" />
+                  </span>
+                  <input
+                    type="url"
+                    value={editImg}
+                    onChange={(e) => setEditImg(e.target.value)}
+                    className="w-full text-sm px-3 pl-9 py-2 border border-slate-200 rounded-lg text-slate-800 bg-white"
+                    placeholder="https://exemplo.com/foto.jpg"
+                  />
+                </div>
+                {editImg && (
+                  <div className="mt-2 flex items-center gap-2 p-1.5 bg-slate-50 rounded-lg border border-slate-200">
+                    <img
+                      src={editImg}
+                      alt="Preview"
+                      className="w-8 h-8 object-cover rounded border border-slate-200"
+                      referrerPolicy="no-referrer"
+                    />
+                    <span className="text-[11px] text-slate-600 truncate">Preview da Imagem Atual</span>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Ou Substituir por Upload / Arquivo</label>
                 <label className="border border-dashed border-slate-200 rounded-lg p-3 bg-slate-50 flex items-center justify-center gap-3 cursor-pointer text-xs font-semibold text-slate-600 hover:bg-slate-100">
                   <Upload className="w-4 h-4 text-slate-400" />
                   Substituir Imagem Real

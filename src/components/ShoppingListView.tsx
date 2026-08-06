@@ -39,6 +39,7 @@ import {
   FileClock,
   Calculator,
   Fan,
+  Cpu,
   X
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
@@ -2848,9 +2849,9 @@ export default function ShoppingListView({
   });
 
   // Calculate stats per category
-  const categoriesList = ['Filamento', 'Peças de Reposição', 'Acessórios/Insumos', 'Refrigeração', 'Outros'];
+  const categoriesList = ['Filamento', 'Placas & Fontes', 'Componentes Eletrônicos', 'Peças de Reposição', 'Refrigeração', 'Acessórios/Insumos', 'Outros'];
   const getCategoryStats = (cat: string) => {
-    const items = shopping.filter(i => i.category === cat);
+    const items = shopping.filter(i => (i.category || 'Filamento') === cat);
     const count = items.length;
     const total = items.reduce((sum, i) => sum + (i.qtyNeeded * i.estUnitCost), 0);
     return { count, total };
@@ -2861,6 +2862,10 @@ export default function ShoppingListView({
     switch (cat) {
       case 'Filamento':
         return <Layers className={`${sizeClass} text-indigo-500`} />;
+      case 'Placas & Fontes':
+        return <Cpu className={`${sizeClass} text-amber-500`} />;
+      case 'Componentes Eletrônicos':
+        return <Cpu className={`${sizeClass} text-emerald-500`} />;
       case 'Peças de Reposição':
         return <Wrench className={`${sizeClass} text-rose-500`} />;
       case 'Acessórios/Insumos':
@@ -3168,9 +3173,11 @@ export default function ShoppingListView({
                   className="w-full text-sm px-4 py-2 border border-slate-200 rounded-lg bg-white text-slate-800 focus:outline-none focus:border-indigo-500 shadow-xs"
                 >
                   <option value="Filamento">Filamento de Impressão</option>
-                  <option value="Peças de Reposição">Peças de Reposição (Bicos, Correias)</option>
-                  <option value="Acessórios/Insumos">Acessórios / Outros Insumos</option>
+                  <option value="Placas & Fontes">Placas & Fontes (Placas-mãe, Fontes 12V/24V)</option>
+                  <option value="Componentes Eletrônicos">Componentes Eletrônicos (Drivers, Sensores, Cabos)</option>
+                  <option value="Peças de Reposição">Peças de Reposição (Bicos, Correias, Extrusoras)</option>
                   <option value="Refrigeração">Refrigeração (Coolers, Fans, Dutos)</option>
+                  <option value="Acessórios/Insumos">Acessórios / Outros Insumos</option>
                   <option value="Outros">Outras Despesas</option>
                 </select>
               </div>
@@ -4958,8 +4965,10 @@ export default function ShoppingListView({
                     className="w-full px-3.5 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-800 dark:text-white bg-white dark:bg-slate-950 focus:outline-none focus:border-indigo-500 text-xs transition"
                   >
                     <option value="Todos">Todas as Categorias (Abas Separadas por Categoria)</option>
-                    <option value="Refrigeração">❄️ Apenas Refrigeração (Coolers, Fans, Dutos)</option>
                     <option value="Filamento">🧵 Apenas Filamento de Impressão</option>
+                    <option value="Placas & Fontes">⚡ Apenas Placas & Fontes</option>
+                    <option value="Componentes Eletrônicos">🔌 Apenas Componentes Eletrônicos</option>
+                    <option value="Refrigeração">❄️ Apenas Refrigeração (Coolers, Fans, Dutos)</option>
                     <option value="Peças de Reposição">🔧 Apenas Peças de Reposição</option>
                     <option value="Acessórios/Insumos">📦 Apenas Acessórios / Insumos</option>
                     <option value="Outros">🏷️ Apenas Outras Despesas</option>

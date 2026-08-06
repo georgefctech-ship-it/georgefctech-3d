@@ -19,7 +19,16 @@ export interface ProjectOrder {
   image?: string; // foto da peça imprimida (Base64 ou URL)
 }
 
-export type ItemCategory = 'Filamento' | 'Placas' | 'Componentes Eletrônicos' | 'Peças Geral' | 'Refrigeração' | 'Outros';
+export type ItemCategory = 
+  | 'Filamento' 
+  | 'Placas & Fontes' 
+  | 'Placas' 
+  | 'Componentes Eletrônicos' 
+  | 'Peças Geral' 
+  | 'Peças de Reposição' 
+  | 'Refrigeração' 
+  | 'Acessórios/Insumos' 
+  | 'Outros';
 
 export interface InventoryItem {
   id: string; // ID único do insumo
@@ -30,7 +39,7 @@ export interface InventoryItem {
   status: 'Em Estoque' | 'Esgotado' | 'Poucas Unidades';
   image?: string; // foto do insumo (Base64 ou URL)
   purchaseLink?: string; // Link de compra (ex: Mercado Livre, Amazon...)
-  category?: ItemCategory | string; // Categoria: Filamento, Placas, Componentes Eletrônicos, Peças Geral, Refrigeração, Outros
+  category?: ItemCategory | string; // Categoria do insumo
 }
 
 export interface ShoppingItem {
@@ -39,7 +48,7 @@ export interface ShoppingItem {
   qtyNeeded: number; // Quantidade desejada
   estUnitCost: number; // Preço estimado unitário (R$)
   purchaseLink: string; // URL da loja ou vendedor
-  category: 'Filamento' | 'Peças de Reposição' | 'Acessórios/Insumos' | 'Refrigeração' | 'Outros' | string;
+  category: ItemCategory | string;
   notes?: string; // Observações customizadas
   checked?: boolean; // Se já foi comprado ou checado
   requestedBy?: string; // Nome do funcionário responsável pelo pedido
