@@ -41,6 +41,8 @@ import {
   Fan,
   Cpu,
   Lock,
+  Database,
+  FileSpreadsheet,
   X
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
@@ -282,6 +284,7 @@ interface ShoppingListViewProps {
   onAddInventoryItem: (item: Omit<InventoryItem, 'id' | 'gramCost' | 'status'>) => void;
   userRole?: string;
   currentSubView?: string;
+  onNavigate?: (view: string) => void;
 }
 
 export default function ShoppingListView({
@@ -293,7 +296,8 @@ export default function ShoppingListView({
   onToggleShoppingItemChecked,
   onAddInventoryItem,
   userRole,
-  currentSubView
+  currentSubView,
+  onNavigate
 }: ShoppingListViewProps) {
   const currentUserEmail = useMemo(() => sessionStorage.getItem('g3d_user_email') || '', []);
   const currentUsername = useMemo(() => sessionStorage.getItem('g3d_username') || '', []);
@@ -302,18 +306,14 @@ export default function ShoppingListView({
 
   const shopping = useMemo(() => {
     if (userRole === 'colaborador') {
-      // 1. Oculta estritamente todos os pedidos efetuados pelo administrador.
-      const colabPurchases = allShopping.filter(item => !isAdministratorPurchase(item));
-
-      // 2. Se a opção "Apenas Minhas Solicitações" estiver ativa, filtra por usuário
+      // Se a opção "Apenas Minhas Solicitações" estiver ativa, filtra por usuário
       if (filterOnlyMine) {
-        return colabPurchases.filter(item =>
+        return allShopping.filter(item =>
           isOwnedByCurrentCollaborator(item, currentUsername, currentUserEmail)
         );
       }
-
-      // Exibe todas as compras feitas em modo colaborador
-      return colabPurchases;
+      // Colaboradores têm visão completa de todas as compras da empresa para recebimento, baixa e relatórios
+      return allShopping;
     }
     return allShopping;
   }, [allShopping, userRole, currentUserEmail, currentUsername, filterOnlyMine]);
@@ -430,6 +430,68 @@ export default function ShoppingListView({
   const [validatingItem, setValidatingItem] = useState<ShoppingItem | null>(null);
   const [autoPushToStock, setAutoPushToStock] = useState<boolean>(true);
 
+  // Quick Stock Consultation Modal State
+  const [stockConsultModalOpen, setStockConsultModalOpen] = useState(false);
+  const [stockSearchQuery, setStockSearchQuery] = useState('');
+  const [stockCategoryFilter, setStockCategoryFilter] = useState('Todos');
+
+  // Helper to find matching inventory item by name
+  const getMatchingInventoryItem = (itemName: string) => {
+    if (!itemName || !inventory) return null;
+    const cleanName = itemName.toLowerCase().replace(/\(reposi[çc][ãa]o\)/gi, '').trim();
+    return inventory.find(inv => {
+      const invMat = (inv.material || '').toLowerCase().trim();
+      return invMat === cleanName || invMat.includes(cleanName) || cleanName.includes(invMat);
+    });
+  };
+
+  const downloadStockExcelDirect = () => {
+    try {
+      const wb = XLSX.utils.book_new();
+      const reportDate = new Date().toLocaleDateString('pt-BR');
+
+      const generalData: any[][] = [
+        ['GEORGEFCTECH-3D — RELATÓRIO OFICIAL DE ESTOQUE E INSUMOS'],
+        [`Data da Emissão: ${reportDate} | Total de Itens: ${inventory.length}`],
+        [],
+        ['ID / SKU', 'Categoria', 'Insumo / Especificação', 'Qtd Estoque', 'Preço Unitário (R$)', 'Total Imobilizado (R$)', 'Status', 'Link Fornecedor']
+      ];
+
+      inventory.forEach(item => {
+        const totalCost = (item.qty || 0) * (item.unitCost || 0);
+        generalData.push([
+          item.id || '-',
+          item.category || 'Filamento',
+          item.material || '-',
+          item.qty || 0,
+          item.unitCost || 0,
+          totalCost,
+          item.status || (item.qty === 0 ? 'Esgotado' : 'Em Estoque'),
+          item.purchaseLink || 'Sem Link'
+        ]);
+      });
+
+      const totalGeneral = inventory.reduce((sum, i) => sum + ((i.qty || 0) * (i.unitCost || 0)), 0);
+      generalData.push([]);
+      generalData.push(['TOTAL GERAL IMOBILIZADO NO ESTOQUE', '', '', inventory.reduce((s, i) => s + (i.qty || 0), 0), '', totalGeneral, '', '']);
+
+      const wsGeneral = XLSX.utils.aoa_to_sheet(generalData);
+      wsGeneral['!cols'] = [
+        { wch: 14 }, { wch: 22 }, { wch: 38 }, { wch: 14 }, { wch: 18 }, { wch: 22 }, { wch: 16 }, { wch: 35 }
+      ];
+      XLSX.utils.book_append_sheet(wb, wsGeneral, 'Estoque Geral');
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      XLSX.writeFile(wb, `Relatorio_Estoque_GeorgeFctech_3D_${todayStr}.xlsx`);
+      setToastMessage("Planilha de Estoque (.xlsx) baixada com sucesso!");
+      setTimeout(() => setToastMessage(null), 4000);
+    } catch (e) {
+      console.error("Erro ao exportar estoque:", e);
+      setToastMessage("Erro ao compilar arquivo Excel de estoque.");
+      setTimeout(() => setToastMessage(null), 4000);
+    }
+  };
+
   const handleToggleOrValidate = (item: ShoppingItem) => {
     if (item.checked) {
       // If already checked, toggle back to unchecked (pending)
@@ -453,7 +515,8 @@ export default function ShoppingListView({
         material: validatingItem.materialName.replace(" (Reposição)", ""),
         qty: validatingItem.qtyNeeded,
         unitCost: validatingItem.estUnitCost,
-        purchaseLink: validatingItem.purchaseLink
+        purchaseLink: validatingItem.purchaseLink,
+        category: validatingItem.category
       });
       setToastMessage(`Compra Validada! "${validatingItem.materialName}" marcada como COMPRADA e enviada para o estoque ativo.`);
     } else {
@@ -1060,7 +1123,7 @@ export default function ShoppingListView({
   };
 
   const generateReportExcel = (customMetadata?: { company: string, requestedBy: string, department: string, category?: string }) => {
-    const baseItems = userRole === 'colaborador' ? shopping.filter(item => !isAdministratorPurchase(item)) : shopping;
+    const baseItems = shopping;
     if (baseItems.length === 0) {
       setToastMessage("Aviso: Nenhum item de compra encontrado para gerar a planilha.");
       setTimeout(() => setToastMessage(null), 4000);
@@ -1909,9 +1972,6 @@ export default function ShoppingListView({
 
   const downloadCompletedPurchasesHtmlReport = () => {
     let completedPurchases = shopping.filter(item => item.checked);
-    if (userRole === 'colaborador') {
-      completedPurchases = completedPurchases.filter(item => !isAdministratorPurchase(item));
-    }
 
     // Filtrar pelo período selecionado no histórico
     if (completedPeriodFilter === 'hoje') {
@@ -2568,9 +2628,6 @@ export default function ShoppingListView({
   // Export Completed purchases as Excel spreadsheet (XLSX)
   const generateCompletedPurchasesExcelReport = (customMetadata?: { company: string, requestedBy: string, department: string }) => {
     let completedPurchases = shopping.filter(item => item.checked);
-    if (userRole === 'colaborador') {
-      completedPurchases = completedPurchases.filter(item => !isAdministratorPurchase(item));
-    }
 
     // Filtrar pelo período selecionado no histórico
     if (completedPeriodFilter === 'hoje') {
@@ -2890,7 +2947,8 @@ export default function ShoppingListView({
       material: item.materialName.replace(" (Reposição)", ""),
       qty: item.qtyNeeded,
       unitCost: item.estUnitCost,
-      purchaseLink: item.purchaseLink
+      purchaseLink: item.purchaseLink,
+      category: item.category
     });
 
     setToastMessage(`Sucesso! ${item.qtyNeeded} unidade(s) de "${item.materialName}" foram lançados no estoque ativo (Baixa Efetuada)!`);
@@ -4290,6 +4348,15 @@ export default function ShoppingListView({
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <button
+                    onClick={() => setStockConsultModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 font-bold text-[10px] uppercase tracking-wider hover:bg-indigo-100 transition duration-150 cursor-pointer"
+                    title="Consultar estoque atual de insumos e matérias-primas"
+                  >
+                    <Database className="w-3.5 h-3.5" />
+                    <span>Consultar Estoque</span>
+                  </button>
+
+                  <button
                     onClick={downloadHtmlReport}
                     disabled={shopping.length === 0}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 font-bold text-[10px] uppercase tracking-wider hover:bg-blue-100 transition duration-150 cursor-pointer disabled:opacity-50"
@@ -4353,6 +4420,23 @@ export default function ShoppingListView({
                             Cód: {item.barcode}
                           </p>
                         )}
+
+                        {(() => {
+                          const stockItem = getMatchingInventoryItem(item.materialName);
+                          if (stockItem) {
+                            return (
+                              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-mono bg-slate-100 dark:bg-slate-850 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-750 mb-2">
+                                <Database className="w-3 h-3 text-indigo-500 shrink-0" />
+                                <span>Estoque Atual: <strong className="text-indigo-600 dark:text-indigo-400">{stockItem.qty} un</strong> ({stockItem.status || 'Em Estoque'})</span>
+                              </div>
+                            );
+                          }
+                          return (
+                            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-mono bg-slate-50 dark:bg-slate-900 text-slate-400 border border-slate-200 dark:border-slate-800 mb-2">
+                              <span>Novo no Estoque após Baixa</span>
+                            </div>
+                          );
+                        })()}
 
                         <div className="flex flex-wrap items-center gap-2 mb-3 text-[10px] text-slate-400">
                           <span>Solicitante: <strong>{item.requestedBy || 'Ftéx'}</strong></span>
@@ -4461,6 +4545,15 @@ export default function ShoppingListView({
                 </div>
 
                 {/* Relatórios e Pedidos Buttons */}
+                <button
+                  onClick={() => setStockConsultModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 font-bold text-[10px] uppercase tracking-wider hover:bg-indigo-100 transition duration-150 cursor-pointer"
+                  title="Consultar estoque atual de insumos"
+                >
+                  <Database className="w-3.5 h-3.5" />
+                  <span>Consultar Estoque</span>
+                </button>
+
                 <button
                   onClick={downloadCompletedPurchasesHtmlReport}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 font-bold text-[10px] uppercase tracking-wider hover:bg-indigo-100 transition duration-150 cursor-pointer"
@@ -5248,6 +5341,203 @@ export default function ShoppingListView({
 
             </form>
 
+          </div>
+        </div>
+      )}
+
+      {/* QUICK STOCK CONSULTATION MODAL */}
+      {stockConsultModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-950/50">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900">
+                  <Database className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800 dark:text-slate-100 text-base flex items-center gap-2">
+                    Consulta Rápida de Estoque & Insumos
+                    <span className="text-xs font-normal font-mono px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300">
+                      {inventory.length} itens cadastrados
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Acompanhe a quantidade disponível em tempo real e exporte planilhas de conferência.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={downloadStockExcelDirect}
+                  disabled={inventory.length === 0}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 font-bold text-xs hover:bg-emerald-100 transition cursor-pointer disabled:opacity-50"
+                  title="Baixar Planilha de Estoque Completa em Excel (.xlsx)"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Baixar Planilha (.XLSX)</span>
+                </button>
+                {onNavigate && (
+                  <button
+                    onClick={() => {
+                      setStockConsultModalOpen(false);
+                      onNavigate('suprimentos');
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-xs hover:bg-slate-100 dark:hover:bg-slate-700 transition cursor-pointer"
+                    title="Ir para tela completa de Insumos & Estoque"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Gerenciar Estoque</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => setStockConsultModalOpen(false)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Filters Bar */}
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-wrap items-center gap-3">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  value={stockSearchQuery}
+                  onChange={(e) => setStockSearchQuery(e.target.value)}
+                  placeholder="Pesquisar material, SKU ou especificação..."
+                  className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-slate-400">Categoria:</label>
+                <select
+                  value={stockCategoryFilter}
+                  onChange={(e) => setStockCategoryFilter(e.target.value)}
+                  className="text-xs px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="Todos">Todas as Categorias</option>
+                  <option value="Filamento">Filamento</option>
+                  <option value="Peças de Reposição">Peças de Reposição</option>
+                  <option value="Acessórios/Insumos">Acessórios/Insumos</option>
+                  <option value="Refrigeração">Refrigeração</option>
+                  <option value="Outros">Outros</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Stock Items Table */}
+            <div className="flex-1 overflow-y-auto p-4 max-h-[50vh]">
+              {(() => {
+                const filteredStock = inventory.filter(inv => {
+                  const matchesSearch = !stockSearchQuery || (
+                    (inv.material || '').toLowerCase().includes(stockSearchQuery.toLowerCase()) ||
+                    (inv.id || '').toLowerCase().includes(stockSearchQuery.toLowerCase()) ||
+                    (inv.category || '').toLowerCase().includes(stockSearchQuery.toLowerCase())
+                  );
+                  const matchesCat = stockCategoryFilter === 'Todos' || inv.category === stockCategoryFilter;
+                  return matchesSearch && matchesCat;
+                });
+
+                if (filteredStock.length === 0) {
+                  return (
+                    <div className="p-8 text-center text-slate-400">
+                      <Database className="w-10 h-10 mx-auto mb-2 opacity-40" />
+                      <p className="text-xs">Nenhum insumo encontrado no estoque com os filtros aplicados.</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-slate-800 text-[10px] font-mono text-slate-400 uppercase bg-slate-50/50 dark:bg-slate-950/30">
+                        <th className="p-2.5">Insumo / Matéria-Prima</th>
+                        <th className="p-2.5">Categoria</th>
+                        <th className="p-2.5 text-center">Quantidade</th>
+                        <th className="p-2.5 text-right">Custo Unitário</th>
+                        <th className="p-2.5 text-right">Total em Estoque</th>
+                        <th className="p-2.5 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                      {filteredStock.map(item => {
+                        const isOut = (item.qty || 0) === 0;
+                        const isLow = (item.qty || 0) > 0 && (item.qty || 0) <= 2;
+                        const totalItemVal = (item.qty || 0) * (item.unitCost || 0);
+
+                        return (
+                          <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-850/40 transition">
+                            <td className="p-2.5 font-medium text-slate-800 dark:text-slate-150">
+                              <div>{item.material}</div>
+                              {item.purchaseLink && (
+                                <a
+                                  href={ensureAbsoluteUrl(item.purchaseLink, item.material)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[10px] text-indigo-500 hover:underline inline-flex items-center gap-1 mt-0.5"
+                                >
+                                  <span>Link fornecedor</span>
+                                  <ExternalLink className="w-2.5 h-2.5" />
+                                </a>
+                              )}
+                            </td>
+                            <td className="p-2.5">
+                              <span className="inline-block px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                                {item.category || 'Filamento'}
+                              </span>
+                            </td>
+                            <td className="p-2.5 text-center font-mono font-bold">
+                              <span className={isOut ? 'text-rose-600' : isLow ? 'text-amber-600' : 'text-emerald-600'}>
+                                {item.qty || 0} un
+                              </span>
+                            </td>
+                            <td className="p-2.5 text-right font-mono text-slate-600 dark:text-slate-300">
+                              R$ {(item.unitCost || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="p-2.5 text-right font-mono font-bold text-slate-800 dark:text-slate-100">
+                              R$ {totalItemVal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="p-2.5 text-center">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
+                                isOut
+                                  ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 border border-rose-200 dark:border-rose-900'
+                                  : isLow
+                                  ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 border border-amber-200 dark:border-amber-900'
+                                  : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 border border-emerald-200 dark:border-emerald-900'
+                              }`}>
+                                {isOut ? 'Esgotado' : isLow ? 'Poucas Unidades' : 'Em Estoque'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                );
+              })()}
+            </div>
+
+            {/* Modal Footer Summary */}
+            <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-4 text-slate-500 font-mono text-[11px]">
+                <span>Total de Itens: <strong className="text-slate-800 dark:text-slate-200">{inventory.length}</strong></span>
+                <span>•</span>
+                <span>Unidades Totais: <strong className="text-slate-800 dark:text-slate-200">{inventory.reduce((acc, i) => acc + (i.qty || 0), 0)} un</strong></span>
+                <span>•</span>
+                <span>Valor Imobilizado: <strong className="text-emerald-600 dark:text-emerald-400">R$ {inventory.reduce((acc, i) => acc + ((i.qty || 0) * (i.unitCost || 0)), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></span>
+              </div>
+
+              <button
+                onClick={() => setStockConsultModalOpen(false)}
+                className="px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition cursor-pointer"
+              >
+                Fechar Consulta
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -182,6 +182,7 @@ export default function App() {
             onToggleShoppingItemChecked={toggleShoppingItemChecked}
             onAddInventoryItem={addInventoryItem}
             userRole={userRole}
+            onNavigate={setCurrentView}
           />
         );
       case 'baixa_compras':
@@ -196,6 +197,7 @@ export default function App() {
             onAddInventoryItem={addInventoryItem}
             userRole={userRole}
             currentSubView="baixa"
+            onNavigate={setCurrentView}
           />
         );
       case 'compras_efetuadas':
@@ -210,6 +212,7 @@ export default function App() {
             onAddInventoryItem={addInventoryItem}
             userRole={userRole}
             currentSubView="compras_efetuadas"
+            onNavigate={setCurrentView}
           />
         );
       case 'calculadoras':
@@ -224,6 +227,7 @@ export default function App() {
             onAddInventoryItem={addInventoryItem}
             userRole={userRole}
             currentSubView="calculadoras"
+            onNavigate={setCurrentView}
           />
         );
       case 'relatorio':
