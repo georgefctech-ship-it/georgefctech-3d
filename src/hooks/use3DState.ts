@@ -715,15 +715,13 @@ export function use3DState() {
           return;
         }
 
-        // Confia 100% no Banco de Dados (sem misturar com caches antigos do navegador)
+        // Confia 100% no Banco de Dados e mantém backup local sempre atualizado
         setProjects(remoteProjects);
         setInventory(remoteInventory);
         setShopping(remoteShopping);
 
-        // Garante que nenhum dado seja salvo no navegador local
-        localStorage.removeItem(STORAGE_KEYS.PROJECTS);
-        localStorage.removeItem(STORAGE_KEYS.INVENTORY);
-        localStorage.removeItem(STORAGE_KEYS.SHOPPING);
+        // Mantém backup local no navegador sempre em sincronia com os dados recebidos
+        backupToLocal(remoteProjects, remoteInventory, remoteShopping);
 
         if (storedSettings) {
           setSettings(JSON.parse(storedSettings));

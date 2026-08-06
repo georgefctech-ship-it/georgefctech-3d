@@ -442,7 +442,7 @@ export default function InventoryView({
 
     const sessionUsername = sessionStorage.getItem('g3d_username') || '';
     const sessionEmail = sessionStorage.getItem('g3d_user_email') || '';
-    const isColab = userRole === 'colaborador';
+    const isColab = (userRole === 'colaborador') || (currentUserRole === 'colaborador') || (sessionStorage.getItem('g3d_user_role') === 'colaborador');
     
     let defaultUser = sessionUsername;
     if (!defaultUser || defaultUser.toLowerCase() === 'ftex' || defaultUser.toLowerCase() === 'ftéx') {
@@ -468,12 +468,13 @@ export default function InventoryView({
     let shopCat: 'Filamento' | 'Peças de Reposição' | 'Acessórios/Insumos' | 'Refrigeração' | 'Outros' = 'Outros';
     if (itemCat === 'Filamento') shopCat = 'Filamento';
     else if (itemCat === 'Refrigeração') shopCat = 'Refrigeração';
-    else if (itemCat === 'Placas' || itemCat === 'Componentes Eletrônicos' || itemCat === 'Peças Geral') shopCat = 'Peças de Reposição';
+    else if (itemCat === 'Placas & Fontes' || itemCat === 'Placas' || itemCat === 'Componentes Eletrônicos' || itemCat === 'Peças Geral' || itemCat === 'Peças de Reposição') shopCat = 'Peças de Reposição';
+    else if (itemCat === 'Acessórios/Insumos' || itemCat === 'Acessórios') shopCat = 'Acessórios/Insumos';
     
     if (onAddShoppingItem) {
       const sessionUsername = sessionStorage.getItem('g3d_username') || '';
       const sessionEmail = sessionStorage.getItem('g3d_user_email') || '';
-      const isColab = userRole === 'colaborador';
+      const isColab = (userRole === 'colaborador') || (currentUserRole === 'colaborador') || (sessionStorage.getItem('g3d_user_role') === 'colaborador');
       const activeUser = sessionUsername || (sessionEmail ? sessionEmail.split('@')[0] : '') || (isColab ? 'Colaborador Ftéx' : 'Administrador George');
 
       const finalCompany = purchaseCompany.trim() || (isColab ? 'Ftéx' : 'GeorgeFctech-3D');
@@ -486,7 +487,7 @@ export default function InventoryView({
         estUnitCost: purchasingItem.unitCost,
         purchaseLink: purchasingItem.purchaseLink || '',
         category: shopCat,
-        notes: purchaseNotes ? `Solicitado via inventário (${itemCat}). Obs: ${purchaseNotes}` : `Solicitado via inventário (${itemCat}).`,
+        notes: purchaseNotes ? `Solicitado via estoque (${itemCat}). Obs: ${purchaseNotes}` : `Solicitado via estoque (${itemCat}).`,
         company: finalCompany,
         requestedBy: finalRequestedBy,
         department: finalDepartment,
@@ -500,7 +501,7 @@ export default function InventoryView({
       window.open(ensureAbsoluteUrl(purchasingItem.purchaseLink), '_blank', 'noreferrer,noopener');
     }
 
-    setPurchaseSuccessMsg(`Item "${purchasingItem.material}" adicionado à lista de compras com sucesso (Quantidade: ${purchaseQty})!`);
+    setPurchaseSuccessMsg(`Produto "${purchasingItem.material}" salvo na Lista de Compras com sucesso (${purchaseQty} un)!`);
     setPurchasingItem(null);
     setPurchaseQty(1);
     setPurchaseNotes('');
@@ -2488,17 +2489,29 @@ export default function InventoryView({
               <button
                 type="button"
                 onClick={() => setPurchasingItem(null)}
-                className="px-5 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                className="px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
               >
                 Cancelar
               </button>
+              {purchasingItem.purchaseLink && (
+                <a
+                  href={ensureAbsoluteUrl(purchasingItem.purchaseLink)}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold uppercase tracking-wider rounded-xl transition inline-flex items-center justify-center gap-1.5 cursor-pointer"
+                  title="Abrir página da loja diretamente"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  Apenas Abrir Link
+                </a>
+              )}
               <button
                 type="button"
                 onClick={handleAddToShopping}
                 className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition shadow-md hover:shadow-lg flex items-center justify-center gap-1.5 cursor-pointer select-none"
               >
                 <Check className="w-4 h-4 stroke-[3]" />
-                Confirmar & Ir para Loja
+                Salvar na Lista & Abrir Loja
               </button>
             </div>
           </div>

@@ -139,49 +139,46 @@ function normalizeCollaboratorStr(str?: string | null): string {
 
 export function isAdministratorPurchase(item: ShoppingItem): boolean {
   if (!item) return false;
-  const company = normalizeCollaboratorStr(item.company);
-  const reqBy = normalizeCollaboratorStr(item.requestedBy);
-  const dept = normalizeCollaboratorStr(item.department);
   const createdByRole = normalizeCollaboratorStr(item.createdByRole);
   const createdByUser = normalizeCollaboratorStr(item.createdByUser);
+  const reqBy = normalizeCollaboratorStr(item.requestedBy);
+  const dept = normalizeCollaboratorStr(item.department);
+  const company = normalizeCollaboratorStr(item.company);
 
-  // 1. Explicit creator role check
+  // 1. Explicit collaborator role check: If created by a collaborator, it is NEVER an administrator-only purchase!
+  if (createdByRole === 'colaborador') {
+    return false;
+  }
+
+  // 2. Collaborator creator or company check: If creator/requester/company belongs to a collaborator (e.g. Jhonatan, Ftéx, etc.), not admin
+  if (
+    (createdByUser && !createdByUser.includes('admin') && !createdByUser.includes('george') && createdByUser !== 'administrador') ||
+    (company && (company.includes('ftex') || company.includes('comercial'))) ||
+    (reqBy && !reqBy.includes('admin') && !reqBy.includes('george') && reqBy !== 'administrador' && reqBy !== 'diretoria' && reqBy !== 'administracao')
+  ) {
+    return false;
+  }
+
+  // 3. Explicit creator role check for admin
   if (createdByRole === 'admin') {
     return true;
   }
-  if (createdByUser.includes('admin') || createdByUser.includes('george') || createdByUser.includes('diretoria')) {
+  if (createdByUser === 'administrador' || createdByUser === 'admin' || (createdByUser.includes('admin') && !createdByUser.includes('colaborador'))) {
     return true;
   }
 
-  // 2. Explicit check for Administrator identifier fields
+  // 4. Explicit check for Administrator in requester or department (only if no collaborator creator)
   if (
     reqBy === 'administrador' ||
     reqBy === 'admin' ||
     reqBy === 'administracao' ||
-    reqBy.includes('administra') ||
-    reqBy.includes('admin') ||
-    reqBy.includes('george') ||
-    reqBy === 'g3d' ||
-    reqBy === 'georgefctech-3d' ||
-    reqBy === 'georgefctech 3d' ||
-    reqBy === 'georgefctec' ||
-    reqBy.includes('georgefctec') ||
-    company === 'georgefctech-3d' ||
-    company === 'georgefctech 3d' ||
-    company === 'georgefctec' ||
-    company === 'administracao' ||
-    company === 'admin' ||
-    company.includes('administra') ||
-    company.includes('george') ||
     dept === 'diretoria' ||
-    dept === 'administracao' ||
-    dept.includes('administra') ||
-    dept.includes('diretoria')
+    dept === 'administracao'
   ) {
     return true;
   }
 
-  // 3. If item has NO creator info, no requestedBy, and no company, it defaults to Administrator/Company purchase
+  // 5. If item has NO creator info, no requestedBy, and no company, it defaults to Administrator purchase
   if (!reqBy && !company && !createdByUser) {
     return true;
   }
