@@ -40,6 +40,9 @@ export interface InventoryItem {
   image?: string; // foto do insumo (Base64 ou URL)
   purchaseLink?: string; // Link de compra (ex: Mercado Livre, Amazon...)
   category?: ItemCategory | string; // Categoria do insumo
+  createdByRole?: 'admin' | 'colaborador' | string; // Papel de quem cadastrou o insumo
+  createdByUser?: string; // Nome ou e-mail de quem cadastrou
+  createdAt?: string; // Data e hora de criação
 }
 
 export interface ShoppingItem {

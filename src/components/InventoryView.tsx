@@ -37,7 +37,11 @@ import {
   Tag,
   Globe,
   RefreshCw,
-  FileText
+  FileText,
+  Lock,
+  Shield,
+  User,
+  Crown
 } from 'lucide-react';
 import { InventoryItem, ShoppingItem } from '../types';
 import { Html5Qrcode } from 'html5-qrcode';
@@ -54,22 +58,68 @@ const CATEGORIES = [
   'Outros'
 ] as const;
 
+export const isItemCreatedByColaborador = (item: InventoryItem): boolean => {
+  if (!item) return false;
+  if (item.createdByRole === 'colaborador') return true;
+  if (item.createdByRole === 'admin') return false;
+  
+  if (item.createdByUser) {
+    const userLower = item.createdByUser.toLowerCase();
+    if (userLower.includes('admin') || userLower.includes('george')) return false;
+    if (userLower.includes('colaborador') || userLower.includes('ftex') || userLower.includes('ftéx')) return true;
+  }
+
+  // Sample default items from initial setup are Admin items
+  const defaultAdminIds = ['INV-001', 'INV-002', 'INV-003', 'INV-004', 'INV-005', 'INV-006', 'INV-007', 'INV-008'];
+  if (item.id && defaultAdminIds.includes(item.id)) {
+    return false;
+  }
+
+  try {
+    const localCreatorMap = JSON.parse(localStorage.getItem('g3d_item_creator_map') || '{}');
+    if (localCreatorMap[item.id]) {
+      if (localCreatorMap[item.id].role === 'colaborador') return true;
+      if (localCreatorMap[item.id].role === 'admin') return false;
+    }
+  } catch (e) {}
+
+  return false;
+};
+
+export const canUserEditOrDeleteItem = (item: InventoryItem, userRole: string): boolean => {
+  if (userRole !== 'colaborador') {
+    // Administrator has full permissions
+    return true;
+  }
+  // Collaborator can ONLY edit and delete items created by collaborators
+  return isItemCreatedByColaborador(item);
+};
+
 export const matchItemCategory = (item: InventoryItem, filterCategory: string): boolean => {
   if (!filterCategory || filterCategory === 'Todos') return true;
 
   const itemCat = (item.category || '').trim();
   const name = (item.material || '').toLowerCase();
 
-  if (filterCategory === 'Filamento') {
-    if (itemCat === 'Filamento') return true;
-    if (!itemCat && (name.includes('pla') || name.includes('petg') || name.includes('abs') || name.includes('tpu') || name.includes('nylon') || name.includes('filamento') || name.includes('resina') || name.includes('asa') || name.includes('hips') || name.includes('pc') || name.includes('peek') || name.includes('pvb'))) {
+  // If item has an explicit category assigned:
+  if (itemCat) {
+    if (filterCategory === itemCat) return true;
+    if ((filterCategory === 'Placas & Fontes' || filterCategory === 'Placas') && (itemCat === 'Placas & Fontes' || itemCat === 'Placas')) return true;
+    if ((filterCategory === 'Peças Geral' || filterCategory === 'Peças de Reposição') && (itemCat === 'Peças Geral' || itemCat === 'Peças de Reposição')) return true;
+    if ((filterCategory === 'Acessórios/Insumos' || filterCategory === 'Acessórios') && (itemCat === 'Acessórios/Insumos' || itemCat === 'Acessórios')) return true;
+    // Strict isolation: explicit non-matching category must not spill over via keywords
+    return false;
+  }
+
+  // Fallback keyword matching only if itemCat is missing/empty
+  if (filterCategory === 'Refrigeração') {
+    if (name.includes('manifold') || name.includes('monifold') || name.includes('cooler') || name.includes('fan') || name.includes('ventoinha') || name.includes('ventilador') || name.includes('duto') || name.includes('coifa') || name.includes('dissipador') || name.includes('heatsink') || name.includes('5015') || name.includes('4010') || name.includes('4020') || name.includes('refrigera')) {
       return true;
     }
     return false;
   }
 
   if (filterCategory === 'Placas & Fontes' || filterCategory === 'Placas') {
-    if (itemCat === 'Placas & Fontes' || itemCat === 'Placas') return true;
     if (name.includes('placa') || name.includes('fonte') || name.includes('motherboard') || name.includes('skr') || name.includes('mks') || name.includes('btt') || name.includes('chaveada') || name.includes('meanwell') || name.includes('v4.2.7') || name.includes('silent board') || name.includes('mainboard')) {
       return true;
     }
@@ -77,7 +127,6 @@ export const matchItemCategory = (item: InventoryItem, filterCategory: string): 
   }
 
   if (filterCategory === 'Componentes Eletrônicos') {
-    if (itemCat === 'Componentes Eletrônicos') return true;
     if (name.includes('sensor') || name.includes('driver') || name.includes('tmc') || name.includes('motor') || name.includes('termistor') || name.includes('aquecedor') || name.includes('bltouch') || name.includes('3dtouch') || name.includes('cabo') || name.includes('mosfet') || name.includes('display') || name.includes('lcd')) {
       return true;
     }
@@ -85,34 +134,31 @@ export const matchItemCategory = (item: InventoryItem, filterCategory: string): 
   }
 
   if (filterCategory === 'Peças Geral' || filterCategory === 'Peças de Reposição') {
-    if (itemCat === 'Peças Geral' || itemCat === 'Peças de Reposição') return true;
     if (name.includes('bico') || name.includes('nozzle') || name.includes('correia') || name.includes('polia') || name.includes('heatbreak') || name.includes('bloco') || name.includes('garganta') || name.includes('tubo ptfe') || name.includes('engrenagem') || name.includes('extrusora') || name.includes('extrusor') || name.includes('rolamento') || name.includes('fuso') || name.includes('acoplador') || name.includes('mola') || name.includes('mesa') || name.includes('vidro') || name.includes('pei')) {
       return true;
     }
     return false;
   }
 
-  if (filterCategory === 'Refrigeração') {
-    if (itemCat === 'Refrigeração') return true;
-    if (name.includes('cooler') || name.includes('fan') || name.includes('ventoinha') || name.includes('ventilador') || name.includes('duto') || name.includes('dissipador') || name.includes('5015') || name.includes('4010') || name.includes('4020')) {
-      return true;
-    }
-    return false;
-  }
-
-  if (filterCategory === 'Acessórios/Insumos') {
-    if (itemCat === 'Acessórios/Insumos' || itemCat === 'Acessórios') return true;
+  if (filterCategory === 'Acessórios/Insumos' || filterCategory === 'Acessórios') {
     if (name.includes('álcool') || name.includes('spray') || name.includes('cola') || name.includes('adesivo') || name.includes('espátula') || name.includes('alicate') || name.includes('chave') || name.includes('graxa') || name.includes('lubrificante') || name.includes('silicone') || name.includes('organizador')) {
       return true;
     }
     return false;
   }
 
-  if (filterCategory === 'Outros') {
-    return itemCat === 'Outros' || (!itemCat && !matchItemCategory(item, 'Filamento') && !matchItemCategory(item, 'Placas & Fontes') && !matchItemCategory(item, 'Componentes Eletrônicos') && !matchItemCategory(item, 'Peças Geral') && !matchItemCategory(item, 'Refrigeração') && !matchItemCategory(item, 'Acessórios/Insumos'));
+  if (filterCategory === 'Filamento') {
+    if (name.includes('pla') || name.includes('petg') || name.includes('abs') || name.includes('tpu') || name.includes('nylon') || name.includes('filamento') || name.includes('resina') || name.includes('asa') || name.includes('hips') || name.includes('pc') || name.includes('peek') || name.includes('pvb')) {
+      return true;
+    }
+    return false;
   }
 
-  return itemCat === filterCategory;
+  if (filterCategory === 'Outros') {
+    return !matchItemCategory(item, 'Filamento') && !matchItemCategory(item, 'Placas & Fontes') && !matchItemCategory(item, 'Componentes Eletrônicos') && !matchItemCategory(item, 'Peças Geral') && !matchItemCategory(item, 'Refrigeração') && !matchItemCategory(item, 'Acessórios/Insumos');
+  }
+
+  return false;
 };
 
 const getCategoryBadgeStyle = (cat?: string) => {
@@ -396,6 +442,11 @@ export default function InventoryView({
 
     const finalImage = uploadedBase64 || manualImgUrl.trim() || imgUrl || 'https://images.unsplash.com/photo-1612815154858-60aa4c59eae6?w=300&q=80';
 
+    const currentUsername = sessionStorage.getItem('g3d_username') || (userRole === 'colaborador' ? 'Colaborador Ftéx' : 'Administrador George');
+    const createdByRole = userRole === 'colaborador' ? 'colaborador' : 'admin';
+    const createdByUser = currentUsername;
+    const createdAt = new Date().toISOString();
+
     onAddInventoryItem({
       id: customBarcodeId.trim() ? customBarcodeId.trim() : undefined,
       material: materialName.trim(),
@@ -403,7 +454,10 @@ export default function InventoryView({
       unitCost: costNum,
       image: finalImage,
       purchaseLink: purchaseLink.trim(),
-      category: selectedCategory
+      category: selectedCategory,
+      createdByRole,
+      createdByUser,
+      createdAt
     });
 
     // Reset Form
@@ -421,6 +475,12 @@ export default function InventoryView({
 
   const handleSaveEdit = () => {
     if (!editingItem) return;
+    if (userRole === 'colaborador' && !canUserEditOrDeleteItem(editingItem, userRole)) {
+      alert('Apenas o Administrador pode editar insumos cadastrados originalmente pelo Administrador.');
+      setEditingItem(null);
+      return;
+    }
+
     if (onEditInventoryItem) {
       onEditInventoryItem(editingItem.id, {
         material: editName,
@@ -428,7 +488,10 @@ export default function InventoryView({
         qty: editQty,
         unitCost: editUnitCost,
         purchaseLink: editLink,
-        image: editImg
+        image: editImg,
+        createdByRole: editingItem.createdByRole,
+        createdByUser: editingItem.createdByUser,
+        createdAt: editingItem.createdAt
       });
     }
     setEditingItem(null);
@@ -1559,8 +1622,18 @@ export default function InventoryView({
                               <span className="font-bold font-mono text-indigo-600 text-sm">R$ {item.gramCost?.toFixed(3)}/g</span>
                             </div>
                             <div>
-                              <span className="text-[10px] uppercase font-mono font-semibold text-slate-400 block">Categoria</span>
-                              <span className="font-semibold text-slate-600 font-mono text-[11px] truncate block">{item.category || 'Filamento'}</span>
+                              <span className="text-[10px] uppercase font-mono font-semibold text-slate-400 block">Origem</span>
+                              <div className="mt-0.5">
+                                {isItemCreatedByColaborador(item) ? (
+                                  <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px] font-bold inline-flex items-center gap-1">
+                                    <User className="w-2.5 h-2.5" /> {item.createdByUser || 'Colaborador'}
+                                  </span>
+                                ) : (
+                                  <span className="text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded text-[10px] font-bold inline-flex items-center gap-1">
+                                    <Crown className="w-2.5 h-2.5" /> Admin
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -1583,7 +1656,7 @@ export default function InventoryView({
                             <span className="flex-1 text-[11px] text-slate-400 italic text-center py-2">Sem Link Cadastrado</span>
                           )}
 
-                          {userRole !== 'colaborador' && (
+                          {canUserEditOrDeleteItem(item, userRole) ? (
                             <div className="flex gap-1">
                               <button
                                 onClick={() => {
@@ -1595,8 +1668,8 @@ export default function InventoryView({
                                   setEditLink(item.purchaseLink || '');
                                   setEditImg(item.image || '');
                                 }}
-                                className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg border border-slate-100"
-                                title="Editar Insumo"
+                                className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg border border-slate-100 transition"
+                                title={userRole === 'colaborador' ? "Editar Insumo (Criado por Colaborador)" : "Editar Insumo"}
                               >
                                 <Edit2 className="w-3.5 h-3.5" />
                               </button>
@@ -1607,11 +1680,16 @@ export default function InventoryView({
                                     onDeleteInventoryItem(item.id);
                                   }
                                 }}
-                                className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg border border-slate-100"
-                                title="Remover"
+                                className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg border border-slate-100 transition"
+                                title="Remover Insumo"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
+                            </div>
+                          ) : (
+                            <div className="inline-flex items-center gap-1 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-400" title="Insumo adicionado pelo Administrador. Edição e exclusão restritas para colaboradores.">
+                              <Lock className="w-3.5 h-3.5 text-slate-400" />
+                              <span className="text-[10px] font-bold text-slate-500">Admin</span>
                             </div>
                           )}
                         </div>
@@ -1639,7 +1717,7 @@ export default function InventoryView({
                         <th className="py-3 px-4 text-right">Custo p/ Grama</th>
                         <th className="py-3 px-4 text-center">Status</th>
                         <th className="py-3 px-4 text-center">Mercado/Link</th>
-                        {userRole !== 'colaborador' && <th className="py-3 px-4 text-center">Ações</th>}
+                        <th className="py-3 px-4 text-center">Ações</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-sm">
@@ -1670,15 +1748,12 @@ export default function InventoryView({
                             </span>
                           </td>
                           <td className="py-3 px-4 whitespace-nowrap text-center">
-                            {userRole === 'colaborador' ? (
-                              <span className="font-mono font-semibold text-slate-700 px-2 min-w-[50px] inline-block text-center">
-                                {item.qty} Un
-                              </span>
-                            ) : (
+                            {canUserEditOrDeleteItem(item, userRole) ? (
                               <div className="flex items-center justify-center gap-2">
                                 <button
                                   onClick={() => onUpdateQty(item.id, Math.max(0, item.qty - 1))}
-                                  className="w-6 h-6 rounded bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200 transition-colors"
+                                  className="w-6 h-6 rounded bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200 transition-colors cursor-pointer"
+                                  title="Diminuir Estoque"
                                 >
                                   -
                                 </button>
@@ -1687,11 +1762,16 @@ export default function InventoryView({
                                 </span>
                                 <button
                                   onClick={() => onUpdateQty(item.id, item.qty + 1)}
-                                  className="w-6 h-6 rounded bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200 transition-colors"
+                                  className="w-6 h-6 rounded bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200 transition-colors cursor-pointer"
+                                  title="Aumentar Estoque"
                                 >
                                   +
                                 </button>
                               </div>
+                            ) : (
+                              <span className="font-mono font-semibold text-slate-700 px-2 min-w-[50px] inline-block text-center">
+                                {item.qty} Un
+                              </span>
                             )}
                           </td>
                           <td className="py-3 px-4 whitespace-nowrap text-right font-mono text-slate-600">
@@ -1722,8 +1802,8 @@ export default function InventoryView({
                               <span className="text-slate-400 text-xs">-</span>
                             )}
                           </td>
-                          {userRole !== 'colaborador' && (
-                            <td className="py-3 px-4 whitespace-nowrap text-center">
+                          <td className="py-3 px-4 whitespace-nowrap text-center">
+                            {canUserEditOrDeleteItem(item, userRole) ? (
                               <div className="flex items-center justify-center gap-1.5">
                                 <button
                                   onClick={() => {
@@ -1735,8 +1815,8 @@ export default function InventoryView({
                                     setEditLink(item.purchaseLink || '');
                                     setEditImg(item.image || '');
                                   }}
-                                  className="p-1.5 text-slate-400 hover:text-indigo-600 rounded hover:bg-indigo-50"
-                                  title="Editar Insumo"
+                                  className="p-1.5 text-slate-400 hover:text-indigo-600 rounded hover:bg-indigo-50 transition cursor-pointer"
+                                  title={userRole === 'colaborador' ? "Editar Insumo (Criado por Colaborador)" : "Editar Insumo"}
                                 >
                                   <Edit2 className="w-3.5 h-3.5" />
                                 </button>
@@ -1746,14 +1826,19 @@ export default function InventoryView({
                                       onDeleteInventoryItem(item.id);
                                     }
                                   }}
-                                  className="p-1.5 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 transition"
-                                  title="Remover Material"
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 transition cursor-pointer"
+                                  title="Remover Insumo"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
                               </div>
-                            </td>
-                          )}
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 text-slate-500 rounded text-[10px] font-bold" title="Insumo adicionado pelo Administrador. Edição e exclusão restritas para colaboradores.">
+                                <Lock className="w-3 h-3 text-slate-400" />
+                                Admin (Fixo)
+                              </span>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

@@ -72,7 +72,10 @@ const DEFAULT_INVENTORY: InventoryItem[] = [
     status: 'Em Estoque',
     category: 'Filamento',
     image: 'https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?w=300&q=80',
-    purchaseLink: 'https://www.mercadolivre.com.br/filamento-creality-petg-1-kg-175-mm-para-impresso-3d-em-cor-preta/p/MLB51382966'
+    purchaseLink: 'https://www.mercadolivre.com.br/filamento-creality-petg-1-kg-175-mm-para-impresso-3d-em-cor-preta/p/MLB51382966',
+    createdByRole: 'admin',
+    createdByUser: 'Administrador George',
+    createdAt: '2026-06-01T10:00:00.000Z'
   },
   {
     id: 'INV-002',
@@ -83,7 +86,10 @@ const DEFAULT_INVENTORY: InventoryItem[] = [
     status: 'Em Estoque',
     category: 'Filamento',
     image: 'https://images.unsplash.com/photo-1615840287214-7fe58a8b668f?w=300&q=80',
-    purchaseLink: 'https://www.mercadolivre.com.br/filamento-creality-petg-1-kg-175-mm-para-impresso-3d-em-cor-preta/p/MLB51382966'
+    purchaseLink: 'https://www.mercadolivre.com.br/filamento-creality-petg-1-kg-175-mm-para-impresso-3d-em-cor-preta/p/MLB51382966',
+    createdByRole: 'admin',
+    createdByUser: 'Administrador George',
+    createdAt: '2026-06-01T10:00:00.000Z'
   },
   {
     id: 'INV-003',
@@ -94,7 +100,10 @@ const DEFAULT_INVENTORY: InventoryItem[] = [
     status: 'Em Estoque',
     category: 'Placas & Fontes',
     image: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=300&q=80',
-    purchaseLink: 'https://www.mercadolivre.com.br/'
+    purchaseLink: 'https://www.mercadolivre.com.br/',
+    createdByRole: 'admin',
+    createdByUser: 'Administrador George',
+    createdAt: '2026-06-01T10:00:00.000Z'
   },
   {
     id: 'INV-004',
@@ -105,7 +114,10 @@ const DEFAULT_INVENTORY: InventoryItem[] = [
     status: 'Em Estoque',
     category: 'Placas & Fontes',
     image: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=300&q=80',
-    purchaseLink: 'https://www.mercadolivre.com.br/'
+    purchaseLink: 'https://www.mercadolivre.com.br/',
+    createdByRole: 'admin',
+    createdByUser: 'Administrador George',
+    createdAt: '2026-06-01T10:00:00.000Z'
   },
   {
     id: 'INV-005',
@@ -116,7 +128,10 @@ const DEFAULT_INVENTORY: InventoryItem[] = [
     status: 'Em Estoque',
     category: 'Componentes Eletrônicos',
     image: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=300&q=80',
-    purchaseLink: 'https://www.mercadolivre.com.br/'
+    purchaseLink: 'https://www.mercadolivre.com.br/',
+    createdByRole: 'admin',
+    createdByUser: 'Administrador George',
+    createdAt: '2026-06-01T10:00:00.000Z'
   },
   {
     id: 'INV-006',
@@ -127,7 +142,10 @@ const DEFAULT_INVENTORY: InventoryItem[] = [
     status: 'Em Estoque',
     category: 'Peças Geral',
     image: 'https://images.unsplash.com/photo-1581092334247-44dfa8c569ca?w=300&q=80',
-    purchaseLink: 'https://www.mercadolivre.com.br/'
+    purchaseLink: 'https://www.mercadolivre.com.br/',
+    createdByRole: 'admin',
+    createdByUser: 'Administrador George',
+    createdAt: '2026-06-01T10:00:00.000Z'
   },
   {
     id: 'INV-007',
@@ -138,7 +156,10 @@ const DEFAULT_INVENTORY: InventoryItem[] = [
     status: 'Em Estoque',
     category: 'Refrigeração',
     image: 'https://images.unsplash.com/photo-1581092334247-44dfa8c569ca?w=300&q=80',
-    purchaseLink: 'https://www.mercadolivre.com.br/'
+    purchaseLink: 'https://www.mercadolivre.com.br/',
+    createdByRole: 'admin',
+    createdByUser: 'Administrador George',
+    createdAt: '2026-06-01T10:00:00.000Z'
   },
   {
     id: 'INV-008',
@@ -149,7 +170,10 @@ const DEFAULT_INVENTORY: InventoryItem[] = [
     status: 'Em Estoque',
     category: 'Acessórios/Insumos',
     image: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=300&q=80',
-    purchaseLink: 'https://www.mercadolivre.com.br/'
+    purchaseLink: 'https://www.mercadolivre.com.br/',
+    createdByRole: 'admin',
+    createdByUser: 'Administrador George',
+    createdAt: '2026-06-01T10:00:00.000Z'
   }
 ];
 
@@ -227,52 +251,95 @@ const DEFAULT_SETTINGS: SettingsConfig = {
   defaultProfitMargin: 15.00
 };
 
+// Helper to save category in local storage cache
+export const saveCategoryToLocalCache = (id: string, category: string) => {
+  try {
+    const map = JSON.parse(localStorage.getItem('g3d_item_categories_map') || '{}');
+    map[id] = category;
+    localStorage.setItem('g3d_item_categories_map', JSON.stringify(map));
+  } catch (e) {
+    // ignore
+  }
+};
+
+// Helper to save creator in local storage cache
+export const saveCreatorToLocalCache = (id: string, role?: string, user?: string, createdAt?: string) => {
+  try {
+    const map = JSON.parse(localStorage.getItem('g3d_item_creator_map') || '{}');
+    map[id] = { role, user, createdAt };
+    localStorage.setItem('g3d_item_creator_map', JSON.stringify(map));
+  } catch (e) {
+    // ignore
+  }
+};
+
 export const sanitizeInventoryCategory = (material: string, currentCategory?: string): string => {
+  const cleanCat = (currentCategory || '').trim();
   const name = (material || '').toLowerCase();
-  if (currentCategory && currentCategory !== 'Filamento') {
-    if (currentCategory === 'Placas') return 'Placas & Fontes';
-    return currentCategory;
+
+  // If a non-default category was explicitly stored, respect and preserve it!
+  if (cleanCat && cleanCat !== '') {
+    if (cleanCat === 'Placas') return 'Placas & Fontes';
+    if (cleanCat === 'Peças de Reposição') return 'Peças Geral';
+    // If it's explicitly Refrigeração, Placas & Fontes, Componentes Eletrônicos, Peças Geral, Acessórios/Insumos, Outros, keep it!
+    if (cleanCat !== 'Filamento') {
+      return cleanCat;
+    }
   }
-  if (name.includes('placa') || name.includes('fonte') || name.includes('motherboard') || name.includes('controladora') || name.includes('meanwell') || name.includes('lrs-') || name.includes('v4.2.7') || name.includes('skr')) {
-    return 'Placas & Fontes';
-  }
-  if (name.includes('sensor') || name.includes('bltouch') || name.includes('termistor') || name.includes('aquecedor') || name.includes('driver') || name.includes('cabo')) {
-    return 'Componentes Eletrônicos';
-  }
-  if (name.includes('cooler') || name.includes('fan') || name.includes('ventoinha') || name.includes('refrigera')) {
+
+  // Check refrigeration terms: "manifold", "monifold", "cooler", "fan", "ventoinha", "duto", "dissipador", "5015", "4010", "4020", "refrigera"
+  if (name.includes('manifold') || name.includes('monifold') || name.includes('cooler') || name.includes('fan') || name.includes('ventoinha') || name.includes('ventilador') || name.includes('duto') || name.includes('coifa') || name.includes('dissipador') || name.includes('heatsink') || name.includes('5015') || name.includes('4010') || name.includes('4020') || name.includes('refrigera')) {
     return 'Refrigeração';
   }
-  if (name.includes('bico') || name.includes('nozzle') || name.includes('correia') || name.includes('polia') || name.includes('extrusor') || name.includes('ptfe') || name.includes('mesa') || name.includes('pei')) {
+  if (name.includes('placa') || name.includes('fonte') || name.includes('motherboard') || name.includes('controladora') || name.includes('meanwell') || name.includes('lrs-') || name.includes('v4.2.7') || name.includes('skr') || name.includes('mks') || name.includes('silent board')) {
+    return 'Placas & Fontes';
+  }
+  if (name.includes('sensor') || name.includes('bltouch') || name.includes('3dtouch') || name.includes('termistor') || name.includes('aquecedor') || name.includes('driver') || name.includes('cabo') || name.includes('tmc') || name.includes('mosfet') || name.includes('motor de passo') || name.includes('display') || name.includes('lcd')) {
+    return 'Componentes Eletrônicos';
+  }
+  if (name.includes('bico') || name.includes('nozzle') || name.includes('correia') || name.includes('polia') || name.includes('extrusor') || name.includes('ptfe') || name.includes('mesa') || name.includes('pei') || name.includes('vidro') || name.includes('heatbreak') || name.includes('bloco') || name.includes('garganta') || name.includes('rolamento') || name.includes('fuso') || name.includes('acoplador') || name.includes('mola')) {
     return 'Peças Geral';
   }
-  if (name.includes('kapton') || name.includes('isopropílico') || name.includes('álcool') || name.includes('fita') || name.includes('cola') || name.includes('graxa') || name.includes('spray')) {
+  if (name.includes('kapton') || name.includes('isopropílico') || name.includes('álcool') || name.includes('fita') || name.includes('cola') || name.includes('graxa') || name.includes('spray') || name.includes('espátula') || name.includes('adesivo') || name.includes('lubrificante') || name.includes('silicone') || name.includes('alicate')) {
     return 'Acessórios/Insumos';
   }
-  return currentCategory || 'Filamento';
+
+  if (cleanCat === 'Filamento') {
+    return 'Filamento';
+  }
+
+  return cleanCat || 'Filamento';
 };
 
 export const sanitizeShoppingCategory = (materialName: string, currentCategory?: string): string => {
+  const cleanCat = (currentCategory || '').trim();
   const name = (materialName || '').toLowerCase();
-  if (currentCategory && currentCategory !== 'Outros' && currentCategory !== 'Filamento') {
-    if (currentCategory === 'Placas') return 'Placas & Fontes';
-    return currentCategory;
+
+  if (cleanCat && cleanCat !== '' && cleanCat !== 'Outros') {
+    if (cleanCat === 'Placas') return 'Placas & Fontes';
+    if (cleanCat === 'Peças Geral') return 'Peças de Reposição';
+    if (cleanCat !== 'Filamento') {
+      return cleanCat;
+    }
   }
-  if (name.includes('placa') || name.includes('fonte') || name.includes('motherboard') || name.includes('controladora') || name.includes('meanwell') || name.includes('lrs-') || name.includes('v4.2.7') || name.includes('skr')) {
-    return 'Placas & Fontes';
-  }
-  if (name.includes('sensor') || name.includes('bltouch') || name.includes('termistor') || name.includes('aquecedor') || name.includes('driver')) {
-    return 'Componentes Eletrônicos';
-  }
-  if (name.includes('cooler') || name.includes('fan') || name.includes('ventoinha') || name.includes('refrigera')) {
+
+  if (name.includes('manifold') || name.includes('monifold') || name.includes('cooler') || name.includes('fan') || name.includes('ventoinha') || name.includes('ventilador') || name.includes('duto') || name.includes('coifa') || name.includes('dissipador') || name.includes('heatsink') || name.includes('5015') || name.includes('4010') || name.includes('4020') || name.includes('refrigera')) {
     return 'Refrigeração';
   }
-  if (name.includes('bico') || name.includes('nozzle') || name.includes('correia') || name.includes('polia') || name.includes('extrusor') || name.includes('ptfe')) {
+  if (name.includes('placa') || name.includes('fonte') || name.includes('motherboard') || name.includes('controladora') || name.includes('meanwell') || name.includes('lrs-') || name.includes('v4.2.7') || name.includes('skr') || name.includes('mks') || name.includes('silent board')) {
+    return 'Placas & Fontes';
+  }
+  if (name.includes('sensor') || name.includes('bltouch') || name.includes('3dtouch') || name.includes('termistor') || name.includes('aquecedor') || name.includes('driver') || name.includes('cabo') || name.includes('tmc') || name.includes('mosfet')) {
+    return 'Componentes Eletrônicos';
+  }
+  if (name.includes('bico') || name.includes('nozzle') || name.includes('correia') || name.includes('polia') || name.includes('extrusor') || name.includes('ptfe') || name.includes('heatbreak') || name.includes('bloco') || name.includes('garganta')) {
     return 'Peças de Reposição';
   }
-  if (name.includes('kapton') || name.includes('isopropílico') || name.includes('álcool') || name.includes('fita') || name.includes('cola') || name.includes('graxa')) {
+  if (name.includes('kapton') || name.includes('isopropílico') || name.includes('álcool') || name.includes('fita') || name.includes('cola') || name.includes('graxa') || name.includes('spray') || name.includes('espátula') || name.includes('adesivo') || name.includes('lubrificante') || name.includes('silicone')) {
     return 'Acessórios/Insumos';
   }
-  return currentCategory || 'Filamento';
+
+  return cleanCat || 'Filamento';
 };
 
 export function use3DState() {
@@ -318,17 +385,38 @@ export function use3DState() {
     image: app.image || null
   });
 
-  const mapDbInventory = (db: any): InventoryItem => ({
-    id: db.id,
-    material: db.material,
-    qty: Number(db.qty),
-    unitCost: Number(db.unit_cost),
-    gramCost: Number(db.gram_cost),
-    status: db.status,
-    image: db.image || undefined,
-    purchaseLink: db.purchase_link || undefined,
-    category: sanitizeInventoryCategory(db.material, db.category)
-  });
+  const mapDbInventory = (db: any): InventoryItem => {
+    let localCategoriesMap: Record<string, string> = {};
+    let localCreatorMap: Record<string, { role?: string; user?: string; createdAt?: string }> = {};
+    try {
+      localCategoriesMap = JSON.parse(localStorage.getItem('g3d_item_categories_map') || '{}');
+      localCreatorMap = JSON.parse(localStorage.getItem('g3d_item_creator_map') || '{}');
+    } catch (e) {
+      // ignore
+    }
+
+    const resolvedCat = db.category || localCategoriesMap[db.id];
+    const resolvedRole = db.created_by_role || localCreatorMap[db.id]?.role || (db.created_by_user ? 'colaborador' : undefined);
+    const resolvedUser = db.created_by_user || localCreatorMap[db.id]?.user;
+    const resolvedCreatedAt = db.created_at || localCreatorMap[db.id]?.createdAt;
+
+    const finalCategory = sanitizeInventoryCategory(db.material, resolvedCat);
+
+    return {
+      id: db.id,
+      material: db.material,
+      qty: Number(db.qty),
+      unitCost: Number(db.unit_cost),
+      gramCost: Number(db.gram_cost),
+      status: db.status,
+      image: db.image || undefined,
+      purchaseLink: db.purchase_link || undefined,
+      category: finalCategory,
+      createdByRole: resolvedRole,
+      createdByUser: resolvedUser,
+      createdAt: resolvedCreatedAt
+    };
+  };
 
   const mapInventoryToDb = (app: InventoryItem) => ({
     id: app.id,
@@ -339,7 +427,10 @@ export function use3DState() {
     status: app.status,
     image: app.image || null,
     purchase_link: app.purchaseLink || null,
-    category: app.category || 'Filamento'
+    category: app.category || 'Filamento',
+    created_by_role: app.createdByRole || null,
+    created_by_user: app.createdByUser || null,
+    created_at: app.createdAt || null
   });
 
   const mapDbShopping = (db: any): ShoppingItem => ({
@@ -430,10 +521,12 @@ export function use3DState() {
             }
 
             if (table === 'g3d_inventory') {
-              if ('purchase_link' in activePayload) {
-                console.warn(`[SafeSync] Removendo 'purchase_link' devido a erro de schema em g3d_inventory`);
-                delete activePayload['purchase_link'];
-                columnFound = true;
+              for (const col of ['created_by_role', 'created_by_user', 'created_at', 'category', 'purchase_link']) {
+                if (col in activePayload) {
+                  console.warn(`[SafeSync] Removendo preventivamente '${col}' devido a erro de schema em g3d_inventory`);
+                  delete activePayload[col];
+                  columnFound = true;
+                }
               }
             }
           }
@@ -586,10 +679,29 @@ export function use3DState() {
       }
 
       if (storedInventory) {
-        const parsedInv = JSON.parse(storedInventory).map((item: InventoryItem) => ({
-          ...item,
-          category: sanitizeInventoryCategory(item.material, item.category)
-        }));
+        let localCategoriesMap: Record<string, string> = {};
+        let localCreatorMap: Record<string, { role?: string; user?: string; createdAt?: string }> = {};
+        try {
+          localCategoriesMap = JSON.parse(localStorage.getItem('g3d_item_categories_map') || '{}');
+          localCreatorMap = JSON.parse(localStorage.getItem('g3d_item_creator_map') || '{}');
+        } catch (e) {
+          // ignore
+        }
+
+        const parsedInv = JSON.parse(storedInventory).map((item: InventoryItem) => {
+          const resolvedCat = item.category || localCategoriesMap[item.id];
+          const resolvedRole = item.createdByRole || localCreatorMap[item.id]?.role;
+          const resolvedUser = item.createdByUser || localCreatorMap[item.id]?.user;
+          const resolvedCreatedAt = item.createdAt || localCreatorMap[item.id]?.createdAt;
+
+          return {
+            ...item,
+            category: sanitizeInventoryCategory(item.material, resolvedCat),
+            createdByRole: resolvedRole,
+            createdByUser: resolvedUser,
+            createdAt: resolvedCreatedAt
+          };
+        });
         setInventory(parsedInv);
       } else {
         setInventory(DEFAULT_INVENTORY);
@@ -693,13 +805,36 @@ export function use3DState() {
   };
 
   // Inventory managers
-  const addInventoryItem = async (item: Omit<InventoryItem, 'id' | 'gramCost' | 'status'> & { id?: string; category?: string }) => {
+  const addInventoryItem = async (item: Omit<InventoryItem, 'id' | 'gramCost' | 'status'> & { id?: string; category?: string; createdByRole?: string; createdByUser?: string; createdAt?: string }) => {
     isMutating.current = true;
     const nextId = item.id || `INV-${Date.now()}-${Math.floor(Math.random() * 100)}`;
     const gramCost = item.unitCost / 1000;
     const status = item.qty === 0 ? 'Esgotado' : item.qty <= 1 ? 'Poucas Unidades' : 'Em Estoque';
-    const category = item.category || 'Filamento';
-    const fullItem: InventoryItem = { ...item, category, id: nextId, gramCost, status };
+    
+    // Determine creator role and username
+    const currentRole = sessionStorage.getItem('g3d_user_role') || 'colaborador';
+    const currentUsername = sessionStorage.getItem('g3d_username') || (currentRole === 'admin' ? 'Administrador George' : 'Colaborador Ftéx');
+
+    const createdByRole = item.createdByRole || (currentRole === 'admin' ? 'admin' : 'colaborador');
+    const createdByUser = item.createdByUser || currentUsername;
+    const createdAt = item.createdAt || new Date().toISOString();
+
+    const category = item.category ? sanitizeInventoryCategory(item.material, item.category) : sanitizeInventoryCategory(item.material);
+
+    const fullItem: InventoryItem = {
+      ...item,
+      category,
+      id: nextId,
+      gramCost,
+      status,
+      createdByRole,
+      createdByUser,
+      createdAt
+    };
+
+    // Cache locally for instantaneous persistence
+    saveCategoryToLocalCache(nextId, category);
+    saveCreatorToLocalCache(nextId, createdByRole, createdByUser, createdAt);
 
     try {
       const updated = [...inventory, fullItem];
@@ -718,9 +853,17 @@ export function use3DState() {
   const editInventoryItem = async (id: string, updatedFields: Partial<InventoryItem>) => {
     isMutating.current = true;
     try {
+      if (updatedFields.category) {
+        saveCategoryToLocalCache(id, updatedFields.category);
+      }
+      if (updatedFields.createdByRole || updatedFields.createdByUser) {
+        saveCreatorToLocalCache(id, updatedFields.createdByRole, updatedFields.createdByUser, updatedFields.createdAt);
+      }
+
       const updated = inventory.map(item => {
         if (item.id === id) {
-          const nextItem = { ...item, ...updatedFields };
+          const nextCategory = updatedFields.category ? sanitizeInventoryCategory(updatedFields.material || item.material, updatedFields.category) : item.category;
+          const nextItem = { ...item, ...updatedFields, category: nextCategory };
           if (updatedFields.unitCost !== undefined) {
             nextItem.gramCost = updatedFields.unitCost / 1000;
           }
@@ -753,6 +896,16 @@ export function use3DState() {
       const updated = inventory.filter(i => i.id !== id);
       setInventory(updated);
       backupToLocal(projects, updated, shopping);
+
+      // Clean local cache maps
+      try {
+        const catMap = JSON.parse(localStorage.getItem('g3d_item_categories_map') || '{}');
+        delete catMap[id];
+        localStorage.setItem('g3d_item_categories_map', JSON.stringify(catMap));
+        const creatorMap = JSON.parse(localStorage.getItem('g3d_item_creator_map') || '{}');
+        delete creatorMap[id];
+        localStorage.setItem('g3d_item_creator_map', JSON.stringify(creatorMap));
+      } catch (e) {}
 
       await syncOperation('g3d_inventory', 'delete', null, id);
       await loadData(true, true);
