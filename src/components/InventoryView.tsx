@@ -58,41 +58,113 @@ const CATEGORIES = [
   'Outros'
 ] as const;
 
-export const isItemCreatedByColaborador = (item: InventoryItem): boolean => {
-  if (!item) return false;
-  if (item.createdByRole === 'colaborador') return true;
-  if (item.createdByRole === 'admin') return false;
-  
-  if (item.createdByUser) {
-    const userLower = item.createdByUser.toLowerCase();
-    if (userLower.includes('admin') || userLower.includes('george')) return false;
-    if (userLower.includes('colaborador') || userLower.includes('ftex') || userLower.includes('ftéx')) return true;
-  }
+export function normalizeUserIdentifier(val?: string | null): string {
+  if (!val) return '';
+  return String(val)
+    .toLowerCase()
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, ""); // removes accents, e.g. ftéx -> ftex
+}
 
-  // Sample default items from initial setup are Admin items
-  const defaultAdminIds = ['INV-001', 'INV-002', 'INV-003', 'INV-004', 'INV-005', 'INV-006', 'INV-007', 'INV-008'];
-  if (item.id && defaultAdminIds.includes(item.id)) {
-    return false;
-  }
+export const getItemCreatorInfo = (item: InventoryItem): { role: 'admin' | 'colaborador'; user: string; createdAt?: string } => {
+  if (!item) return { role: 'admin', user: 'Administrador George' };
+
+  let resolvedRole = item.createdByRole || '';
+  let resolvedUser = item.createdByUser || '';
+  let resolvedCreatedAt = item.createdAt;
 
   try {
     const localCreatorMap = JSON.parse(localStorage.getItem('g3d_item_creator_map') || '{}');
     if (localCreatorMap[item.id]) {
-      if (localCreatorMap[item.id].role === 'colaborador') return true;
-      if (localCreatorMap[item.id].role === 'admin') return false;
+      if (!resolvedRole && localCreatorMap[item.id].role) resolvedRole = localCreatorMap[item.id].role;
+      if (!resolvedUser && localCreatorMap[item.id].user) resolvedUser = localCreatorMap[item.id].user;
+      if (!resolvedCreatedAt && localCreatorMap[item.id].createdAt) resolvedCreatedAt = localCreatorMap[item.id].createdAt;
     }
   } catch (e) {}
 
-  return false;
+  // Check default admin item IDs
+  const defaultAdminIds = ['INV-001', 'INV-002', 'INV-003', 'INV-004', 'INV-005', 'INV-006', 'INV-007', 'INV-008'];
+  if (item.id && defaultAdminIds.includes(item.id)) {
+    return { role: 'admin', user: 'Administrador George', createdAt: resolvedCreatedAt };
+  }
+
+  const normUser = normalizeUserIdentifier(resolvedUser);
+  if (
+    normUser === 'admin' ||
+    normUser === 'administrador' ||
+    normUser === 'george' ||
+    normUser.includes('georgefctec') ||
+    normUser.includes('georgefctech')
+  ) {
+    return { role: 'admin', user: resolvedUser || 'Administrador George', createdAt: resolvedCreatedAt };
+  }
+
+  if (resolvedRole === 'admin') {
+    return { role: 'admin', user: resolvedUser || 'Administrador George', createdAt: resolvedCreatedAt };
+  }
+
+  if (resolvedRole === 'colaborador' || resolvedUser) {
+    let displayName = resolvedUser || 'Colaborador';
+    const cleanNorm = normalizeUserIdentifier(displayName);
+    if (cleanNorm === 'ftex' || cleanNorm === 'colaborador ftex') {
+      displayName = 'Colaborador Ftéx';
+    } else if (!displayName.toLowerCase().startsWith('colaborador') && !displayName.toLowerCase().startsWith('admin')) {
+      displayName = `Colaborador ${displayName.charAt(0).toUpperCase() + displayName.slice(1)}`;
+    }
+    return {
+      role: 'colaborador',
+      user: displayName,
+      createdAt: resolvedCreatedAt
+    };
+  }
+
+  return { role: 'admin', user: 'Administrador George', createdAt: resolvedCreatedAt };
 };
 
-export const canUserEditOrDeleteItem = (item: InventoryItem, userRole: string): boolean => {
-  if (userRole !== 'colaborador') {
-    // Administrator has full permissions
+export const isItemCreatedByColaborador = (item: InventoryItem): boolean => {
+  return getItemCreatorInfo(item).role === 'colaborador';
+};
+
+export const canUserEditOrDeleteItem = (
+  item: InventoryItem, 
+  userRole?: string,
+  currentUsername?: string,
+  currentUserEmail?: string
+): boolean => {
+  const role = userRole || sessionStorage.getItem('g3d_user_role') || 'colaborador';
+  if (role !== 'colaborador') {
+    // Administrator has full permissions to edit and delete any item
     return true;
   }
-  // Collaborator can ONLY edit and delete items created by collaborators
-  return isItemCreatedByColaborador(item);
+
+  if (!item) return false;
+
+  const creator = getItemCreatorInfo(item);
+  if (creator.role === 'admin') {
+    return false;
+  }
+
+  const activeUser = currentUsername || sessionStorage.getItem('g3d_username') || '';
+  const activeEmail = currentUserEmail || sessionStorage.getItem('g3d_user_email') || '';
+
+  const normCreator = normalizeUserIdentifier(creator.user);
+  const normActiveUser = normalizeUserIdentifier(activeUser);
+  const normActiveEmail = normalizeUserIdentifier(activeEmail);
+  const normActiveEmailPrefix = normActiveEmail ? normActiveEmail.split('@')[0] : '';
+
+  if (!normActiveUser && !normActiveEmail) {
+    return false;
+  }
+
+  // Strict per-collaborator verification:
+  // ONLY the specific collaborator who registered the product (e.g. Jhonatan, Ftéx, Lucas, etc.) can edit or delete it
+  const isMatch =
+    (normActiveUser && (normCreator === normActiveUser || normCreator.includes(normActiveUser) || normActiveUser.includes(normCreator))) ||
+    (normActiveEmail && (normCreator === normActiveEmail || normCreator.includes(normActiveEmail))) ||
+    (normActiveEmailPrefix && (normCreator === normActiveEmailPrefix || normCreator.includes(normActiveEmailPrefix)));
+
+  return Boolean(isMatch);
 };
 
 export const matchItemCategory = (item: InventoryItem, filterCategory: string): boolean => {
@@ -225,6 +297,10 @@ export default function InventoryView({
   userRole,
   onNavigate
 }: InventoryViewProps) {
+  const currentUserRole = userRole || sessionStorage.getItem('g3d_user_role') || 'colaborador';
+  const currentUsername = sessionStorage.getItem('g3d_username') || '';
+  const currentUserEmail = sessionStorage.getItem('g3d_user_email') || '';
+
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   
   // Category filter state
@@ -442,9 +518,9 @@ export default function InventoryView({
 
     const finalImage = uploadedBase64 || manualImgUrl.trim() || imgUrl || 'https://images.unsplash.com/photo-1612815154858-60aa4c59eae6?w=300&q=80';
 
-    const currentUsername = sessionStorage.getItem('g3d_username') || (userRole === 'colaborador' ? 'Colaborador Ftéx' : 'Administrador George');
-    const createdByRole = userRole === 'colaborador' ? 'colaborador' : 'admin';
-    const createdByUser = currentUsername;
+    const activeUser = currentUsername || (currentUserRole === 'colaborador' ? 'Colaborador' : 'Administrador George');
+    const createdByRole = currentUserRole === 'colaborador' ? 'colaborador' : 'admin';
+    const createdByUser = activeUser;
     const createdAt = new Date().toISOString();
 
     onAddInventoryItem({
@@ -475,8 +551,9 @@ export default function InventoryView({
 
   const handleSaveEdit = () => {
     if (!editingItem) return;
-    if (userRole === 'colaborador' && !canUserEditOrDeleteItem(editingItem, userRole)) {
-      alert('Apenas o Administrador pode editar insumos cadastrados originalmente pelo Administrador.');
+    const creator = getItemCreatorInfo(editingItem);
+    if (currentUserRole === 'colaborador' && !canUserEditOrDeleteItem(editingItem, currentUserRole, currentUsername, currentUserEmail)) {
+      alert(`Apenas ${creator.user} (quem cadastrou) ou o Administrador pode editar este insumo.`);
       setEditingItem(null);
       return;
     }
@@ -1624,15 +1701,18 @@ export default function InventoryView({
                             <div>
                               <span className="text-[10px] uppercase font-mono font-semibold text-slate-400 block">Origem</span>
                               <div className="mt-0.5">
-                                {isItemCreatedByColaborador(item) ? (
-                                  <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px] font-bold inline-flex items-center gap-1">
-                                    <User className="w-2.5 h-2.5" /> {item.createdByUser || 'Colaborador'}
-                                  </span>
-                                ) : (
-                                  <span className="text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded text-[10px] font-bold inline-flex items-center gap-1">
-                                    <Crown className="w-2.5 h-2.5" /> Admin
-                                  </span>
-                                )}
+                                {(() => {
+                                  const creatorInfo = getItemCreatorInfo(item);
+                                  return creatorInfo.role === 'colaborador' ? (
+                                    <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px] font-bold inline-flex items-center gap-1">
+                                      <User className="w-2.5 h-2.5" /> {creatorInfo.user}
+                                    </span>
+                                  ) : (
+                                    <span className="text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded text-[10px] font-bold inline-flex items-center gap-1">
+                                      <Crown className="w-2.5 h-2.5" /> Admin
+                                    </span>
+                                  );
+                                })()}
                               </div>
                             </div>
                           </div>
@@ -1656,42 +1736,49 @@ export default function InventoryView({
                             <span className="flex-1 text-[11px] text-slate-400 italic text-center py-2">Sem Link Cadastrado</span>
                           )}
 
-                          {canUserEditOrDeleteItem(item, userRole) ? (
-                            <div className="flex gap-1">
-                              <button
-                                onClick={() => {
-                                  setEditingItem(item);
-                                  setEditName(item.material);
-                                  setEditCategory(item.category || 'Filamento');
-                                  setEditQty(item.qty);
-                                  setEditUnitCost(item.unitCost);
-                                  setEditLink(item.purchaseLink || '');
-                                  setEditImg(item.image || '');
-                                }}
-                                className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg border border-slate-100 transition"
-                                title={userRole === 'colaborador' ? "Editar Insumo (Criado por Colaborador)" : "Editar Insumo"}
+                          {(() => {
+                            const creatorInfo = getItemCreatorInfo(item);
+                            const canManage = canUserEditOrDeleteItem(item, currentUserRole, currentUsername, currentUserEmail);
+                            return canManage ? (
+                              <div className="flex gap-1">
+                                <button
+                                  onClick={() => {
+                                    setEditingItem(item);
+                                    setEditName(item.material);
+                                    setEditCategory(item.category || 'Filamento');
+                                    setEditQty(item.qty);
+                                    setEditUnitCost(item.unitCost);
+                                    setEditLink(item.purchaseLink || '');
+                                    setEditImg(item.image || '');
+                                  }}
+                                  className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg border border-slate-100 transition cursor-pointer"
+                                  title="Editar Insumo"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                
+                                <button
+                                  onClick={() => {
+                                    if (confirm(`Deseja realmente apagar o insumo "${item.material}"?`)) {
+                                      onDeleteInventoryItem(item.id);
+                                    }
+                                  }}
+                                  className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg border border-slate-100 transition cursor-pointer"
+                                  title="Remover Insumo"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <div 
+                                className="inline-flex items-center gap-1 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-400" 
+                                title={`Insumo cadastrado por ${creatorInfo.user}. Edição e exclusão restritas.`}
                               >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </button>
-                              
-                              <button
-                                onClick={() => {
-                                  if (confirm(`Deseja realmente apagar o insumo "${item.material}"?`)) {
-                                    onDeleteInventoryItem(item.id);
-                                  }
-                                }}
-                                className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg border border-slate-100 transition"
-                                title="Remover Insumo"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="inline-flex items-center gap-1 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-400" title="Insumo adicionado pelo Administrador. Edição e exclusão restritas para colaboradores.">
-                              <Lock className="w-3.5 h-3.5 text-slate-400" />
-                              <span className="text-[10px] font-bold text-slate-500">Admin</span>
-                            </div>
-                          )}
+                                <Lock className="w-3.5 h-3.5 text-slate-400" />
+                                <span className="text-[10px] font-bold text-slate-500 truncate max-w-[80px]">{creatorInfo.user}</span>
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     </div>
@@ -1721,126 +1808,133 @@ export default function InventoryView({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-sm">
-                      {filteredInventory.map((item) => (
-                        <tr key={item.id} className="hover:bg-slate-50 text-sm transition-colors duration-150">
-                          <td className="py-3 px-4 font-semibold text-slate-800 max-w-[240px]">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded border border-slate-200 overflow-hidden flex-shrink-0 bg-slate-100 cursor-pointer" onClick={() => item.image && setZoomImage(item.image)}>
-                                {item.image ? (
-                                  <img
-                                    src={item.image}
-                                    alt={item.material}
-                                    className="w-full h-full object-cover"
-                                    referrerPolicy="no-referrer"
-                                  />
-                                ) : (
-                                  <div className="w-full h-full bg-indigo-50 text-indigo-500 font-mono text-[10px] font-bold flex items-center justify-center">3D</div>
-                                )}
+                      {filteredInventory.map((item) => {
+                        const creatorInfo = getItemCreatorInfo(item);
+                        const canManage = canUserEditOrDeleteItem(item, currentUserRole, currentUsername, currentUserEmail);
+                        return (
+                          <tr key={item.id} className="hover:bg-slate-50 text-sm transition-colors duration-150">
+                            <td className="py-3 px-4 font-semibold text-slate-800 max-w-[240px]">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded border border-slate-200 overflow-hidden flex-shrink-0 bg-slate-100 cursor-pointer" onClick={() => item.image && setZoomImage(item.image)}>
+                                  {item.image ? (
+                                    <img
+                                      src={item.image}
+                                      alt={item.material}
+                                      className="w-full h-full object-cover"
+                                      referrerPolicy="no-referrer"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full bg-indigo-50 text-indigo-500 font-mono text-[10px] font-bold flex items-center justify-center">3D</div>
+                                  )}
+                                </div>
+                                <span className="truncate block" title={item.material}>
+                                  {item.material}
+                                </span>
                               </div>
-                              <span className="truncate block" title={item.material}>
-                                {item.material}
+                            </td>
+                            <td className="py-3 px-4 whitespace-nowrap text-center">
+                              <span className={`px-2.5 py-0.5 text-[10px] font-bold rounded-full ${getCategoryBadgeStyle(item.category)}`}>
+                                {item.category || 'Filamento'}
                               </span>
-                            </div>
-                          </td>
-                          <td className="py-3 px-4 whitespace-nowrap text-center">
-                            <span className={`px-2.5 py-0.5 text-[10px] font-bold rounded-full ${getCategoryBadgeStyle(item.category)}`}>
-                              {item.category || 'Filamento'}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 whitespace-nowrap text-center">
-                            {canUserEditOrDeleteItem(item, userRole) ? (
-                              <div className="flex items-center justify-center gap-2">
-                                <button
-                                  onClick={() => onUpdateQty(item.id, Math.max(0, item.qty - 1))}
-                                  className="w-6 h-6 rounded bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200 transition-colors cursor-pointer"
-                                  title="Diminuir Estoque"
-                                >
-                                  -
-                                </button>
+                            </td>
+                            <td className="py-3 px-4 whitespace-nowrap text-center">
+                              {canManage ? (
+                                <div className="flex items-center justify-center gap-2">
+                                  <button
+                                    onClick={() => onUpdateQty(item.id, Math.max(0, item.qty - 1))}
+                                    className="w-6 h-6 rounded bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200 transition-colors cursor-pointer"
+                                    title="Diminuir Estoque"
+                                  >
+                                    -
+                                  </button>
+                                  <span className="font-mono font-semibold text-slate-700 px-2 min-w-[50px] inline-block text-center">
+                                    {item.qty} Un
+                                  </span>
+                                  <button
+                                    onClick={() => onUpdateQty(item.id, item.qty + 1)}
+                                    className="w-6 h-6 rounded bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200 transition-colors cursor-pointer"
+                                    title="Aumentar Estoque"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              ) : (
                                 <span className="font-mono font-semibold text-slate-700 px-2 min-w-[50px] inline-block text-center">
                                   {item.qty} Un
                                 </span>
-                                <button
-                                  onClick={() => onUpdateQty(item.id, item.qty + 1)}
-                                  className="w-6 h-6 rounded bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200 transition-colors cursor-pointer"
-                                  title="Aumentar Estoque"
-                                >
-                                  +
-                                </button>
-                              </div>
-                            ) : (
-                              <span className="font-mono font-semibold text-slate-700 px-2 min-w-[50px] inline-block text-center">
-                                {item.qty} Un
+                              )}
+                            </td>
+                            <td className="py-3 px-4 whitespace-nowrap text-right font-mono text-slate-600">
+                              {formatBRL(item.unitCost)}
+                            </td>
+                            <td className="py-3 px-4 whitespace-nowrap text-right font-mono text-indigo-650 font-semibold">
+                              {item.gramCost ? `R$ ${item.gramCost.toFixed(3)}/g` : '--'}
+                            </td>
+                            <td className="py-3 px-4 whitespace-nowrap text-center">
+                              <span className={`px-2.5 py-1 text-[10px] font-extrabold rounded-full ${getStatusStyle(item.status)}`}>
+                                {item.status}
                               </span>
-                            )}
-                          </td>
-                          <td className="py-3 px-4 whitespace-nowrap text-right font-mono text-slate-600">
-                            {formatBRL(item.unitCost)}
-                          </td>
-                          <td className="py-3 px-4 whitespace-nowrap text-right font-mono text-indigo-650 font-semibold">
-                            {item.gramCost ? `R$ ${item.gramCost.toFixed(3)}/g` : '--'}
-                          </td>
-                          <td className="py-3 px-4 whitespace-nowrap text-center">
-                            <span className={`px-2.5 py-1 text-[10px] font-extrabold rounded-full ${getStatusStyle(item.status)}`}>
-                              {item.status}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 whitespace-nowrap text-center">
-                            {item.purchaseLink ? (
-                              <button
-                                onClick={() => {
-                                  setPurchasingItem(item);
-                                  setPurchaseQty(1);
-                                  setPurchaseNotes('');
-                                }}
-                                className="inline-flex p-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded cursor-pointer"
-                                title="Adicionar à lista de compras e ver link"
-                              >
-                                <ExternalLink className="w-3.5 h-3.5" />
-                              </button>
-                            ) : (
-                              <span className="text-slate-400 text-xs">-</span>
-                            )}
-                          </td>
-                          <td className="py-3 px-4 whitespace-nowrap text-center">
-                            {canUserEditOrDeleteItem(item, userRole) ? (
-                              <div className="flex items-center justify-center gap-1.5">
+                            </td>
+                            <td className="py-3 px-4 whitespace-nowrap text-center">
+                              {item.purchaseLink ? (
                                 <button
                                   onClick={() => {
-                                    setEditingItem(item);
-                                    setEditName(item.material);
-                                    setEditCategory(item.category || 'Filamento');
-                                    setEditQty(item.qty);
-                                    setEditUnitCost(item.unitCost);
-                                    setEditLink(item.purchaseLink || '');
-                                    setEditImg(item.image || '');
+                                    setPurchasingItem(item);
+                                    setPurchaseQty(1);
+                                    setPurchaseNotes('');
                                   }}
-                                  className="p-1.5 text-slate-400 hover:text-indigo-600 rounded hover:bg-indigo-50 transition cursor-pointer"
-                                  title={userRole === 'colaborador' ? "Editar Insumo (Criado por Colaborador)" : "Editar Insumo"}
+                                  className="inline-flex p-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded cursor-pointer"
+                                  title="Adicionar à lista de compras e ver link"
                                 >
-                                  <Edit2 className="w-3.5 h-3.5" />
+                                  <ExternalLink className="w-3.5 h-3.5" />
                                 </button>
-                                <button
-                                  onClick={() => {
-                                    if (confirm(`Deseja realmente remover o material "${item.material}" do inventário?`)) {
-                                      onDeleteInventoryItem(item.id);
-                                    }
-                                  }}
-                                  className="p-1.5 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 transition cursor-pointer"
-                                  title="Remover Insumo"
+                              ) : (
+                                <span className="text-slate-400 text-xs">-</span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 whitespace-nowrap text-center">
+                              {canManage ? (
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <button
+                                    onClick={() => {
+                                      setEditingItem(item);
+                                      setEditName(item.material);
+                                      setEditCategory(item.category || 'Filamento');
+                                      setEditQty(item.qty);
+                                      setEditUnitCost(item.unitCost);
+                                      setEditLink(item.purchaseLink || '');
+                                      setEditImg(item.image || '');
+                                    }}
+                                    className="p-1.5 text-slate-400 hover:text-indigo-600 rounded hover:bg-indigo-50 transition cursor-pointer"
+                                    title="Editar Insumo"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      if (confirm(`Deseja realmente remover o material "${item.material}" do inventário?`)) {
+                                        onDeleteInventoryItem(item.id);
+                                      }
+                                    }}
+                                    className="p-1.5 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 transition cursor-pointer"
+                                    title="Remover Insumo"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <span 
+                                  className="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 text-slate-500 rounded text-[10px] font-bold" 
+                                  title={`Insumo cadastrado por ${creatorInfo.user}. Edição e exclusão restritas.`}
                                 >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 text-slate-500 rounded text-[10px] font-bold" title="Insumo adicionado pelo Administrador. Edição e exclusão restritas para colaboradores.">
-                                <Lock className="w-3 h-3 text-slate-400" />
-                                Admin (Fixo)
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
+                                  <Lock className="w-3 h-3 text-slate-400" />
+                                  {creatorInfo.user} (Fixo)
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 ) : (

@@ -30,7 +30,7 @@ import {
   Github,
   MessageCircle
 } from 'lucide-react';
-import { getAdminLogo, getColabLogo, getAdminName, getColabName } from './types';
+import { getUserAvatar, getUserDisplayName, getAdminLogo, getColabLogo, getAdminName, getColabName } from './types';
 
 export default function App() {
   const [visualUpdateTick, setVisualUpdateTick] = useState(0);
@@ -286,13 +286,13 @@ export default function App() {
           <div className="w-9 h-9 rounded-full bg-transparent flex items-center justify-center p-0 overflow-hidden">
             <img 
               referrerPolicy="no-referrer"
-              src={userRole === 'colaborador' ? getColabLogo() : getAdminLogo()}
+              src={getUserAvatar(userRole, sessionStorage.getItem('g3d_username') || '', sessionStorage.getItem('g3d_user_email') || '')}
               alt="Logo"
               className="w-full h-full object-cover"
             />
           </div>
           <span className="font-bold text-sm tracking-wide text-slate-800 dark:text-slate-100">
-            {userRole === 'colaborador' ? getColabName() : getAdminName()}
+            {getUserDisplayName(userRole, sessionStorage.getItem('g3d_username') || '', sessionStorage.getItem('g3d_user_email') || '')}
           </span>
         </div>
         <div className="flex items-center gap-1.5">

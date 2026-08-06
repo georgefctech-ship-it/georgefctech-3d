@@ -31,7 +31,18 @@ import {
   X,
   Image as ImageIcon
 } from 'lucide-react';
-import { getAdminLogo, getColabLogo, getAdminName, getColabName, getAdminSub, getColabSub } from '../types';
+import { 
+  getUserAvatar, 
+  getUserDisplayName, 
+  getUserSubtitle, 
+  setUserProfileData,
+  getAdminLogo, 
+  getColabLogo, 
+  getAdminName, 
+  getColabName, 
+  getAdminSub, 
+  getColabSub 
+} from '../types';
 
 interface SidebarProps {
   currentView: string;
@@ -56,9 +67,13 @@ export default function Sidebar({ currentView, onViewChange, onLogout, userRole 
     return () => window.removeEventListener('g3d_visual_settings_updated', handleUpdate);
   }, []);
 
-  const logoUrl = userRole === 'colaborador' ? getColabLogo() : getAdminLogo();
-  const profileName = userRole === 'colaborador' ? getColabName() : getAdminName();
-  const profileSubtitle = userRole === 'colaborador' ? getColabSub() : getAdminSub();
+  const currentUserRole = userRole || sessionStorage.getItem('g3d_user_role') || 'colaborador';
+  const currentUsername = sessionStorage.getItem('g3d_username') || '';
+  const currentUserEmail = sessionStorage.getItem('g3d_user_email') || '';
+
+  const logoUrl = getUserAvatar(currentUserRole, currentUsername, currentUserEmail);
+  const profileName = getUserDisplayName(currentUserRole, currentUsername, currentUserEmail);
+  const profileSubtitle = getUserSubtitle(currentUserRole, currentUsername);
 
   const openAvatarModal = () => {
     setAvatarLogo(logoUrl);
@@ -87,18 +102,16 @@ export default function Sidebar({ currentView, onViewChange, onLogout, userRole 
 
   const handleSaveAvatar = (e: React.FormEvent) => {
     e.preventDefault();
-    if (userRole === 'colaborador') {
-      localStorage.setItem('g3d_colab_logo', avatarLogo.trim());
-      localStorage.setItem('g3d_colab_name', avatarName.trim());
-      localStorage.setItem('g3d_colab_sub', avatarSub.trim());
-    } else {
-      localStorage.setItem('g3d_admin_logo', avatarLogo.trim());
-      localStorage.setItem('g3d_admin_name', avatarName.trim());
-      localStorage.setItem('g3d_admin_sub', avatarSub.trim());
-    }
+    setUserProfileData(
+      currentUserRole,
+      currentUsername,
+      currentUserEmail,
+      avatarLogo.trim(),
+      avatarName.trim(),
+      avatarSub.trim()
+    );
 
     setAvatarSuccess(true);
-    window.dispatchEvent(new Event('g3d_visual_settings_updated'));
     setTimeout(() => {
       setAvatarSuccess(false);
       setIsAvatarModalOpen(false);
