@@ -568,6 +568,26 @@ export function use3DState() {
     created_at: app.createdAt || null
   });
 
+  // Helper to track columns not present in the current Supabase schema to avoid retry delays and sync errors
+  const getUnsupportedDbColumns = (): Set<string> => {
+    try {
+      const raw = localStorage.getItem('g3d_unsupported_columns');
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) return new Set(arr);
+      }
+    } catch (e) {}
+    return new Set<string>();
+  };
+
+  const markDbColumnUnsupported = (table: string, column: string) => {
+    try {
+      const current = getUnsupportedDbColumns();
+      current.add(`${table}:${column}`);
+      localStorage.setItem('g3d_unsupported_columns', JSON.stringify(Array.from(current)));
+    } catch (e) {}
+  };
+
   const safeSupabaseOperation = async (
     table: string,
     action: 'insert' | 'update' | 'delete',
@@ -577,49 +597,108 @@ export function use3DState() {
     const supabase = getSupabaseClient();
     if (!supabase) throw new Error('Supabase client not initialized');
 
-    let activePayload = payload ? { ...payload } : null;
+    if (action === 'delete') {
+      const res = await supabase.from(table).delete().eq('id', id);
+      if (res && res.error) {
+        console.warn(`Erro ao deletar de ${table} (${id}):`, res.error);
+      }
+      return res;
+    }
 
-    for (let attempt = 0; attempt < 6; attempt++) {
+    let activePayload = payload ? { ...payload } : {};
+    const unsupportedCols = getUnsupportedDbColumns();
+
+    // Strip known unsupported columns upfront
+    Object.keys(activePayload).forEach(k => {
+      if (unsupportedCols.has(`${table}:${k}`)) {
+        delete activePayload[k];
+      }
+    });
+
+    const maxAttempts = 15;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
       let res;
       if (action === 'insert') {
         res = await supabase.from(table).upsert(activePayload, { onConflict: 'id' });
       } else if (action === 'update') {
         res = await supabase.from(table).upsert({ ...activePayload, id }, { onConflict: 'id' });
-      } else if (action === 'delete') {
-        res = await supabase.from(table).delete().eq('id', id);
       }
 
       if (res && res.error) {
         const errMsg = res.error.message || '';
-        console.warn(`Erro na tabela ${table} (${action}) [tentativa ${attempt + 1}]:`, res.error);
+        console.warn(`Aviso na tabela ${table} (${action}) [tentativa ${attempt + 1}/${maxAttempts}]:`, res.error);
 
         // Check if the error indicates a missing column (code 42703 or specific message)
-        if (
+        const isColumnError =
           errMsg.includes('column') ||
           errMsg.includes('Could not find') ||
           errMsg.includes('cache') ||
-          res.error.code === '42703'
-        ) {
-          let columnFound = false;
-          if (activePayload) {
-            const keys = Object.keys(activePayload);
-            for (const key of keys) {
-              if (
-                errMsg.toLowerCase().includes(key.toLowerCase()) ||
-                errMsg.replace(/_/g, '').toLowerCase().includes(key.replace(/_/g, '').toLowerCase())
-              ) {
-                console.warn(`[SafeSync] Removendo coluna ausente '${key}' do payload de ${table}`);
-                delete activePayload[key];
-                columnFound = true;
+          errMsg.includes('PGRST204') ||
+          res.error.code === '42703';
+
+        if (isColumnError && activePayload) {
+          let removedAny = false;
+
+          // 1. Regex extraction of column name
+          const colMatches = [
+            errMsg.match(/Could not find the '([^']+)' column/i),
+            errMsg.match(/column "([^"]+)"/i),
+            errMsg.match(/column '([^']+)'/i),
+            errMsg.match(/column ([a-zA-Z0-9_]+) does not exist/i),
+            errMsg.match(/'([^']+)' column of/i)
+          ];
+
+          for (const m of colMatches) {
+            if (m && m[1]) {
+              const matchedCol = m[1].trim();
+              if (activePayload[matchedCol] !== undefined) {
+                console.warn(`[SafeSync] Removendo coluna ausente '${matchedCol}' do payload de ${table}`);
+                delete activePayload[matchedCol];
+                markDbColumnUnsupported(table, matchedCol);
+                removedAny = true;
               }
             }
           }
 
-          if (columnFound && attempt < 5) {
-            continue; // retry with remaining payload
+          // 2. Exact or normalized matching against payload keys
+          const keys = Object.keys(activePayload);
+          for (const key of keys) {
+            if (
+              errMsg.toLowerCase().includes(`'${key.toLowerCase()}'`) ||
+              errMsg.toLowerCase().includes(`"${key.toLowerCase()}"`) ||
+              errMsg.toLowerCase().includes(` ${key.toLowerCase()} `) ||
+              errMsg.replace(/_/g, '').toLowerCase().includes(key.replace(/_/g, '').toLowerCase())
+            ) {
+              console.warn(`[SafeSync] Removendo coluna ausente '${key}' do payload de ${table}`);
+              delete activePayload[key];
+              markDbColumnUnsupported(table, key);
+              removedAny = true;
+            }
+          }
+
+          // 3. If no specific key could be identified, remove non-base optional columns
+          if (!removedAny) {
+            const optionalShoppingKeys = ['department', 'company', 'barcode', 'created_by_role', 'created_by_user', 'created_at', 'requested_by'];
+            const optionalInventoryKeys = ['created_by_role', 'created_by_user', 'created_at', 'category', 'purchase_link'];
+            
+            const candidateKeys = table === 'g3d_shopping' ? optionalShoppingKeys : table === 'g3d_inventory' ? optionalInventoryKeys : [];
+            for (const ck of candidateKeys) {
+              if (activePayload[ck] !== undefined) {
+                delete activePayload[ck];
+                markDbColumnUnsupported(table, ck);
+                removedAny = true;
+              }
+            }
+          }
+
+          if (removedAny && attempt < maxAttempts - 1) {
+            continue; // retry with pruned payload
           }
         }
-        throw new Error(res.error.message || JSON.stringify(res.error));
+
+        // If it still fails after pruning, log warning but don't crash app execution
+        console.warn(`Supabase sync notice on ${table}:`, res.error);
+        return res;
       }
 
       return res;
