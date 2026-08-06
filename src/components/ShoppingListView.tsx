@@ -128,36 +128,6 @@ const getProductImage = (item: ShoppingItem): string => {
   return 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=200&auto=format&fit=crop&q=80';
 };
 
-export function isAdministratorPurchase(item: ShoppingItem): boolean {
-  if (!item) return false;
-  const company = String(item.company || '').toLowerCase().trim();
-  const reqBy = String(item.requestedBy || '').toLowerCase().trim();
-  const dept = String(item.department || '').toLowerCase().trim();
-
-  // Explicit check for Administrator identifier fields
-  if (
-    reqBy === 'administrador' ||
-    reqBy === 'admin' ||
-    reqBy === 'administração' ||
-    reqBy === 'georgefctech-3d' ||
-    reqBy === 'georgefctech 3d' ||
-    reqBy === 'georgefctec' ||
-    reqBy === 'georgefctec@gmail.com' ||
-    reqBy === 'g3d' ||
-    reqBy.includes('georgefctec') ||
-    company === 'georgefctech-3d' ||
-    company === 'georgefctech 3d' ||
-    company === 'administração' ||
-    company === 'admin' ||
-    dept === 'diretoria' ||
-    dept === 'administração'
-  ) {
-    return true;
-  }
-
-  return false;
-}
-
 function normalizeCollaboratorStr(str?: string | null): string {
   if (!str) return '';
   return String(str)
@@ -167,6 +137,58 @@ function normalizeCollaboratorStr(str?: string | null): string {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
+export function isAdministratorPurchase(item: ShoppingItem): boolean {
+  if (!item) return false;
+  const company = normalizeCollaboratorStr(item.company);
+  const reqBy = normalizeCollaboratorStr(item.requestedBy);
+  const dept = normalizeCollaboratorStr(item.department);
+  const createdByRole = normalizeCollaboratorStr(item.createdByRole);
+  const createdByUser = normalizeCollaboratorStr(item.createdByUser);
+
+  // 1. Explicit creator role check
+  if (createdByRole === 'admin') {
+    return true;
+  }
+  if (createdByUser.includes('admin') || createdByUser.includes('george') || createdByUser.includes('diretoria')) {
+    return true;
+  }
+
+  // 2. Explicit check for Administrator identifier fields
+  if (
+    reqBy === 'administrador' ||
+    reqBy === 'admin' ||
+    reqBy === 'administracao' ||
+    reqBy.includes('administra') ||
+    reqBy.includes('admin') ||
+    reqBy.includes('george') ||
+    reqBy === 'g3d' ||
+    reqBy === 'georgefctech-3d' ||
+    reqBy === 'georgefctech 3d' ||
+    reqBy === 'georgefctec' ||
+    reqBy.includes('georgefctec') ||
+    company === 'georgefctech-3d' ||
+    company === 'georgefctech 3d' ||
+    company === 'georgefctec' ||
+    company === 'administracao' ||
+    company === 'admin' ||
+    company.includes('administra') ||
+    company.includes('george') ||
+    dept === 'diretoria' ||
+    dept === 'administracao' ||
+    dept.includes('administra') ||
+    dept.includes('diretoria')
+  ) {
+    return true;
+  }
+
+  // 3. If item has NO creator info, no requestedBy, and no company, it defaults to Administrator/Company purchase
+  if (!reqBy && !company && !createdByUser) {
+    return true;
+  }
+
+  return false;
+}
+
 export function isOwnedByCurrentCollaborator(
   item: ShoppingItem,
   username: string,
@@ -174,31 +196,61 @@ export function isOwnedByCurrentCollaborator(
 ): boolean {
   if (!item) return false;
 
-  // 1. Admin purchases are strictly forbidden for collaborators
+  // 1. Admin purchases are strictly forbidden for collaborators to alter or remove
   if (isAdministratorPurchase(item)) {
+    return false;
+  }
+
+  if (item.createdByRole === 'admin') {
     return false;
   }
 
   const reqBy = normalizeCollaboratorStr(item.requestedBy);
   const company = normalizeCollaboratorStr(item.company);
+  const createdByUser = normalizeCollaboratorStr(item.createdByUser);
   const uName = normalizeCollaboratorStr(username);
   const uEmail = normalizeCollaboratorStr(email);
   const uEmailPrefix = uEmail ? uEmail.split('@')[0] : '';
 
-  // 2. Strict per-collaborator verification:
-  if (uName && (reqBy === uName || reqBy.includes(uName) || uName.includes(reqBy))) {
-    return true;
-  }
-  if (uEmail && (reqBy === uEmail || reqBy.includes(uEmail))) {
-    return true;
-  }
-  if (uEmailPrefix && (reqBy === uEmailPrefix || reqBy.includes(uEmailPrefix))) {
-    return true;
+  // If no logged in collaborator username or email, reject
+  if (!uName && !uEmail && !uEmailPrefix) {
+    return false;
   }
 
-  // If user is Ftéx / Ftex
-  if ((uName.includes('ftex') || uEmail.includes('ftex')) && (reqBy.includes('ftex') || company.includes('ftex') || !reqBy)) {
-    return true;
+  // If the item has no author specified, it belongs to the company/admin, not this collaborator
+  if (!reqBy && !createdByUser) {
+    return false;
+  }
+
+  // 2. Strict per-collaborator verification:
+  // Match creator username or email
+  if (createdByUser) {
+    if (uName && (createdByUser === uName || createdByUser.includes(uName) || uName.includes(createdByUser))) {
+      return true;
+    }
+    if (uEmail && (createdByUser === uEmail || createdByUser.includes(uEmail))) {
+      return true;
+    }
+    if (uEmailPrefix && (createdByUser === uEmailPrefix || createdByUser.includes(uEmailPrefix))) {
+      return true;
+    }
+  }
+
+  // Match requestedBy
+  if (reqBy) {
+    if (uName && (reqBy === uName || reqBy.includes(uName) || uName.includes(reqBy))) {
+      return true;
+    }
+    if (uEmail && (reqBy === uEmail || reqBy.includes(uEmail))) {
+      return true;
+    }
+    if (uEmailPrefix && (reqBy === uEmailPrefix || reqBy.includes(uEmailPrefix))) {
+      return true;
+    }
+    // If collaborator username is specifically "Ftex" or "Colaborador Ftéx"
+    if ((uName.includes('ftex') || uEmail.includes('ftex')) && (reqBy.includes('ftex') || company.includes('ftex'))) {
+      return true;
+    }
   }
 
   return false;
@@ -600,6 +652,10 @@ export default function ShoppingListView({
     const submittedDept = department.trim() || (userRole === 'colaborador' ? 'Faturamento/Comercial' : 'Geral');
     const submittedComp = company.trim() || (userRole === 'colaborador' ? 'Ftéx' : 'GeorgeFctech-3D');
 
+    const createdByRole = userRole === 'colaborador' ? 'colaborador' : 'admin';
+    const createdByUser = sessionUsername || sessionEmail || fallbackUser;
+    const createdAt = new Date().toISOString();
+
     onAddShoppingItem({
       materialName: materialName.trim(),
       qtyNeeded,
@@ -610,7 +666,10 @@ export default function ShoppingListView({
       requestedBy: submittedRequestedBy,
       department: submittedDept,
       company: submittedComp,
-      barcode: barcode.trim() || undefined
+      barcode: barcode.trim() || undefined,
+      createdByRole,
+      createdByUser,
+      createdAt
     });
 
     // Reset Form

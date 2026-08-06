@@ -58,6 +58,9 @@ export interface ShoppingItem {
   department?: string; // Setor do funcionário
   company?: string; // Empresa do pedido
   barcode?: string; // Código de barras ou modelo do produto
+  createdByRole?: 'admin' | 'colaborador' | string; // Papel de quem cadastrou a solicitação
+  createdByUser?: string; // Usuário ou e-mail de quem cadastrou
+  createdAt?: string; // Data e hora da solicitação
 }
 
 export interface SettingsConfig {

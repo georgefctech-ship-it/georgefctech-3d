@@ -273,6 +273,17 @@ export const saveCreatorToLocalCache = (id: string, role?: string, user?: string
   }
 };
 
+// Helper to save shopping creator in local storage cache
+export const saveShoppingCreatorToLocalCache = (id: string, role?: string, user?: string, createdAt?: string) => {
+  try {
+    const map = JSON.parse(localStorage.getItem('g3d_shopping_creator_map') || '{}');
+    map[id] = { role, user, createdAt };
+    localStorage.setItem('g3d_shopping_creator_map', JSON.stringify(map));
+  } catch (e) {
+    // ignore
+  }
+};
+
 // Helper to save purchase link in local storage cache for shopping items
 export const saveShoppingLinkToLocalCache = (id: string, link?: string) => {
   try {
@@ -468,13 +479,18 @@ export function use3DState() {
 
   const mapDbShopping = (db: any): ShoppingItem => {
     let localShoppingLinksMap: Record<string, string> = {};
+    let localShoppingCreatorMap: Record<string, { role?: string; user?: string; createdAt?: string }> = {};
     try {
       localShoppingLinksMap = JSON.parse(localStorage.getItem('g3d_shopping_links_map') || '{}');
+      localShoppingCreatorMap = JSON.parse(localStorage.getItem('g3d_shopping_creator_map') || '{}');
     } catch (e) {
       // ignore
     }
 
     const resolvedLink = db.purchase_link || localShoppingLinksMap[db.id] || '';
+    const resolvedRole = db.created_by_role || localShoppingCreatorMap[db.id]?.role;
+    const resolvedUser = db.created_by_user || localShoppingCreatorMap[db.id]?.user;
+    const resolvedCreatedAt = db.created_at || localShoppingCreatorMap[db.id]?.createdAt;
 
     return {
       id: db.id,
@@ -488,7 +504,10 @@ export function use3DState() {
       requestedBy: db.requested_by || undefined,
       department: db.department || undefined,
       company: db.company || undefined,
-      barcode: db.barcode || undefined
+      barcode: db.barcode || undefined,
+      createdByRole: resolvedRole,
+      createdByUser: resolvedUser,
+      createdAt: resolvedCreatedAt
     };
   };
 
@@ -504,7 +523,10 @@ export function use3DState() {
     requested_by: app.requestedBy || null,
     department: app.department || null,
     company: app.company || null,
-    barcode: app.barcode || null
+    barcode: app.barcode || null,
+    created_by_role: app.createdByRole || null,
+    created_by_user: app.createdByUser || null,
+    created_at: app.createdAt || null
   });
 
   const safeSupabaseOperation = async (
@@ -997,7 +1019,23 @@ export function use3DState() {
   const addShoppingItem = async (item: Omit<ShoppingItem, 'id' | 'checked'>) => {
     isMutating.current = true;
     const nextId = `SHOP-${Date.now()}-${Math.floor(Math.random() * 100)}`;
-    const newItem: ShoppingItem = { ...item, id: nextId, checked: false };
+    const currentRole = sessionStorage.getItem('g3d_user_role') || 'colaborador';
+    const currentUsername = sessionStorage.getItem('g3d_username') || (currentRole === 'admin' ? 'Administrador George' : 'Colaborador Ftéx');
+
+    const createdByRole = item.createdByRole || (currentRole === 'admin' ? 'admin' : 'colaborador');
+    const createdByUser = item.createdByUser || currentUsername;
+    const createdAt = item.createdAt || new Date().toISOString();
+
+    const newItem: ShoppingItem = { 
+      ...item, 
+      id: nextId, 
+      checked: false,
+      createdByRole,
+      createdByUser,
+      createdAt
+    };
+
+    saveShoppingCreatorToLocalCache(nextId, createdByRole, createdByUser, createdAt);
 
     if (item.purchaseLink) {
       saveShoppingLinkToLocalCache(nextId, item.purchaseLink);
@@ -1024,6 +1062,7 @@ export function use3DState() {
       setShopping(updated);
       backupToLocal(projects, inventory, updated);
       saveShoppingLinkToLocalCache(id, undefined);
+      saveShoppingCreatorToLocalCache(id, undefined, undefined, undefined);
 
       await syncOperation('g3d_shopping', 'delete', null, id);
       await loadData(true, true);

@@ -427,6 +427,11 @@ export default function InventoryView({
     else if (itemCat === 'Placas' || itemCat === 'Componentes Eletrônicos' || itemCat === 'Peças Geral') shopCat = 'Peças de Reposição';
     
     if (onAddShoppingItem) {
+      const sessionUsername = sessionStorage.getItem('g3d_username') || '';
+      const sessionEmail = sessionStorage.getItem('g3d_user_email') || '';
+      const isColab = userRole === 'colaborador';
+      const activeUser = sessionUsername || (sessionEmail ? sessionEmail.split('@')[0] : '') || (isColab ? 'Colaborador Ftéx' : 'Administrador George');
+
       onAddShoppingItem({
         materialName: purchasingItem.material,
         qtyNeeded: purchaseQty,
@@ -434,8 +439,11 @@ export default function InventoryView({
         purchaseLink: purchasingItem.purchaseLink || '',
         category: shopCat,
         notes: purchaseNotes ? `Solicitado via inventário (${itemCat}). Obs: ${purchaseNotes}` : `Solicitado via inventário (${itemCat}).`,
-        requestedBy: userRole === 'colaborador' ? 'Colaborador' : 'Administrador',
-        company: userRole === 'colaborador' ? 'Ftéx' : 'GeorgeFctech-3D'
+        requestedBy: isColab ? activeUser : 'Administração',
+        company: isColab ? 'Ftéx' : 'GeorgeFctech-3D',
+        createdByRole: isColab ? 'colaborador' : 'admin',
+        createdByUser: activeUser,
+        createdAt: new Date().toISOString()
       });
     }
 
