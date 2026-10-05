@@ -30,17 +30,8 @@ import {
   Github,
   MessageCircle
 } from 'lucide-react';
-import { getUserAvatar, getUserDisplayName, getAdminLogo, getColabLogo, getAdminName, getColabName } from './types';
 
 export default function App() {
-  const [visualUpdateTick, setVisualUpdateTick] = useState(0);
-
-  useEffect(() => {
-    const handleUpdate = () => setVisualUpdateTick(t => t + 1);
-    window.addEventListener('g3d_visual_settings_updated', handleUpdate);
-    return () => window.removeEventListener('g3d_visual_settings_updated', handleUpdate);
-  }, []);
-
   const [currentView, setCurrentView] = useState('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [importStatus, setImportStatus] = useState<string | null>(null);
@@ -80,15 +71,6 @@ export default function App() {
       }
     }
   }, [isAuthenticated]);
-
-  useEffect(() => {
-    if (isAuthenticated && userRole === 'colaborador') {
-      const adminOnlyViews = ['dashboard', 'pecas', 'relatorio', 'configuracoes', 'vercel'];
-      if (adminOnlyViews.includes(currentView)) {
-        setCurrentView('compras');
-      }
-    }
-  }, [currentView, userRole, isAuthenticated]);
 
   const handleLogout = () => {
     sessionStorage.removeItem('g3d_authenticated');
@@ -166,9 +148,7 @@ export default function App() {
             onDeleteInventoryItem={deleteInventoryItem}
             onUpdateQty={updateInventoryQty}
             onEditInventoryItem={editInventoryItem}
-            onAddShoppingItem={addShoppingItem}
             userRole={userRole}
-            onNavigate={setCurrentView}
           />
         );
       case 'compras':
@@ -182,56 +162,10 @@ export default function App() {
             onToggleShoppingItemChecked={toggleShoppingItemChecked}
             onAddInventoryItem={addInventoryItem}
             userRole={userRole}
-            onNavigate={setCurrentView}
-          />
-        );
-      case 'baixa_compras':
-        return (
-          <ShoppingListView
-            shopping={shopping}
-            inventory={inventory}
-            onAddShoppingItem={addShoppingItem}
-            onDeleteShoppingItem={deleteShoppingItem}
-            onUpdateShoppingItem={updateShoppingItem}
-            onToggleShoppingItemChecked={toggleShoppingItemChecked}
-            onAddInventoryItem={addInventoryItem}
-            userRole={userRole}
-            currentSubView="baixa"
-            onNavigate={setCurrentView}
-          />
-        );
-      case 'compras_efetuadas':
-        return (
-          <ShoppingListView
-            shopping={shopping}
-            inventory={inventory}
-            onAddShoppingItem={addShoppingItem}
-            onDeleteShoppingItem={deleteShoppingItem}
-            onUpdateShoppingItem={updateShoppingItem}
-            onToggleShoppingItemChecked={toggleShoppingItemChecked}
-            onAddInventoryItem={addInventoryItem}
-            userRole={userRole}
-            currentSubView="compras_efetuadas"
-            onNavigate={setCurrentView}
-          />
-        );
-      case 'calculadoras':
-        return (
-          <ShoppingListView
-            shopping={shopping}
-            inventory={inventory}
-            onAddShoppingItem={addShoppingItem}
-            onDeleteShoppingItem={deleteShoppingItem}
-            onUpdateShoppingItem={updateShoppingItem}
-            onToggleShoppingItemChecked={toggleShoppingItemChecked}
-            onAddInventoryItem={addInventoryItem}
-            userRole={userRole}
-            currentSubView="calculadoras"
-            onNavigate={setCurrentView}
           />
         );
       case 'relatorio':
-        return <ReportView projects={projects} />;
+        return <ReportView projects={projects} inventory={inventory} />;
       case 'vercel':
         return <VercelGuide />;
       case 'configuracoes':
@@ -290,13 +224,15 @@ export default function App() {
           <div className="w-9 h-9 rounded-full bg-transparent flex items-center justify-center p-0 overflow-hidden">
             <img 
               referrerPolicy="no-referrer"
-              src={getUserAvatar(userRole, sessionStorage.getItem('g3d_username') || '', sessionStorage.getItem('g3d_user_email') || '')}
+              src={userRole === 'colaborador'
+                ? "https://lh3.googleusercontent.com/gps-cs-s/APNQkAForRZzi0p_dHcu4q-uB5_6Hmh_ZWM1hwqil-EcrY-fKLUJWx-Z1RHuhgUQTtqJXsV29-B0tbj3CuhgI93tL_ygBJPL6nmLWh2TGr4Imchb-7y8ozTXVOdxt5UFk-PmJqQndhUJLw=w229-h164-n-k-no-nu"
+                : "https://vyvompcoiaizoluuxnzx.supabase.co/storage/v1/object/sign/img/meu_logo.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9lYTFhZWQwNC03M2Y5LTQwODQtOWNiOS04ODBkMTA3MzAwY2UiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJpbWcvbWV1X2xvZ28ucG5nIiwic2NvcGUiOiJkb3dubG9hZCIsImlhdCI6MTc4MTc5NTUxOCwiZXhwIjoxODc2NDAzNTE4fQ.JgHY5piKmwxjB0nfW08joAWsNE-JYRA5kUUkVra9hFI"}
               alt="Logo"
               className="w-full h-full object-cover"
             />
           </div>
           <span className="font-bold text-sm tracking-wide text-slate-800 dark:text-slate-100">
-            {getUserDisplayName(userRole, sessionStorage.getItem('g3d_username') || '', sessionStorage.getItem('g3d_user_email') || '')}
+            {userRole === 'colaborador' ? 'GeorgeFctech Comercial' : 'GeorgeFctech-3D'}
           </span>
         </div>
         <div className="flex items-center gap-1.5">

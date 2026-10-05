@@ -9,34 +9,31 @@ import { createClient } from '@supabase/supabase-js';
 // Priority:
 // 1. Environment variables set on Vercel/TrueNAS (VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY)
 // 2. LocalStorage configuration set by the administrator in the Settings menu
-// 3. Safe built-in fallback for the company project so it works across devices and browsers
-const DEFAULT_SUPABASE_URL = 'https://vyvompcoiaizoluuxnzx.supabase.co';
-const DEFAULT_SUPABASE_ANON_KEY = 'sb_publishable_TL1zMcymy0YcX0iG_KBU8A_lxzcL-MU';
-
 const getSupabaseConfig = () => {
-  const envUrl = (import.meta as any).env?.VITE_SUPABASE_URL?.trim();
-  const envKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY?.trim();
+  const envUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
+  const envKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
 
   if (envUrl && envKey) {
     return { url: envUrl, key: envKey, source: 'env' };
   }
 
-  const localUrl = localStorage.getItem('g3d_supabase_url')?.trim();
-  const localKey = localStorage.getItem('g3d_supabase_key')?.trim();
+  const localUrl = localStorage.getItem('g3d_supabase_url');
+  const localKey = localStorage.getItem('g3d_supabase_key');
 
   if (localUrl && localKey) {
     return { url: localUrl, key: localKey, source: 'local' };
   }
 
-  return { url: DEFAULT_SUPABASE_URL, key: DEFAULT_SUPABASE_ANON_KEY, source: 'default' };
+  return null;
 };
 
 export const hasSupabaseConfigured = (): boolean => {
-  return Boolean(getSupabaseConfig().url && getSupabaseConfig().key);
+  return getSupabaseConfig() !== null;
 };
 
 export const getSupabaseClient = () => {
   const config = getSupabaseConfig();
+  if (!config) return null;
   return createClient(config.url, config.key, {
     auth: {
       persistSession: true,
@@ -92,35 +89,15 @@ CREATE TABLE IF NOT EXISTS g3d_shopping (
   checked BOOLEAN DEFAULT FALSE,
   requested_by TEXT,
   department TEXT,
-  company TEXT,
-  barcode TEXT,
-  created_by_role TEXT,
-  created_by_user TEXT,
-  created_at TEXT
+  company TEXT
 );
 
 -- 4. Tabela de Funções / Cargos por Email (Admin vs Colaborador)
 CREATE TABLE IF NOT EXISTS g3d_user_roles (
   email TEXT PRIMARY KEY,
   role TEXT NOT NULL DEFAULT 'colaborador', -- 'admin' ou 'colaborador'
-  username TEXT UNIQUE,
-  password TEXT
+  username TEXT UNIQUE
 );
-
--- 5. Atualização de Colunas em Tabelas Existentes (Migrações Automáticas)
-ALTER TABLE g3d_shopping ADD COLUMN IF NOT EXISTS requested_by TEXT;
-ALTER TABLE g3d_shopping ADD COLUMN IF NOT EXISTS department TEXT;
-ALTER TABLE g3d_shopping ADD COLUMN IF NOT EXISTS company TEXT;
-ALTER TABLE g3d_shopping ADD COLUMN IF NOT EXISTS barcode TEXT;
-ALTER TABLE g3d_shopping ADD COLUMN IF NOT EXISTS created_by_role TEXT;
-ALTER TABLE g3d_shopping ADD COLUMN IF NOT EXISTS created_by_user TEXT;
-ALTER TABLE g3d_shopping ADD COLUMN IF NOT EXISTS created_at TEXT;
-
-ALTER TABLE g3d_inventory ADD COLUMN IF NOT EXISTS created_by_role TEXT;
-ALTER TABLE g3d_inventory ADD COLUMN IF NOT EXISTS created_by_user TEXT;
-ALTER TABLE g3d_inventory ADD COLUMN IF NOT EXISTS created_at TEXT;
-ALTER TABLE g3d_inventory ADD COLUMN IF NOT EXISTS category TEXT;
-ALTER TABLE g3d_inventory ADD COLUMN IF NOT EXISTS purchase_link TEXT;
 
 -- Habilitar leitura pública ou autenticada de todos os registros
 -- (Para simplificar a integração profissional interna, ou sinta-se livre para customizar o RLS)

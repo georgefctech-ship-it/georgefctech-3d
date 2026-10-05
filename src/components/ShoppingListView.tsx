@@ -18,8 +18,6 @@ import {
   Edit2,
   Tag,
   Search,
-  Mail,
-  Share2,
   CheckCircle,
   Filter,
   Layers,
@@ -32,23 +30,10 @@ import {
   AlertCircle,
   QrCode,
   Camera,
-  ScanLine,
-  FileText,
-  Barcode,
-  CheckSquare,
-  FileClock,
-  Calculator,
-  Fan,
-  Cpu,
-  Lock,
-  Database,
-  FileSpreadsheet,
-  X
+  ScanLine
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { ShoppingItem, InventoryItem } from '../types';
-// @ts-ignore
-import XLSX from 'xlsx-js-style';
 
 const ensureAbsoluteUrl = (url: string | undefined, productName?: string): string => {
   if (!url || !url.trim()) {
@@ -130,150 +115,6 @@ const getProductImage = (item: ShoppingItem): string => {
   return 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=200&auto=format&fit=crop&q=80';
 };
 
-function normalizeCollaboratorStr(str?: string | null): string {
-  if (!str) return '';
-  return String(str)
-    .toLowerCase()
-    .trim()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
-}
-
-export function isAdministratorPurchase(item: ShoppingItem): boolean {
-  if (!item) return false;
-  const createdByRole = normalizeCollaboratorStr(item.createdByRole);
-  const createdByUser = normalizeCollaboratorStr(item.createdByUser);
-  const reqBy = normalizeCollaboratorStr(item.requestedBy);
-  const dept = normalizeCollaboratorStr(item.department);
-  const company = normalizeCollaboratorStr(item.company);
-
-  // 1. Explicit collaborator role check: If created by a collaborator, it is NEVER an administrator-only purchase!
-  if (createdByRole === 'colaborador') {
-    return false;
-  }
-
-  // 2. Collaborator creator or company check: If creator/requester/company belongs to a collaborator (e.g. Jhonatan, Ftéx, etc.), not admin
-  if (
-    (createdByUser && !createdByUser.includes('admin') && !createdByUser.includes('george') && createdByUser !== 'administrador') ||
-    (company && (company.includes('ftex') || company.includes('comercial'))) ||
-    (reqBy && !reqBy.includes('admin') && !reqBy.includes('george') && reqBy !== 'administrador' && reqBy !== 'diretoria' && reqBy !== 'administracao')
-  ) {
-    return false;
-  }
-
-  // 3. Explicit creator role check for admin
-  if (createdByRole === 'admin') {
-    return true;
-  }
-  if (createdByUser === 'administrador' || createdByUser === 'admin' || (createdByUser.includes('admin') && !createdByUser.includes('colaborador'))) {
-    return true;
-  }
-
-  // 4. Explicit check for Administrator in requester or department (only if no collaborator creator)
-  if (
-    reqBy === 'administrador' ||
-    reqBy === 'admin' ||
-    reqBy === 'administracao' ||
-    dept === 'diretoria' ||
-    dept === 'administracao'
-  ) {
-    return true;
-  }
-
-  // 5. If item has NO creator info, no requestedBy, and no company, it defaults to Administrator purchase
-  if (!reqBy && !company && !createdByUser) {
-    return true;
-  }
-
-  return false;
-}
-
-export function isOwnedByCurrentCollaborator(
-  item: ShoppingItem,
-  username: string,
-  email: string
-): boolean {
-  if (!item) return false;
-
-  // 1. Admin purchases are strictly forbidden for collaborators to alter or remove
-  if (isAdministratorPurchase(item)) {
-    return false;
-  }
-
-  if (item.createdByRole === 'admin') {
-    return false;
-  }
-
-  const reqBy = normalizeCollaboratorStr(item.requestedBy);
-  const company = normalizeCollaboratorStr(item.company);
-  const createdByUser = normalizeCollaboratorStr(item.createdByUser);
-  const uName = normalizeCollaboratorStr(username);
-  const uEmail = normalizeCollaboratorStr(email);
-  const uEmailPrefix = uEmail ? uEmail.split('@')[0] : '';
-
-  // If no logged in collaborator username or email, reject
-  if (!uName && !uEmail && !uEmailPrefix) {
-    return false;
-  }
-
-  // If the item has no author specified, it belongs to the company/admin, not this collaborator
-  if (!reqBy && !createdByUser) {
-    return false;
-  }
-
-  // 2. Strict per-collaborator verification:
-  // Match creator username or email
-  if (createdByUser) {
-    if (uName && (createdByUser === uName || createdByUser.includes(uName) || uName.includes(createdByUser))) {
-      return true;
-    }
-    if (uEmail && (createdByUser === uEmail || createdByUser.includes(uEmail))) {
-      return true;
-    }
-    if (uEmailPrefix && (createdByUser === uEmailPrefix || createdByUser.includes(uEmailPrefix))) {
-      return true;
-    }
-  }
-
-  // Match requestedBy
-  if (reqBy) {
-    if (uName && (reqBy === uName || reqBy.includes(uName) || uName.includes(reqBy))) {
-      return true;
-    }
-    if (uEmail && (reqBy === uEmail || reqBy.includes(uEmail))) {
-      return true;
-    }
-    if (uEmailPrefix && (reqBy === uEmailPrefix || reqBy.includes(uEmailPrefix))) {
-      return true;
-    }
-    // If collaborator username is specifically "Ftex" or "Colaborador Ftéx"
-    if ((uName.includes('ftex') || uEmail.includes('ftex')) && (reqBy.includes('ftex') || company.includes('ftex'))) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-export function canUserEditOrDeleteShoppingItem(
-  item: ShoppingItem,
-  role?: string,
-  username?: string,
-  email?: string
-): boolean {
-  if (!item) return false;
-  const currentRole = role || sessionStorage.getItem('g3d_user_role') || 'colaborador';
-  if (currentRole === 'admin') return true;
-
-  // Finished / Baixa completed purchases cannot be altered or removed by collaborators
-  if (item.checked) return false;
-
-  const uName = username || sessionStorage.getItem('g3d_username') || '';
-  const uEmail = email || sessionStorage.getItem('g3d_user_email') || '';
-
-  return isOwnedByCurrentCollaborator(item, uName, uEmail);
-}
-
 interface ShoppingListViewProps {
   shopping: ShoppingItem[];
   inventory: InventoryItem[];
@@ -283,41 +124,18 @@ interface ShoppingListViewProps {
   onToggleShoppingItemChecked: (id: string) => void;
   onAddInventoryItem: (item: Omit<InventoryItem, 'id' | 'gramCost' | 'status'>) => void;
   userRole?: string;
-  currentSubView?: string;
-  onNavigate?: (view: string) => void;
 }
 
 export default function ShoppingListView({
-  shopping: allShopping,
+  shopping,
   inventory,
   onAddShoppingItem,
   onDeleteShoppingItem,
   onUpdateShoppingItem,
   onToggleShoppingItemChecked,
   onAddInventoryItem,
-  userRole,
-  currentSubView,
-  onNavigate
+  userRole
 }: ShoppingListViewProps) {
-  const currentUserEmail = useMemo(() => sessionStorage.getItem('g3d_user_email') || '', []);
-  const currentUsername = useMemo(() => sessionStorage.getItem('g3d_username') || '', []);
-
-  const [filterOnlyMine, setFilterOnlyMine] = useState(false);
-
-  const shopping = useMemo(() => {
-    if (userRole === 'colaborador') {
-      // Se a opção "Apenas Minhas Solicitações" estiver ativa, filtra por usuário
-      if (filterOnlyMine) {
-        return allShopping.filter(item =>
-          isOwnedByCurrentCollaborator(item, currentUsername, currentUserEmail)
-        );
-      }
-      // Colaboradores têm visão completa de todas as compras da empresa para recebimento, baixa e relatórios
-      return allShopping;
-    }
-    return allShopping;
-  }, [allShopping, userRole, currentUserEmail, currentUsername, filterOnlyMine]);
-
   const [formOpen, setFormOpen] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerMode, setScannerMode] = useState<'create' | 'search'>('create');
@@ -327,77 +145,16 @@ export default function ShoppingListView({
   const [qtyNeeded, setQtyNeeded] = useState(1);
   const [estUnitCost, setEstUnitCost] = useState(120.00);
   const [purchaseLink, setPurchaseLink] = useState('');
-  const [category, setCategory] = useState<'Filamento' | 'Peças de Reposição' | 'Acessórios/Insumos' | 'Refrigeração' | 'Outros' | string>(() => {
+  const [category, setCategory] = useState<'Filamento' | 'Peças de Reposição' | 'Acessórios/Insumos' | 'Outros'>(() => {
     return userRole === 'colaborador' ? 'Acessórios/Insumos' : 'Filamento';
   });
   const [notes, setNotes] = useState('');
   const [requestedBy, setRequestedBy] = useState(() => {
-    const username = sessionStorage.getItem('g3d_username') || '';
-    const email = sessionStorage.getItem('g3d_user_email') || '';
-    if (username.toLowerCase() === 'ftex' || username.toLowerCase() === 'ftéx') {
-      if (email && !email.toLowerCase().includes('ftex') && !email.toLowerCase().includes('ftéx')) {
-        const prefix = email.split('@')[0];
-        return prefix.charAt(0).toUpperCase() + prefix.slice(1);
-      }
-      return '';
-    }
-    return username || email || '';
+    return sessionStorage.getItem('g3d_username') || sessionStorage.getItem('g3d_user_email') || '';
   });
   const [department, setDepartment] = useState('');
-  const [company, setCompany] = useState(() => {
-    return userRole === 'colaborador' ? 'Ftéx' : '';
-  });
+  const [company, setCompany] = useState('');
   const [barcode, setBarcode] = useState('');
-
-  // States for Excel Report custom metadata dialog
-  const [excelModalOpen, setExcelModalOpen] = useState(false);
-  const [excelModalType, setExcelModalType] = useState<'pending' | 'completed'>('pending');
-  const [excelCompany, setExcelCompany] = useState('');
-  const [excelRequestedBy, setExcelRequestedBy] = useState('');
-  const [excelDepartment, setExcelDepartment] = useState('');
-  const [excelCategory, setExcelCategory] = useState<string>('Todos');
-
-  const triggerExcelReportModal = (type: 'pending' | 'completed') => {
-    setExcelModalType(type);
-    
-    // Set sensible defaults for the modal inputs
-    const defaultCompany = type === 'pending'
-      ? (filterCompany !== 'Todos' ? filterCompany : (userRole === 'colaborador' ? (company || 'Ftéx') : 'GeorgeFctech-3D'))
-      : (company || 'Ftéx');
-      
-    const defaultRequestedBy = requestedBy || (userRole === 'colaborador' ? 'Colaborador' : 'Administrador');
-    const defaultDepartment = department || (userRole === 'colaborador' ? 'Faturamento/Comercial' : 'Oficina');
-    const defaultCat = filterCategory !== 'Todos' ? filterCategory : 'Todos';
-
-    setExcelCompany(defaultCompany);
-    setExcelRequestedBy(defaultRequestedBy);
-    setExcelDepartment(defaultDepartment);
-    setExcelCategory(defaultCat);
-    setExcelModalOpen(true);
-  };
-
-  // Automatically pre-fill company and requestedBy for colaboradores
-  useEffect(() => {
-    if (userRole === 'colaborador') {
-      if (!company) {
-        setCompany('Ftéx');
-      }
-      const username = sessionStorage.getItem('g3d_username') || '';
-      const email = sessionStorage.getItem('g3d_user_email') || '';
-      let defaultUser = username;
-      if (username.toLowerCase() === 'ftex' || username.toLowerCase() === 'ftéx') {
-        if (email && !email.toLowerCase().includes('ftex') && !email.toLowerCase().includes('ftéx')) {
-          const prefix = email.split('@')[0];
-          defaultUser = prefix.charAt(0).toUpperCase() + prefix.slice(1);
-        } else {
-          defaultUser = '';
-        }
-      }
-      if (defaultUser && !requestedBy) {
-        setRequestedBy(defaultUser);
-      }
-    }
-  }, [userRole, formOpen]);
 
   // Filtering states
   const [searchQuery, setSearchQuery] = useState('');
@@ -412,7 +169,7 @@ export default function ShoppingListView({
   const [editCost, setEditCost] = useState(0);
   const [editLink, setEditLink] = useState('');
   const [editNotes, setEditNotes] = useState('');
-  const [editCategory, setEditCategory] = useState<'Filamento' | 'Peças de Reposição' | 'Acessórios/Insumos' | 'Refrigeração' | 'Outros' | string>('Filamento');
+  const [editCategory, setEditCategory] = useState<'Filamento' | 'Peças de Reposição' | 'Acessórios/Insumos' | 'Outros'>('Filamento');
   const [editRequestedBy, setEditRequestedBy] = useState('');
   const [editDepartment, setEditDepartment] = useState('');
   const [editCompany, setEditCompany] = useState('');
@@ -425,250 +182,6 @@ export default function ShoppingListView({
 
   // Inventory Registration Success Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  // Validation and baixa states
-  const [validatingItem, setValidatingItem] = useState<ShoppingItem | null>(null);
-  const [autoPushToStock, setAutoPushToStock] = useState<boolean>(true);
-
-  // Quick Stock Consultation Modal State
-  const [stockConsultModalOpen, setStockConsultModalOpen] = useState(false);
-  const [stockSearchQuery, setStockSearchQuery] = useState('');
-  const [stockCategoryFilter, setStockCategoryFilter] = useState('Todos');
-
-  // Helper to find matching inventory item by name
-  const getMatchingInventoryItem = (itemName: string) => {
-    if (!itemName || !inventory) return null;
-    const cleanName = itemName.toLowerCase().replace(/\(reposi[çc][ãa]o\)/gi, '').trim();
-    return inventory.find(inv => {
-      const invMat = (inv.material || '').toLowerCase().trim();
-      return invMat === cleanName || invMat.includes(cleanName) || cleanName.includes(invMat);
-    });
-  };
-
-  const downloadStockExcelDirect = () => {
-    try {
-      const wb = XLSX.utils.book_new();
-      const reportDate = new Date().toLocaleDateString('pt-BR');
-
-      const generalData: any[][] = [
-        ['GEORGEFCTECH-3D — RELATÓRIO OFICIAL DE ESTOQUE E INSUMOS'],
-        [`Data da Emissão: ${reportDate} | Total de Itens: ${inventory.length}`],
-        [],
-        ['ID / SKU', 'Categoria', 'Insumo / Especificação', 'Qtd Estoque', 'Preço Unitário (R$)', 'Total Imobilizado (R$)', 'Status', 'Link Fornecedor']
-      ];
-
-      inventory.forEach(item => {
-        const totalCost = (item.qty || 0) * (item.unitCost || 0);
-        generalData.push([
-          item.id || '-',
-          item.category || 'Filamento',
-          item.material || '-',
-          item.qty || 0,
-          item.unitCost || 0,
-          totalCost,
-          item.status || (item.qty === 0 ? 'Esgotado' : 'Em Estoque'),
-          item.purchaseLink || 'Sem Link'
-        ]);
-      });
-
-      const totalGeneral = inventory.reduce((sum, i) => sum + ((i.qty || 0) * (i.unitCost || 0)), 0);
-      generalData.push([]);
-      generalData.push(['TOTAL GERAL IMOBILIZADO NO ESTOQUE', '', '', inventory.reduce((s, i) => s + (i.qty || 0), 0), '', totalGeneral, '', '']);
-
-      const wsGeneral = XLSX.utils.aoa_to_sheet(generalData);
-      wsGeneral['!cols'] = [
-        { wch: 14 }, { wch: 22 }, { wch: 38 }, { wch: 14 }, { wch: 18 }, { wch: 22 }, { wch: 16 }, { wch: 35 }
-      ];
-      XLSX.utils.book_append_sheet(wb, wsGeneral, 'Estoque Geral');
-
-      const todayStr = new Date().toISOString().split('T')[0];
-      XLSX.writeFile(wb, `Relatorio_Estoque_GeorgeFctech_3D_${todayStr}.xlsx`);
-      setToastMessage("Planilha de Estoque (.xlsx) baixada com sucesso!");
-      setTimeout(() => setToastMessage(null), 4000);
-    } catch (e) {
-      console.error("Erro ao exportar estoque:", e);
-      setToastMessage("Erro ao compilar arquivo Excel de estoque.");
-      setTimeout(() => setToastMessage(null), 4000);
-    }
-  };
-
-  const handleToggleOrValidate = (item: ShoppingItem) => {
-    if (item.checked) {
-      // If already checked, toggle back to unchecked (pending)
-      onToggleShoppingItemChecked(item.id);
-    } else {
-      // If unchecked, open validation modal to offer the baixa option!
-      setValidatingItem(item);
-      setAutoPushToStock(true);
-    }
-  };
-
-  const handleConfirmValidation = () => {
-    if (!validatingItem) return;
-
-    // 1. Mark as checked (Completed) in the database & state
-    onToggleShoppingItemChecked(validatingItem.id);
-
-    // 2. If autoPushToStock is checked, add to active inventory (estoque)
-    if (autoPushToStock) {
-      onAddInventoryItem({
-        material: validatingItem.materialName.replace(" (Reposição)", ""),
-        qty: validatingItem.qtyNeeded,
-        unitCost: validatingItem.estUnitCost,
-        purchaseLink: validatingItem.purchaseLink,
-        category: validatingItem.category
-      });
-      setToastMessage(`Compra Validada! "${validatingItem.materialName}" marcada como COMPRADA e enviada para o estoque ativo.`);
-    } else {
-      setToastMessage(`Compra Validada! "${validatingItem.materialName}" marcada como COMPRADA.`);
-    }
-
-    // Reset state & close modal
-    setValidatingItem(null);
-    setTimeout(() => setToastMessage(null), 5005);
-  };
-
-  // --- COLLABORATOR EXTENDED MENUS AND CALCULATOR STATES ---
-  const [colabActiveTab, setColabActiveTab] = useState<'baixa' | 'compras' | 'calculadora'>('baixa');
-  const [completedPeriodFilter, setCompletedPeriodFilter] = useState<'todos' | 'hoje' | 'semana' | 'mes'>('todos');
-
-  // Função para obter a data de compra de um item baseado no notes ou data atual
-  const getPurchasedDate = (item: ShoppingItem): Date => {
-    if (item.notes) {
-      const dateRegex = /(\d{2})\/(\d{2})\/(\d{4}|\d{2})/;
-      const match = item.notes.match(dateRegex);
-      if (match) {
-        const day = parseInt(match[1], 10);
-        const month = parseInt(match[2], 10) - 1;
-        let year = parseInt(match[3], 10);
-        if (year < 100) year += 2000;
-        return new Date(year, month, day);
-      }
-    }
-    return new Date();
-  };
-
-  const isToday = (date: Date): boolean => {
-    const today = new Date();
-    return date.getDate() === today.getDate() &&
-           date.getMonth() === today.getMonth() &&
-           date.getFullYear() === today.getFullYear();
-  };
-
-  const isThisWeek = (date: Date): boolean => {
-    const today = new Date();
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(today.getDate() - 7);
-    return date >= sevenDaysAgo && date <= today;
-  };
-
-  const isThisMonth = (date: Date): boolean => {
-    const today = new Date();
-    return date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
-  };
-
-  // Sync colabActiveTab with currentSubView if navigated from sidebar
-  useEffect(() => {
-    if (currentSubView === 'baixa') {
-      setColabActiveTab('baixa');
-    } else if (currentSubView === 'compras_efetuadas') {
-      setColabActiveTab('compras');
-    } else if (currentSubView === 'calculadoras') {
-      setColabActiveTab('calculadora');
-    }
-  }, [currentSubView]);
-
-  // Screen Simulated Calculator States
-  const [calcDisplay, setCalcDisplay] = useState('0');
-  const [calcSubDisplay, setCalcSubDisplay] = useState('');
-  const [calcResetOnNextKey, setCalcResetOnNextKey] = useState(false);
-
-  const handleCalcKeyPress = (key: string) => {
-    if (key === 'C') {
-      setCalcDisplay('0');
-      setCalcSubDisplay('');
-      setCalcResetOnNextKey(false);
-    } else if (key === 'DEL') {
-      if (calcDisplay.length > 1) {
-        setCalcDisplay(calcDisplay.slice(0, -1));
-      } else {
-        setCalcDisplay('0');
-      }
-    } else if (key === '=') {
-      try {
-        const cleanExpression = calcDisplay.replace(/×/g, '*').replace(/÷/g, '/');
-        if (/^[0-9.+\-*/\s()]+$/.test(cleanExpression)) {
-          // eslint-disable-next-line no-eval
-          const result = eval(cleanExpression);
-          setCalcSubDisplay(calcDisplay + ' =');
-          setCalcDisplay(String(Number(result.toFixed(6))));
-          setCalcResetOnNextKey(true);
-        } else {
-          setCalcDisplay('Erro');
-        }
-      } catch (err) {
-        setCalcDisplay('Erro');
-      }
-    } else if (['+', '-', '×', '÷'].includes(key)) {
-      setCalcResetOnNextKey(false);
-      const lastChar = calcDisplay.slice(-1);
-      if (['+', '-', '×', '÷'].includes(lastChar)) {
-        setCalcDisplay(calcDisplay.slice(0, -1) + key);
-      } else {
-        setCalcDisplay(calcDisplay + key);
-      }
-    } else {
-      if (calcDisplay === '0' || calcDisplay === 'Erro' || calcResetOnNextKey) {
-        setCalcDisplay(key === '.' ? '0.' : key);
-        setCalcResetOnNextKey(false);
-      } else {
-        if (key === '.') {
-          const parts = calcDisplay.split(/[+\-×÷]/);
-          const lastPart = parts[parts.length - 1];
-          if (lastPart.includes('.')) return;
-        }
-        setCalcDisplay(calcDisplay + key);
-      }
-    }
-  };
-  
-  // Compras Efetuadas Search State
-  const [completedSearchQuery, setCompletedSearchQuery] = useState('');
-
-  // Filament Gram Cost Calculator States
-  const [calcFilPrice, setCalcFilPrice] = useState<number>(150);
-  const [calcFilWeight, setCalcFilWeight] = useState<number>(1000);
-
-  // Batch Budget Calculator States
-  const [calcQty, setCalcQty] = useState<number>(5);
-  const [calcUnitPrice, setCalcUnitPrice] = useState<number>(35);
-  const [calcShipping, setCalcShipping] = useState<number>(15);
-
-  // Filament Length/Volumetric States
-  const [calcFilType, setCalcFilType] = useState<'PLA' | 'PETG' | 'ABS'>('PLA');
-  const [calcFilTotalWeight, setCalcFilTotalWeight] = useState<number>(1); // in kg
-
-  const handleDirectBaixa = (item: ShoppingItem, pushToStock: boolean) => {
-    // 1. Toggle checked status to true
-    if (!item.checked) {
-      onToggleShoppingItemChecked(item.id);
-    }
-    
-    // 2. If pushToStock is selected, add to inventory
-    if (pushToStock) {
-      onAddInventoryItem({
-        material: item.materialName.replace(" (Reposição)", ""),
-        qty: item.qtyNeeded,
-        unitCost: item.estUnitCost,
-        purchaseLink: item.purchaseLink
-      });
-      setToastMessage(`Baixa Realizada! "${item.materialName}" foi marcado como COMPRADO e enviado ao estoque ativo!`);
-    } else {
-      setToastMessage(`Baixa Realizada! "${item.materialName}" marcado como COMPRADO.`);
-    }
-
-    setTimeout(() => setToastMessage(null), 5000);
-  };
 
   const handleScanSuccess = (code: string, matchedProduct?: any) => {
     if (scannerMode === 'search') {
@@ -704,18 +217,6 @@ export default function ShoppingListView({
     e.preventDefault();
     if (!materialName.trim()) return;
 
-    const sessionUsername = sessionStorage.getItem('g3d_username') || '';
-    const sessionEmail = sessionStorage.getItem('g3d_user_email') || '';
-    const fallbackUser = sessionUsername || sessionEmail || (userRole === 'colaborador' ? 'Colaborador Ftéx' : 'Administrador');
-
-    const submittedRequestedBy = requestedBy.trim() || fallbackUser;
-    const submittedDept = department.trim() || (userRole === 'colaborador' ? 'Faturamento/Comercial' : 'Geral');
-    const submittedComp = company.trim() || (userRole === 'colaborador' ? 'Ftéx' : 'GeorgeFctech-3D');
-
-    const createdByRole = userRole === 'colaborador' ? 'colaborador' : 'admin';
-    const createdByUser = sessionUsername || sessionEmail || fallbackUser;
-    const createdAt = new Date().toISOString();
-
     onAddShoppingItem({
       materialName: materialName.trim(),
       qtyNeeded,
@@ -723,13 +224,10 @@ export default function ShoppingListView({
       purchaseLink: purchaseLink.trim(),
       category,
       notes: notes.trim(),
-      requestedBy: submittedRequestedBy,
-      department: submittedDept,
-      company: submittedComp,
-      barcode: barcode.trim() || undefined,
-      createdByRole,
-      createdByUser,
-      createdAt
+      requestedBy: requestedBy.trim() || undefined,
+      department: department.trim() || undefined,
+      company: company.trim() || undefined,
+      barcode: barcode.trim() || undefined
     });
 
     // Reset Form
@@ -739,34 +237,14 @@ export default function ShoppingListView({
     setPurchaseLink('');
     setCategory(userRole === 'colaborador' ? 'Acessórios/Insumos' : 'Filamento');
     setNotes('');
-    
-    let resetUser = sessionUsername;
-    if (sessionUsername.toLowerCase() === 'ftex' || sessionUsername.toLowerCase() === 'ftéx') {
-      if (sessionEmail && !sessionEmail.toLowerCase().includes('ftex') && !sessionEmail.toLowerCase().includes('ftéx')) {
-        const prefix = sessionEmail.split('@')[0];
-        resetUser = prefix.charAt(0).toUpperCase() + prefix.slice(1);
-      } else {
-        resetUser = '';
-      }
-    }
-    setRequestedBy(resetUser);
+    setRequestedBy(sessionStorage.getItem('g3d_username') || sessionStorage.getItem('g3d_user_email') || '');
     setDepartment('');
-    setCompany(userRole === 'colaborador' ? 'Ftéx' : '');
+    setCompany('');
     setBarcode('');
     setFormOpen(false);
   };
 
   const handleStartEdit = (item: ShoppingItem) => {
-    if (!canUserEditOrDeleteShoppingItem(item, userRole, currentUsername, currentUserEmail)) {
-      if (item.checked) {
-        setToastMessage("Acesso Restrito: Compras já concluídas/baixadas só podem ser alteradas por Administradores.");
-      } else {
-        setToastMessage("Acesso Restrito: Você só pode editar suas próprias solicitações de compras.");
-      }
-      setTimeout(() => setToastMessage(null), 4000);
-      return;
-    }
-
     setEditingId(item.id);
     setEditName(item.materialName);
     setEditQty(item.qtyNeeded);
@@ -781,13 +259,6 @@ export default function ShoppingListView({
   };
 
   const handleSaveEdit = (id: string) => {
-    const targetItem = allShopping.find(i => i.id === id);
-    if (targetItem && !canUserEditOrDeleteShoppingItem(targetItem, userRole, currentUsername, currentUserEmail)) {
-      setToastMessage("Acesso Restrito: Sem permissão para alterar este item de compra.");
-      setTimeout(() => setToastMessage(null), 4000);
-      return;
-    }
-
     onUpdateShoppingItem(id, {
       materialName: editName.trim(),
       qtyNeeded: editQty,
@@ -803,40 +274,18 @@ export default function ShoppingListView({
     setEditingId(null);
   };
 
-  const handleDeleteShoppingItem = (id: string) => {
-    const targetItem = allShopping.find(i => i.id === id);
-    if (targetItem && !canUserEditOrDeleteShoppingItem(targetItem, userRole, currentUsername, currentUserEmail)) {
-      if (targetItem.checked) {
-        setToastMessage("Acesso Restrito: Compras já concluídas/baixadas não podem ser excluídas por Colaboradores.");
-      } else {
-        setToastMessage("Acesso Restrito: Você só pode excluir suas próprias solicitações de compras.");
-      }
-      setTimeout(() => setToastMessage(null), 4000);
-      return;
-    }
-    onDeleteShoppingItem(id);
-  };
-
   // Automated item replenishment from inventory warnings
   const lowStockItems = inventory.filter(item => item.qty <= 1);
 
   const handleAddFromLowStock = (item: InventoryItem) => {
     const defaultLink = item.purchaseLink || 'https://www.mercadolivre.com.br/';
-    const isColab = userRole === 'colaborador';
-    const sessionUsername = sessionStorage.getItem('g3d_username') || '';
-    const sessionEmail = sessionStorage.getItem('g3d_user_email') || '';
-    const colabUser = requestedBy || sessionUsername || sessionEmail || 'Colaborador Ftéx';
-
     onAddShoppingItem({
       materialName: `Filamento ${item.material} (Reposição)`,
       qtyNeeded: 2, 
       estUnitCost: item.unitCost || 130.00,
       purchaseLink: defaultLink,
       category: 'Filamento',
-      notes: `Reabastecimento sugerido. Estoque crítico atual: ${item.qty} rolos.`,
-      company: isColab ? 'Ftéx' : 'GeorgeFctech-3D',
-      requestedBy: isColab ? colabUser : 'Administrador',
-      department: isColab ? 'Faturamento/Comercial' : 'Geral'
+      notes: `Reabastecimento sugerido. Estoque crítico atual: ${item.qty} rolos.`
     });
   };
 
@@ -844,20 +293,526 @@ export default function ShoppingListView({
   const generateReport = () => {
     if (shopping.length === 0) return;
 
-    const defaultCompanyLabel = userRole === 'colaborador' ? (company || 'Empresa Solicitante') : 'GeorgeFctech-3D';
-    const selectedCompany = filterCompany !== 'Todos' ? filterCompany : (userRole === 'colaborador' ? (company || 'Empresa Solicitante') : `GERAL / ${defaultCompanyLabel}`);
-    const reportTitle = userRole === 'colaborador' ? 'PEDIDO COMERCIAL DE COMPRAS' : `${selectedCompany.toUpperCase()} - PEDIDO COMERCIAL`;
+    const selectedCompany = filterCompany !== 'Todos' ? filterCompany : 'GERAL / GeorgeFctech-3D';
+    const reportTitle = `${selectedCompany.toUpperCase()} - RELATÓRIO COMERCIAL DE PEDIDOS`;
     const dateFormatted = new Date().toLocaleDateString('pt-BR');
     const timeFormatted = new Date().toLocaleTimeString('pt-BR');
 
+    const htmlContent = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${reportTitle}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --secondary: #0f172a;
+      --success: #059669;
+      --warning: #d97706;
+      --slate-50: #f8fafc;
+      --slate-100: #f1f5f9;
+      --slate-200: #e2e8f0;
+      --slate-300: #cbd5e1;
+      --slate-700: #334155;
+      --slate-800: #1e293b;
+      --slate-900: #0f172a;
+    }
 
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
-    // Excel-compatible HTML Spreadsheet 2003 wrapper that preserves rich styling, gridlines, and hyperlinks
-    const excelContent = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background-color: #f8fafc;
+      color: var(--slate-900);
+      line-height: 1.5;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 20px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+      border: 1px solid var(--slate-200);
+      overflow: hidden;
+    }
+
+    .header {
+      background: linear-gradient(135deg, var(--slate-900) 0%, #1e1b4b 100%);
+      color: #ffffff;
+      padding: 40px;
+      position: relative;
+    }
+
+    .header-logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      font-size: 14px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #a5b4fc;
+      margin-bottom: 15px;
+    }
+
+    .header-title {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      margin-bottom: 10px;
+      line-height: 1.2;
+    }
+
+    .header-meta {
+      font-size: 13px;
+      color: #cbd5e1;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      margin-top: 20px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .header-meta span {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-cols: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 20px;
+      padding: 30px 40px;
+      background-color: var(--slate-50);
+      border-bottom: 1px solid var(--slate-200);
+    }
+
+    .stat-card {
+      background: #ffffff;
+      padding: 20px;
+      border-radius: 12px;
+      border: 1px solid var(--slate-200);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--slate-700);
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--slate-900);
+    }
+
+    .stat-value.highlight {
+      color: var(--primary);
+    }
+
+    .table-container {
+      padding: 40px;
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+
+    th {
+      font-size: 11px;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--slate-700);
+      letter-spacing: 0.05em;
+      padding: 16px 20px;
+      border-bottom: 2px solid var(--slate-200);
+      background-color: var(--slate-50);
+    }
+
+    td {
+      padding: 20px;
+      border-bottom: 1px solid var(--slate-100);
+      font-size: 14px;
+      vertical-align: middle;
+    }
+
+    tr:hover td {
+      background-color: rgba(79, 70, 229, 0.01);
+    }
+
+    .product-cell {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .product-img {
+      width: 56px;
+      height: 56px;
+      border-radius: 10px;
+      object-fit: cover;
+      background-color: var(--slate-100);
+      border: 1px solid var(--slate-200);
+      flex-shrink: 0;
+    }
+
+    .product-info {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .product-name {
+      font-weight: 700;
+      color: var(--slate-900);
+    }
+
+    .product-notes {
+      font-size: 12px;
+      color: var(--slate-700);
+    }
+
+    .product-barcode {
+      display: inline-block;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      background-color: #eef2ff;
+      color: #4338ca;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: bold;
+      width: fit-content;
+      margin-top: 2px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .badge-filamento { background-color: #eef2ff; color: #4338ca; }
+    .badge-reparacao { background-color: #fff1f2; color: #be123c; }
+    .badge-insumos { background-color: #f0fdfa; color: #0f766e; }
+    .badge-outros { background-color: #f1f5f9; color: #334155; }
+
+    .badge-pending { background-color: #fef3c7; color: #d97706; }
+    .badge-bought { background-color: #d1fae5; color: #059669; }
+
+    .price-col {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+    }
+
+    .total-price {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    .action-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background-color: var(--primary);
+      color: #ffffff;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      text-decoration: none;
+      transition: background-color 0.15s ease;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+
+    .action-btn:hover {
+      background-color: var(--primary-hover);
+    }
+
+    .action-btn.secondary {
+      background-color: var(--slate-100);
+      color: var(--slate-700);
+      border: 1px solid var(--slate-200);
+    }
+
+    .action-btn.secondary:hover {
+      background-color: var(--slate-200);
+    }
+
+    .footer {
+      background-color: var(--slate-50);
+      padding: 30px 40px;
+      border-top: 1px solid var(--slate-200);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: var(--slate-700);
+    }
+
+    .print-btn {
+      background-color: var(--slate-800);
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-weight: 700;
+      cursor: pointer;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      transition: opacity 0.15s;
+    }
+
+    .print-btn:hover {
+      opacity: 0.9;
+    }
+
+    @media print {
+      body {
+        background-color: #ffffff;
+        padding: 0;
+      }
+      .container {
+        box-shadow: none;
+        border: none;
+      }
+      .print-btn {
+        display: none;
+      }
+      .action-btn {
+        border: 1px solid var(--slate-300);
+        background: transparent !important;
+        color: var(--slate-900) !important;
+        font-weight: normal;
+        text-decoration: underline;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .stats-grid {
+        grid-template-cols: 1fr;
+        padding: 20px;
+      }
+      .table-container {
+        padding: 10px;
+      }
+      td, th {
+        padding: 12px 10px;
+      }
+      .header {
+        padding: 24px;
+      }
+      .header-title {
+        font-size: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-logo">
+        <svg style="width:16px;height:16px" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4"></path>
+        </svg>
+        GeorgeFctech 3D - Gestor de Suprimentos
+      </div>
+      <h1 class="header-title">${reportTitle}</h1>
+      <div class="header-meta">
+        <span>🕒 Gerado em: ${dateFormatted} às ${timeFormatted}</span>
+        <span>🏢 Empresa: ${selectedCompany}</span>
+        <span>📦 Total de Itens: ${shopping.length}</span>
+      </div>
+    </div>
+
+    <!-- Stats summary cards -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <span class="stat-label">Custo Estimado Geral</span>
+        <span class="stat-value highlight">R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Itens Pendentes</span>
+        <span class="stat-value">${shopping.filter(i => !i.checked).length} de ${shopping.length}</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Itens Adquiridos</span>
+        <span class="stat-value" style="color: var(--success);">${shopping.filter(i => i.checked).length}</span>
+      </div>
+    </div>
+
+    <!-- Table content -->
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 45%;">Produto / Material</th>
+            <th style="width: 15%;">Categoria</th>
+            <th style="width: 10%; text-align: center;">Qtd</th>
+            <th style="width: 15%; text-align: right;">Unitário</th>
+            <th style="width: 15%; text-align: right;">Custo Total</th>
+            <th style="width: 15%; text-align: center;">Status</th>
+            <th style="width: 15%; text-align: right;">Link de Compra</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${shopping.map(item => {
+            const itemTotal = item.qtyNeeded * item.estUnitCost;
+            const absoluteUrl = ensureAbsoluteUrl(item.purchaseLink, item.materialName);
+            const isCustomLink = !!item.purchaseLink;
+            const itemCategoryClass = 
+              item.category === 'Filamento' ? 'badge-filamento' :
+              item.category === 'Peças de Reposição' ? 'badge-reparacao' :
+              item.category === 'Acessórios/Insumos' ? 'badge-insumos' : 'badge-outros';
+
+            return `
+              <tr>
+                <td>
+                  <div class="product-cell">
+                    <img class="product-img" src="${getProductImage(item)}" alt="${item.materialName}" loading="lazy" />
+                    <div class="product-info">
+                      <span class="product-name">${item.materialName}</span>
+                      ${item.notes ? `<span class="product-notes">${item.notes}</span>` : ''}
+                      ${item.barcode ? `<span class="product-barcode">Cód/Modelo: ${item.barcode}</span>` : ''}
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <span class="badge ${itemCategoryClass}">${item.category}</span>
+                </td>
+                <td style="text-align: center; font-weight: 600;">
+                  ${item.qtyNeeded}
+                </td>
+                <td style="text-align: right;" class="price-col">
+                  R$ ${item.estUnitCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </td>
+                <td style="text-align: right;" class="total-price">
+                  R$ ${itemTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </td>
+                <td style="text-align: center;">
+                  <span class="badge ${item.checked ? 'badge-bought' : 'badge-pending'}">
+                    ${item.checked ? 'Comprado' : 'Pendente'}
+                  </span>
+                </td>
+                <td style="text-align: right;">
+                  <a href="${absoluteUrl}" target="_blank" class="action-btn ${isCustomLink ? '' : 'secondary'}">
+                    ${isCustomLink ? 'Comprar Link' : 'Pesquisar'}
+                  </a>
+                </td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div>
+        <strong>GeorgeFctech 3D</strong> - Impressões 3D & Organização Comercial de Insumos
+      </div>
+      <div>
+        <button class="print-btn" onclick="window.print()">Imprimir / Salvar PDF</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', url);
+    downloadAnchor.setAttribute('download', `Relatorio_Compras_${new Date().toISOString().split('T')[0]}.html`);
+    downloadAnchor.click();
+  };
+
+  // Generate Excel/XLS consolidated spreadsheet compatible with Excel / Google Sheets
+  const generateExcel = () => {
+    const itemsToExport = filteredShopping;
+    if (itemsToExport.length === 0) return;
+
+    const totalEst = itemsToExport.reduce((acc, i) => acc + (i.qtyNeeded * i.estUnitCost), 0);
+    const totalItemsCount = itemsToExport.length;
+    const boughtCount = itemsToExport.filter(i => i.checked).length;
+    const pendingCount = itemsToExport.filter(i => !i.checked).length;
+    const totalQty = itemsToExport.reduce((acc, i) => acc + i.qtyNeeded, 0);
+
+    const chosenCompany = filterCompany !== 'Todos' ? filterCompany.toUpperCase() : 'GEORGEFCTECH-3D';
+
+    const formatBRLHtml = (val: number) => {
+      return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    };
+
+    const ensureAbsoluteUrl = (url?: string, searchFallback?: string) => {
+      if (!url) {
+        return `https://lista.mercadolivre.com.br/${encodeURIComponent(searchFallback || 'filamento 3d')}`;
+      }
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        return url;
+      }
+      return `https://${url}`;
+    };
+
+    const rowsHtml = itemsToExport.map((item, idx) => {
+      const itemTotal = item.qtyNeeded * item.estUnitCost;
+      const absoluteUrl = ensureAbsoluteUrl(item.purchaseLink, item.materialName);
+      const rowClass = idx % 2 === 0 ? 'tr-odd' : 'tr-even';
+      const statusText = item.checked ? 'Comprado' : 'Pendente';
+      const statusBg = item.checked ? '#ecfdf5' : '#fffbeb';
+      const statusColor = item.checked ? '#047857' : '#b45309';
+      const linkLabel = item.purchaseLink ? "Comprar Item 🔗" : "Pesquisar 🔗";
+
+      return `
+        <tr class="${rowClass}" height="28" style="height: 28px;">
+          <td class="cell-id" style="border: 1px solid #cbd5e1; text-align: center; font-family: monospace;">${item.id}</td>
+          <td style="border: 1px solid #cbd5e1; font-weight: bold; color: #0f172a; white-space: nowrap;">${item.materialName}</td>
+          <td style="border: 1px solid #cbd5e1; text-align: center; white-space: nowrap;">${item.category}</td>
+          <td class="cell-number" style="border: 1px solid #cbd5e1; text-align: center; font-weight: bold;">${item.qtyNeeded}</td>
+          <td class="cell-currency" style="border: 1px solid #cbd5e1; text-align: right;">${formatBRLHtml(item.estUnitCost)}</td>
+          <td class="cell-total-value" style="border: 1px solid #cbd5e1; text-align: right; font-weight: bold; color: #4f46e5; background-color: #f5f3ff;">${formatBRLHtml(itemTotal)}</td>
+          <td style="border: 1px solid #cbd5e1; text-align: center; background-color: ${statusBg}; color: ${statusColor}; font-weight: bold; white-space: nowrap;">${statusText}</td>
+          <td style="border: 1px solid #cbd5e1; white-space: nowrap;">${item.requestedBy || '-'}</td>
+          <td style="border: 1px solid #cbd5e1; text-align: center; white-space: nowrap;">${item.department || '-'}</td>
+          <td style="border: 1px solid #cbd5e1; font-weight: 500; color: #334155; white-space: nowrap;">${item.company || 'GeorgeFctech-3D'}</td>
+          <td style="border: 1px solid #cbd5e1; text-align: center; font-family: monospace; white-space: nowrap;">${item.barcode || '-'}</td>
+          <td class="cell-link" style="border: 1px solid #cbd5e1; text-align: center; white-space: nowrap;"><a href="${absoluteUrl}" style="color: #2563eb; text-decoration: underline; font-weight: bold;">${linkLabel}</a></td>
+          <td style="border: 1px solid #cbd5e1; color: #475569; font-size: 9pt;">${item.notes || '-'}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const excelHtml = `
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
       xmlns:x="urn:schemas-microsoft-com:office:excel"
       xmlns="http://www.w3.org/TR/REC-html40">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="utf-8"/>
   <!--[if gte mso 9]>
   <xml>
     <x:ExcelWorkbook>
@@ -873,2086 +828,224 @@ export default function ShoppingListView({
   </xml>
   <![endif]-->
   <style>
-    body {
-      font-family: 'Segoe UI', Arial, sans-serif;
-      margin: 0;
-      padding: 30px;
-      background-color: #f8fafc;
-    }
-    .wrapper {
-      max-width: 1150px;
-      margin: 0 auto;
-    }
-    table.main-table {
-      width: 1150px;
+    table {
       border-collapse: collapse;
-      table-layout: fixed;
-      background-color: #ffffff;
+      font-family: 'Segoe UI', 'Calibri', sans-serif;
     }
-    .title-banner {
-      background: #0f172a;
-      background-image: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
-      color: #ffffff;
-      padding: 30px;
-      border-radius: 12px;
-      border: 1px solid #0f172a;
-    }
-    .stat-card {
-      background-color: #ffffff;
+    td, th {
       border: 1px solid #cbd5e1;
-      border-radius: 8px;
-      padding: 16px;
-      vertical-align: top;
-    }
-    .stat-title {
-      font-size: 9pt;
-      font-weight: bold;
-      text-transform: uppercase;
-      color: #64748b;
-      margin-bottom: 6px;
-    }
-    .stat-value {
-      font-size: 18pt;
-      font-weight: 800;
-    }
-    th {
-      background-color: #1e1b4b;
-      color: #ffffff;
-      font-weight: bold;
-      font-size: 11pt;
-      border: 1px solid #cbd5e1;
-      text-align: left;
-      padding: 12px 10px;
-      height: 30pt;
-      vertical-align: middle;
-    }
-    td {
-      border: 1px solid #cbd5e1;
-      padding: 12px 10px;
+      padding: 8px 12px;
       font-size: 10pt;
-      color: #1e293b;
       vertical-align: middle;
     }
-    .badge {
-      display: inline-block;
-      padding: 4px 10px;
-      border-radius: 12px;
-      font-size: 8.5pt;
+    .header-main {
+      background-color: #0f172a;
+      color: #ffffff;
+      font-size: 16pt;
       font-weight: bold;
-      text-transform: uppercase;
       text-align: center;
     }
-    .link-btn {
+    .header-sub {
+      background-color: #1e293b;
+      color: #cbd5e1;
+      font-size: 10pt;
+      font-style: italic;
+      text-align: center;
+    }
+    .meta-label {
+      font-weight: bold;
+      color: #475569;
+      background-color: #f1f5f9;
+      text-align: left;
+    }
+    .meta-value {
+      color: #0f172a;
+      text-align: left;
+    }
+    .metric-title {
+      font-size: 11pt;
+      font-weight: bold;
+      color: #1e293b;
+      background-color: #f1f5f9;
+      text-align: center;
+    }
+    .metric-value {
+      font-size: 13pt;
+      font-weight: bold;
+      text-align: center;
+      color: #0f172a;
+      background-color: #ffffff;
+    }
+    .metric-value-total {
+      font-size: 13pt;
+      font-weight: bold;
+      text-align: center;
       color: #4f46e5;
-      font-weight: bold;
-      text-decoration: underline;
+      background-color: #f5f3ff;
     }
-  </style>
-</head>
-<body>
-  <div class="wrapper">
-    <table class="main-table" style="width: 1150px; table-layout: fixed; border-collapse: collapse;">
-      <colgroup>
-        <col width="380" style="width: 380px;" />
-        <col width="140" style="width: 140px;" />
-        <col width="60"  style="width: 60px;" />
-        <col width="120" style="width: 120px;" />
-        <col width="130" style="width: 130px;" />
-        <col width="110" style="width: 110px;" />
-        <col width="210" style="width: 210px;" />
-      </colgroup>
-
-      <!-- 1. HEADER BANNER ROW -->
-      <tr style="height: 100pt;">
-        <td colspan="7" class="title-banner" style="background-color: #0f172a; color: #ffffff; padding: 25px 30px; border-radius: 12px; border: 1px solid #0f172a; height: 100pt; vertical-align: middle;">
-          ${userRole === 'colaborador' ? '' : `
-          <div style="font-size: 10pt; font-weight: bold; letter-spacing: 0.1em; text-transform: uppercase; color: #818cf8; margin-bottom: 6px;">
-            GeorgeFctech 3D &bull; Gestão de Insumos
-          </div>
-          `}
-          <div style="font-size: 20pt; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 10px; color: #ffffff;">
-            ${userRole === 'colaborador' ? 'Pedido de Compras Comercial' : reportTitle}
-          </div>
-          <div style="font-size: 10pt; color: #94a3b8; font-family: 'Segoe UI', sans-serif;">
-            <span>🕒 Gerado em: <strong style="color: #cbd5e1;">${dateFormatted} às ${timeFormatted}</strong></span>
-            &nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;&nbsp;&nbsp;&nbsp;
-            <span>👤 Responsável: <strong style="color: #cbd5e1;">${requestedBy || 'Colaborador'}</strong></span>
-            &nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;&nbsp;&nbsp;&nbsp;
-            <span>🏷️ Setor Responsável: <strong style="color: #cbd5e1;">${department || 'Geral'}</strong></span>
-            &nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;&nbsp;&nbsp;&nbsp;
-            <span>🏢 Empresa: <strong style="color: #cbd5e1;">${userRole === 'colaborador' ? (company || 'Empresa Solicitante') : selectedCompany}</strong></span>
-          </div>
-        </td>
-      </tr>
-
-      <!-- Spacing Row -->
-      <tr style="height: 15pt;"><td colspan="7" style="border: none; height: 15pt;"></td></tr>
-
-      <!-- 2. STATS CARD ROW (Implemented as nested table for absolute side-by-side reliability) -->
-      <tr style="height: 65pt;">
-        <td colspan="7" style="border: none; padding: 0; height: 65pt;">
-          <table style="width: 100%; border-collapse: collapse; table-layout: fixed;">
-            <tr>
-              <!-- Card 1 -->
-              <td class="stat-card" style="width: 32%; background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px; vertical-align: top;">
-                <div class="stat-title" style="font-size: 9pt; font-weight: bold; text-transform: uppercase; color: #64748b; margin-bottom: 6px;">Custo Previsto Geral</div>
-                <div class="stat-value" style="font-size: 18pt; font-weight: 800; color: #4f46e5;">R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-              </td>
-              <!-- Spacing -->
-              <td style="width: 2%; border: none;"></td>
-              <!-- Card 2 -->
-              <td class="stat-card" style="width: 32%; background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px; vertical-align: top;">
-                <div class="stat-title" style="font-size: 9pt; font-weight: bold; text-transform: uppercase; color: #64748b; margin-bottom: 6px;">Itens Pendentes</div>
-                <div class="stat-value" style="font-size: 18pt; font-weight: 800; color: #b45309;">${shopping.filter(i => !i.checked).length} de ${shopping.length}</div>
-              </td>
-              <!-- Spacing -->
-              <td style="width: 2%; border: none;"></td>
-              <!-- Card 3 -->
-              <td class="stat-card" style="width: 32%; background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px; vertical-align: top;">
-                <div class="stat-title" style="font-size: 9pt; font-weight: bold; text-transform: uppercase; color: #64748b; margin-bottom: 6px;">Itens Adquiridos</div>
-                <div class="stat-value" style="font-size: 18pt; font-weight: 800; color: #059669;">${shopping.filter(i => i.checked).length}</div>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-
-      <!-- Spacing Row -->
-      <tr style="height: 20pt;"><td colspan="7" style="border: none; height: 20pt;"></td></tr>
-
-      <!-- 3. DATA TABLE HEADERS -->
-      <tr style="height: 32pt;">
-        <th style="width: 380px; background-color: #1e1b4b; color: #ffffff; font-weight: bold; border: 1px solid #cbd5e1; padding: 12px 10px; font-size: 11pt; vertical-align: middle; text-align: left;">Material / Produto</th>
-        <th style="width: 140px; background-color: #1e1b4b; color: #ffffff; font-weight: bold; border: 1px solid #cbd5e1; padding: 12px 10px; font-size: 11pt; vertical-align: middle; text-align: center;">Categoria</th>
-        <th style="width: 60px; background-color: #1e1b4b; color: #ffffff; font-weight: bold; border: 1px solid #cbd5e1; padding: 12px 10px; font-size: 11pt; vertical-align: middle; text-align: center;">Qtd</th>
-        <th style="width: 120px; background-color: #1e1b4b; color: #ffffff; font-weight: bold; border: 1px solid #cbd5e1; padding: 12px 10px; font-size: 11pt; vertical-align: middle; text-align: right;">Unitário</th>
-        <th style="width: 130px; background-color: #1e1b4b; color: #ffffff; font-weight: bold; border: 1px solid #cbd5e1; padding: 12px 10px; font-size: 11pt; vertical-align: middle; text-align: right;">Custo Total</th>
-        <th style="width: 110px; background-color: #1e1b4b; color: #ffffff; font-weight: bold; border: 1px solid #cbd5e1; padding: 12px 10px; font-size: 11pt; vertical-align: middle; text-align: center;">Status</th>
-        <th style="width: 210px; background-color: #1e1b4b; color: #ffffff; font-weight: bold; border: 1px solid #cbd5e1; padding: 12px 10px; font-size: 11pt; vertical-align: middle; text-align: center;">Link de Acesso</th>
-      </tr>
-
-      <!-- 4. DATA ROWS -->
-      ${shopping.map((item, index) => {
-        const itemTotal = item.qtyNeeded * item.estUnitCost;
-        const absoluteUrl = ensureAbsoluteUrl(item.purchaseLink, item.materialName);
-        
-        const statusText = item.checked ? 'Comprado' : 'Pendente';
-        const statusColor = item.checked ? '#047857' : '#b45309';
-        const statusBg = item.checked ? '#ecfdf5' : '#fffbeb';
-        const statusBorder = item.checked ? '#a7f3d0' : '#fde68a';
-        
-        const categoryLabel = item.category || 'Outros';
-        
-        // Custom Category styling based on standard modern palette
-        let catColor = '#334155';
-        let catBg = '#f1f5f9';
-        let catBorder = '#e2e8f0';
-        if (categoryLabel === 'Filamento') {
-          catColor = '#4338ca';
-          catBg = '#eef2ff';
-          catBorder = '#c7d2fe';
-        } else if (categoryLabel === 'Peças de Reposição') {
-          catColor = '#b91c1c';
-          catBg = '#fef2f2';
-          catBorder = '#fecaca';
-        } else if (categoryLabel === 'Acessórios/Insumos') {
-          catColor = '#0f766e';
-          catBg = '#f0fdfa';
-          catBorder = '#ccfbf1';
-        }
-
-        const rowBg = index % 2 === 0 ? '#ffffff' : '#f8fafc';
-        const details = item.notes ? `<div style="font-size: 8.5pt; color: #64748b; font-weight: normal; margin-top: 4px; font-style: italic;">Obs: ${item.notes}</div>` : '';
-        const barcodeText = item.barcode ? `<div style="font-size: 8.5pt; color: #4338ca; font-weight: bold; margin-top: 2px;">Cód/Modelo: ${item.barcode}</div>` : '';
-
-        return `
-          <tr style="height: auto; background-color: ${rowBg};">
-            <td style="width: 380px; border: 1px solid #cbd5e1; text-align: left; padding: 12px 10px; font-weight: bold; color: #0f172a; vertical-align: middle;">
-              <div style="font-size: 10.5pt; color: #0f172a;">${item.materialName}</div>
-              ${barcodeText}
-              ${details}
-            </td>
-            <td style="width: 140px; border: 1px solid #cbd5e1; text-align: center; padding: 12px 10px; vertical-align: middle;">
-              <span class="badge" style="display: inline-block; padding: 4px 8px; border-radius: 12px; font-size: 8pt; font-weight: bold; text-transform: uppercase; background-color: ${catBg}; color: ${catColor}; border: 1px solid ${catBorder};">
-                ${categoryLabel}
-              </span>
-            </td>
-            <td style="width: 60px; border: 1px solid #cbd5e1; text-align: center; padding: 12px 10px; font-weight: bold; color: #0f172a; vertical-align: middle; font-size: 11pt;">
-              ${item.qtyNeeded}
-            </td>
-            <td style="width: 120px; border: 1px solid #cbd5e1; text-align: right; padding: 12px 10px; color: #1e293b; vertical-align: middle; font-family: Courier New, monospace; font-weight: bold;">
-              R$ ${item.estUnitCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </td>
-            <td style="width: 130px; border: 1px solid #cbd5e1; text-align: right; padding: 12px 10px; font-weight: bold; color: #4f46e5; vertical-align: middle; font-family: Courier New, monospace;">
-              R$ ${itemTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </td>
-            <td style="width: 110px; border: 1px solid #cbd5e1; text-align: center; padding: 12px 10px; vertical-align: middle;">
-              <span class="badge" style="display: inline-block; padding: 4px 8px; border-radius: 12px; font-size: 8.5pt; font-weight: bold; text-transform: uppercase; background-color: ${statusBg}; color: ${statusColor}; border: 1px solid ${statusBorder};">
-                ${statusText}
-              </span>
-            </td>
-            <td style="width: 210px; border: 1px solid #cbd5e1; text-align: center; padding: 12px 10px; vertical-align: middle;">
-              <a href="${absoluteUrl}" class="link-btn" style="color: #4f46e5; text-decoration: underline; font-weight: bold; font-size: 9.5pt;">Acessar Link</a>
-            </td>
-          </tr>
-        `;
-      }).join('')}
-
-      <!-- 5. VALOR TOTAL ROW -->
-      <tr style="height: 35pt; background-color: #f1f5f9;">
-        <td colspan="4" style="border: 1px solid #cbd5e1; text-align: right; font-weight: bold; font-size: 11pt; color: #1e293b; padding: 12px 10px; vertical-align: middle;">
-          VALOR TOTAL ESTIMADO DO PEDIDO:
-        </td>
-        <td style="border: 1px solid #cbd5e1; text-align: right; font-weight: bold; font-size: 12pt; color: #4f46e5; padding: 12px 10px; vertical-align: middle; font-family: Courier New, monospace;">
-          R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-        </td>
-        <td colspan="2" style="border: 1px solid #cbd5e1; background-color: #f1f5f9; vertical-align: middle;"></td>
-      </tr>
-    </table>
-  </div>
-</body>
-</html>`;
-
-    // Download compiled Excel Spreadsheet
-    const blob = new Blob([excelContent], { type: 'application/vnd.ms-excel;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute('href', url);
-    downloadAnchor.setAttribute('download', `Pedido_Comercial_${new Date().toISOString().split('T')[0]}.xls`);
-    downloadAnchor.click();
-  };
-
-  const generateReportExcel = (customMetadata?: { company: string, requestedBy: string, department: string, category?: string }) => {
-    const baseItems = shopping;
-    if (baseItems.length === 0) {
-      setToastMessage("Aviso: Nenhum item de compra encontrado para gerar a planilha.");
-      setTimeout(() => setToastMessage(null), 4000);
-      return;
-    }
-
-    const targetCategory = customMetadata?.category || (filterCategory !== 'Todos' ? filterCategory : 'Todos');
-    const metaCompany = customMetadata ? customMetadata.company : (filterCompany !== 'Todos' ? filterCompany : (userRole === 'colaborador' ? (company || 'Ftéx') : 'GeorgeFctech-3D'));
-    const metaRequestedBy = customMetadata ? customMetadata.requestedBy : (requestedBy || (userRole === 'colaborador' ? 'Colaborador Ftéx' : 'Administrador'));
-    const metaDepartment = customMetadata ? customMetadata.department : (department || (userRole === 'colaborador' ? 'Faturamento/Comercial' : 'Geral'));
-    const dateFormatted = new Date().toLocaleDateString('pt-BR');
-    const timeFormatted = new Date().toLocaleTimeString('pt-BR');
-
-    // Helper to build a styled worksheet for a given list of items
-    const buildWorksheet = (items: ShoppingItem[], sheetCategoryTitle: string, isFilteredCategory: boolean) => {
-      const itemsTotal = items.reduce((acc, i) => acc + (i.qtyNeeded * i.estUnitCost), 0);
-      
-      const titleBanner = isFilteredCategory 
-        ? `PEDIDO DE COMPRA - ${sheetCategoryTitle.toUpperCase()} - ${metaCompany.toUpperCase()}`
-        : `PEDIDO DE COMPRA COMERCIAL - ${metaCompany.toUpperCase()}`;
-        
-      const subtitle = isFilteredCategory
-        ? `Itens e Componentes da Categoria ${sheetCategoryTitle} - GeorgeFctech 3D`
-        : `Sistema Gestor de Insumos - GeorgeFctech 3D`;
-
-      const data: any[][] = [
-        [titleBanner],
-        [subtitle],
-        [],
-        [`Data de Emissão:`, `${dateFormatted} às ${timeFormatted}`, ``, `Responsável:`, metaRequestedBy, ``, `Setor:`, metaDepartment],
-        [`Empresa / Cliente:`, metaCompany, ``, `Categoria:`, sheetCategoryTitle, ``, `Custo Estimado Total:`, itemsTotal],
-        [], // Empty row spacer
-        [
-          'Material / Produto',
-          'Código / Modelo',
-          'Categoria',
-          'Quantidade',
-          'Custo Unitário',
-          'Custo Total',
-          'Fornecedor / Link de Compra',
-          'Observações / Notas',
-          'Status'
-        ]
-      ];
-
-      items.forEach(item => {
-        const itemTotal = item.qtyNeeded * item.estUnitCost;
-        const statusText = item.checked ? 'Adquirido' : 'Pendente';
-        
-        data.push([
-          item.materialName || '',
-          item.barcode || '',
-          item.category || 'Outros',
-          item.qtyNeeded,
-          item.estUnitCost,
-          itemTotal,
-          item.purchaseLink && item.purchaseLink.trim() !== '' ? 'Clique para Comprar ↗' : '',
-          item.notes || '',
-          statusText
-        ]);
-      });
-
-      // Add Grand Total Row
-      data.push([]);
-      data.push([
-        isFilteredCategory ? `VALOR TOTAL DA CATEGORIA ${sheetCategoryTitle.toUpperCase()}` : 'VALOR TOTAL ESTIMADO DO PEDIDO',
-        '',
-        '',
-        '',
-        '',
-        itemsTotal,
-        '',
-        '',
-        ''
-      ]);
-
-      const ws = XLSX.utils.aoa_to_sheet(data);
-
-      ws['!cols'] = [
-        { wch: 35 }, // Material / Produto
-        { wch: 18 }, // Código / Modelo
-        { wch: 20 }, // Categoria
-        { wch: 12 }, // Quantidade
-        { wch: 16 }, // Custo Unitário
-        { wch: 16 }, // Custo Total
-        { wch: 25 }, // Link de Compra
-        { wch: 30 }, // Observações / Notas
-        { wch: 12 }  // Status
-      ];
-
-      const rowHeights = [
-        { hpt: 30 }, // Row 0 (Title)
-        { hpt: 20 }, // Row 1 (Subtitle)
-        { hpt: 12 }, // Row 2 (Spacer)
-        { hpt: 22 }, // Row 3 (Metadata 1)
-        { hpt: 22 }, // Row 4 (Metadata 2)
-        { hpt: 12 }, // Row 5 (Spacer)
-        { hpt: 28 }, // Row 6 (Headers)
-      ];
-      for (let i = 0; i < items.length; i++) {
-        rowHeights.push({ hpt: 24 });
-      }
-      rowHeights.push({ hpt: 12 }); // Total Spacer Row
-      rowHeights.push({ hpt: 30 }); // Grand Total Row
-      ws['!rows'] = rowHeights;
-
-      ws['!views'] = [{ showGridLines: true }];
-
-      ws['!merges'] = [
-        { s: { r: 0, c: 0 }, e: { r: 0, c: 8 } },
-        { s: { r: 1, c: 0 }, e: { r: 1, c: 8 } },
-        { s: { r: 8 + items.length, c: 0 }, e: { r: 8 + items.length, c: 4 } }
-      ];
-
-      const startRow = 7;
-      items.forEach((item, index) => {
-        const rIdx = startRow + index;
-        const excelRow = rIdx + 1;
-
-        const unitCostCellRef = XLSX.utils.encode_cell({ r: rIdx, c: 4 });
-        if (ws[unitCostCellRef]) {
-          ws[unitCostCellRef].t = 'n';
-          ws[unitCostCellRef].z = '"R$"#,##0.00';
-        }
-
-        const totalCostCellRef = XLSX.utils.encode_cell({ r: rIdx, c: 5 });
-        ws[totalCostCellRef] = {
-          t: 'n',
-          f: `D${excelRow}*E${excelRow}`,
-          v: item.qtyNeeded * item.estUnitCost,
-          z: '"R$"#,##0.00'
-        };
-
-        const qtyCellRef = XLSX.utils.encode_cell({ r: rIdx, c: 3 });
-        if (ws[qtyCellRef]) {
-          ws[qtyCellRef].t = 'n';
-          ws[qtyCellRef].z = '#,##0';
-        }
-
-        if (item.purchaseLink && item.purchaseLink.trim() !== '') {
-          const linkCellRef = XLSX.utils.encode_cell({ r: rIdx, c: 6 });
-          const absoluteUrl = ensureAbsoluteUrl(item.purchaseLink, item.materialName);
-          if (ws[linkCellRef]) {
-            ws[linkCellRef].l = {
-              Target: absoluteUrl,
-              Tooltip: 'Clique para abrir o link do fornecedor no seu navegador'
-            };
-          }
-        }
-      });
-
-      const startDataRowExcel = startRow + 1;
-      const endDataRowExcel = startRow + items.length;
-
-      const grandTotalRowIdx = 8 + items.length;
-      const grandTotalRowExcel = grandTotalRowIdx + 1;
-      const grandTotalCellRef = XLSX.utils.encode_cell({ r: grandTotalRowIdx, c: 5 });
-      ws[grandTotalCellRef] = {
-        t: 'n',
-        f: `SUM(F${startDataRowExcel}:F${endDataRowExcel})`,
-        v: itemsTotal,
-        z: '"R$"#,##0.00'
-      };
-
-      const metaTotalCellRef = XLSX.utils.encode_cell({ r: 4, c: 7 });
-      ws[metaTotalCellRef] = {
-        t: 'n',
-        f: `F${grandTotalRowExcel}`,
-        v: itemsTotal,
-        z: '"R$"#,##0.00'
-      };
-
-      // Styling loop
-      Object.keys(ws).forEach((cellKey) => {
-        if (cellKey.startsWith('!')) return;
-        const cell = ws[cellKey];
-        const parsedCell = XLSX.utils.decode_cell(cellKey);
-        const r = parsedCell.r;
-        const c = parsedCell.c;
-
-        let font = { name: 'Segoe UI', sz: 10, color: { rgb: '1E293B' }, bold: false, italic: false };
-        let fill = {};
-        let alignment = { vertical: 'center', horizontal: 'left', wrapText: true };
-        let border = {
-          top: { style: 'thin', color: { rgb: 'E2E8F0' } },
-          bottom: { style: 'thin', color: { rgb: 'E2E8F0' } },
-          left: { style: 'thin', color: { rgb: 'E2E8F0' } },
-          right: { style: 'thin', color: { rgb: 'E2E8F0' } }
-        };
-
-        if (r === 0) {
-          font = { name: 'Segoe UI', sz: 14, color: { rgb: 'FFFFFF' }, bold: true, italic: false };
-          fill = { patternType: 'solid', fgColor: { rgb: isFilteredCategory && sheetCategoryTitle === 'Refrigeração' ? '0E7490' : '1E3A8A' } };
-          alignment = { vertical: 'center', horizontal: 'center', wrapText: false };
-          border = {
-            top: { style: 'medium', color: { rgb: '1E293B' } },
-            bottom: { style: 'none', color: { rgb: 'FFFFFF' } },
-            left: { style: 'medium', color: { rgb: '1E293B' } },
-            right: { style: 'medium', color: { rgb: '1E293B' } }
-          };
-        } else if (r === 1) {
-          font = { name: 'Segoe UI', sz: 10, color: { rgb: '93C5FD' }, bold: true, italic: true };
-          fill = { patternType: 'solid', fgColor: { rgb: isFilteredCategory && sheetCategoryTitle === 'Refrigeração' ? '0E7490' : '1E3A8A' } };
-          alignment = { vertical: 'center', horizontal: 'center', wrapText: false };
-          border = {
-            top: { style: 'none', color: { rgb: 'FFFFFF' } },
-            bottom: { style: 'medium', color: { rgb: '1E293B' } },
-            left: { style: 'medium', color: { rgb: '1E293B' } },
-            right: { style: 'medium', color: { rgb: '1E293B' } }
-          };
-        } else if (r === 3 || r === 4) {
-          const isLabelCell = (c === 0 || c === 3 || c === 6);
-          if (isLabelCell) {
-            font = { name: 'Segoe UI', sz: 9.5, color: { rgb: '475569' }, bold: true, italic: false };
-            fill = { patternType: 'solid', fgColor: { rgb: 'F1F5F9' } };
-            alignment = { vertical: 'center', horizontal: 'left', wrapText: false };
-          } else {
-            font = { name: 'Segoe UI', sz: 9.5, color: { rgb: '0F172A' }, bold: (r === 4 && c === 7) || (r === 4 && c === 4), italic: false };
-            fill = { patternType: 'solid', fgColor: { rgb: 'FFFFFF' } };
-            alignment = { vertical: 'center', horizontal: (r === 4 && c === 7) ? 'right' : 'left', wrapText: false };
-          }
-          border = {
-            top: { style: 'thin', color: { rgb: 'CBD5E1' } },
-            bottom: { style: 'thin', color: { rgb: 'CBD5E1' } },
-            left: { style: 'thin', color: { rgb: 'CBD5E1' } },
-            right: { style: 'thin', color: { rgb: 'CBD5E1' } }
-          };
-        } else if (r === 6) {
-          font = { name: 'Segoe UI', sz: 10, color: { rgb: 'FFFFFF' }, bold: true, italic: false };
-          fill = { patternType: 'solid', fgColor: { rgb: '334155' } };
-          alignment = { vertical: 'center', horizontal: (c === 0 || c === 7) ? 'left' : 'center', wrapText: false };
-          border = {
-            top: { style: 'medium', color: { rgb: '1E293B' } },
-            bottom: { style: 'medium', color: { rgb: '1E293B' } },
-            left: { style: 'thin', color: { rgb: '475569' } },
-            right: { style: 'thin', color: { rgb: '475569' } }
-          };
-        } else if (r >= 7 && r < 7 + items.length) {
-          const isOddRow = (r % 2 !== 0);
-          fill = { patternType: 'solid', fgColor: { rgb: isOddRow ? 'F8FAFC' : 'FFFFFF' } };
-
-          if (c === 0) {
-            alignment = { vertical: 'center', horizontal: 'left', wrapText: true };
-            font.bold = true;
-          } else if (c === 1 || c === 2) {
-            alignment = { vertical: 'center', horizontal: 'center', wrapText: false };
-          } else if (c === 3) {
-            alignment = { vertical: 'center', horizontal: 'center', wrapText: false };
-          } else if (c === 4 || c === 5) {
-            alignment = { vertical: 'center', horizontal: 'right', wrapText: false };
-          } else if (c === 6) {
-            alignment = { vertical: 'center', horizontal: 'center', wrapText: false };
-            font = { name: 'Segoe UI', sz: 9.5, color: { rgb: '2563EB' }, bold: true, italic: false };
-          } else if (c === 7) {
-            alignment = { vertical: 'center', horizontal: 'left', wrapText: true };
-            font.italic = true;
-            font.color = { rgb: '64748B' };
-          } else if (c === 8) {
-            const val = String(cell.v);
-            alignment = { vertical: 'center', horizontal: 'center', wrapText: false };
-            if (val === 'Adquirido') {
-              fill = { patternType: 'solid', fgColor: { rgb: 'D1FAE5' } };
-              font = { name: 'Segoe UI', sz: 9, color: { rgb: '065F46' }, bold: true, italic: false };
-            } else {
-              fill = { patternType: 'solid', fgColor: { rgb: 'FEF3C7' } };
-              font = { name: 'Segoe UI', sz: 9, color: { rgb: '92400E' }, bold: true, italic: false };
-            }
-          }
-        } else if (r === 8 + items.length) {
-          font = { name: 'Segoe UI', sz: 10.5, color: { rgb: '0F172A' }, bold: true, italic: false };
-          fill = { patternType: 'solid', fgColor: { rgb: 'E2E8F0' } };
-          alignment = { vertical: 'center', horizontal: (c === 5) ? 'right' : 'left', wrapText: false };
-          border = {
-            top: { style: 'thin', color: { rgb: '94A3B8' } },
-            bottom: { style: 'double', color: { rgb: '0F172A' } },
-            left: { style: 'thin', color: { rgb: 'CBD5E1' } },
-            right: { style: 'thin', color: { rgb: 'CBD5E1' } }
-          };
-        } else {
-          border = {
-            top: { style: 'none', color: { rgb: 'FFFFFF' } },
-            bottom: { style: 'none', color: { rgb: 'FFFFFF' } },
-            left: { style: 'none', color: { rgb: 'FFFFFF' } },
-            right: { style: 'none', color: { rgb: 'FFFFFF' } }
-          };
-          fill = { patternType: 'none' };
-        }
-
-        cell.s = { font, fill, alignment, border };
-      });
-
-      return ws;
-    };
-
-    const wb = XLSX.utils.book_new();
-    const sanitizeSheetName = (name: string) => name.replace(/[\\/*?:[\]]/g, '').slice(0, 31);
-    const dateStr = new Date().toISOString().split('T')[0];
-
-    if (targetCategory && targetCategory !== 'Todos') {
-      const filtered = baseItems.filter(item => (item.category || 'Outros') === targetCategory);
-      if (filtered.length === 0) {
-        setToastMessage(`Aviso: Nenhum item de compra pendente encontrado para a categoria "${targetCategory}".`);
-        setTimeout(() => setToastMessage(null), 4500);
-        return;
-      }
-
-      const ws = buildWorksheet(filtered, targetCategory, true);
-      const sheetName = sanitizeSheetName(targetCategory);
-      XLSX.utils.book_append_sheet(wb, ws, sheetName);
-
-      const catFileSlug = targetCategory.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]/g, "_");
-      XLSX.writeFile(wb, `Pedido_Comercial_${catFileSlug}_${dateStr}.xlsx`);
-      setToastMessage(`Sucesso! Planilha Excel gerada exclusivamente para a categoria "${targetCategory}".`);
-    } else {
-      // "Todos" selected: generate separated sheets per category + consolidated overview sheet
-      const uniqueCats = Array.from(new Set(baseItems.map(i => i.category || 'Outros')));
-      
-      // 1. Dedicated tab for each category that has items
-      uniqueCats.forEach(cat => {
-        const catItems = baseItems.filter(i => (i.category || 'Outros') === cat);
-        if (catItems.length > 0) {
-          const ws = buildWorksheet(catItems, cat, true);
-          XLSX.utils.book_append_sheet(wb, ws, sanitizeSheetName(cat));
-        }
-      });
-
-      // 2. If there are multiple categories, also append a Consolidated Overview tab
-      if (uniqueCats.length > 1) {
-        const sortedItems = [...baseItems].sort((a, b) => (a.category || '').localeCompare(b.category || ''));
-        const wsAll = buildWorksheet(sortedItems, 'Todas as Categorias', false);
-        XLSX.utils.book_append_sheet(wb, wsAll, 'Geral Consolidado');
-      }
-
-      XLSX.writeFile(wb, `Pedido_Comercial_Completo_${dateStr}.xlsx`);
-      setToastMessage("Sucesso! Planilha Excel (.xlsx) profissional baixada com produtos organizados por categoria.");
-    }
-
-    setTimeout(() => setToastMessage(null), 5000);
-  };
-
-  const downloadHtmlReport = () => {
-    if (shopping.length === 0) return;
-
-    const defaultCompanyLabel = userRole === 'colaborador' ? (company || 'Empresa Solicitante') : 'GeorgeFctech-3D';
-    const selectedCompany = filterCompany !== 'Todos' ? filterCompany : (userRole === 'colaborador' ? (company || 'Empresa Solicitante') : `GERAL / ${defaultCompanyLabel}`);
-    const reportTitle = userRole === 'colaborador' ? 'PEDIDO COMERCIAL DE COMPRAS' : `${selectedCompany.toUpperCase()} - PEDIDO COMERCIAL`;
-    const dateFormatted = new Date().toLocaleDateString('pt-BR');
-    const timeFormatted = new Date().toLocaleTimeString('pt-BR');
-
-    // Create a beautifully-styled, print-ready standalone HTML document with solid grids and elegant "PDF" styling
-    const htmlContent = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <title>${reportTitle}</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body {
-      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-      margin: 0;
-      padding: 0;
-      background-color: #f1f5f9;
-      color: #0f172a;
-    }
-    .print-banner {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 12px;
-      padding: 16px;
-      background-color: #1e1b4b;
-      color: #ffffff;
-      position: sticky;
-      top: 0;
-      z-index: 1000;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    }
-    .print-btn {
-      background-color: #10b981;
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      font-size: 13px;
-      font-weight: bold;
-      border-radius: 6px;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      transition: background-color 0.15s ease;
-    }
-    .print-btn:hover {
-      background-color: #059669;
-    }
-    .close-btn {
-      background-color: #475569;
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      font-size: 13px;
-      font-weight: bold;
-      border-radius: 6px;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      transition: background-color 0.15s ease;
-    }
-    .close-btn:hover {
-      background-color: #334155;
-    }
-    .pdf-container {
-      max-width: 900px;
-      margin: 30px auto;
-      background-color: #ffffff;
-      border: 2px solid #1e293b;
-      border-radius: 8px;
-      padding: 30px;
-      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
-    }
-    .header-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 20px;
-    }
-    .header-table td {
-      border: none !important;
-      padding: 4px 0 !important;
-    }
-    .doc-logo {
-      font-size: 24px;
-      font-weight: 800;
-      color: #1e1b4b;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin: 0;
-    }
-    .doc-subtitle {
-      font-size: 11px;
-      color: #475569;
-      font-weight: bold;
-      letter-spacing: 1.5px;
-      text-transform: uppercase;
-      margin-top: 3px;
-    }
-    .doc-meta {
-      font-size: 12px;
-      color: #334155;
-      text-align: right;
-      line-height: 1.5;
-    }
-    .divider-solid {
-      border-top: 3px solid #1e1b4b;
-      margin: 15px 0 25px 0;
-    }
-    .info-grid {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 25px;
-    }
-    .info-grid td {
-      border: 1px solid #1e293b !important;
-      padding: 10px 14px !important;
-      font-size: 12px;
-      background-color: #f8fafc;
-      width: 33.33%;
-    }
-    .info-label {
-      font-size: 10px;
-      color: #64748b;
-      font-weight: bold;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 3px;
-    }
-    .info-value {
-      font-size: 14px;
-      font-weight: bold;
-      color: #0f172a;
-    }
-    .items-grid-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 25px;
-    }
-    .items-grid-table th {
-      background-color: #1e1b4b;
+    .th-col {
+      background-color: #4f46e5;
       color: #ffffff;
       font-weight: bold;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      padding: 10px 8px;
-      border: 1px solid #1e293b !important;
-      text-align: left;
-    }
-    .items-grid-table td {
-      border: 1px solid #1e293b !important;
-      padding: 12px 10px;
-      font-size: 12px;
-      color: #0f172a;
-      vertical-align: middle;
-    }
-    .items-grid-table tr:nth-child(even) {
-      background-color: #f8fafc;
-    }
-    .badge {
-      display: inline-block;
-      padding: 3px 6px;
-      border-radius: 4px;
-      font-size: 9px;
-      font-weight: bold;
-      text-transform: uppercase;
-      border: 1px solid currentColor;
-    }
-    .badge-filamento { background-color: #eef2ff; color: #4338ca; }
-    .badge-pecas { background-color: #fef2f2; color: #b91c1c; }
-    .badge-acessorios { background-color: #f0fdfa; color: #0d9488; }
-    .badge-refrigeracao { background-color: #ecfeff; color: #0891b2; }
-    .badge-outros { background-color: #f1f5f9; color: #475569; }
-    
-    .badge-status-comprado { background-color: #ecfdf5; color: #047857; }
-    .badge-status-pendente { background-color: #fffbeb; color: #b45309; }
-
-    .price-col {
-      font-family: monospace;
-      font-weight: bold;
-      text-align: right;
-      white-space: nowrap;
-    }
-    .action-link {
-      display: inline-flex;
-      align-items: center;
-      background-color: #2563eb;
-      color: #ffffff !important;
-      text-decoration: none !important;
-      font-weight: bold;
-      padding: 6px 12px;
-      border-radius: 4px;
-      font-size: 10px;
-      border: 1px solid #1d4ed8;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.15);
-      white-space: nowrap;
-    }
-    .action-link:hover {
-      background-color: #1d4ed8;
-    }
-    .notes-box {
-      font-size: 11px;
-      color: #475569;
-      margin-top: 5px;
-      font-style: italic;
-    }
-    .barcode-label {
-      font-family: monospace;
-      font-size: 10px;
-      color: #4338ca;
-      font-weight: bold;
-      background-color: #eef2ff;
-      border: 1px solid #c7d2fe;
-      padding: 1px 4px;
-      border-radius: 3px;
-      display: inline-block;
-      margin-top: 4px;
-    }
-    .row-highlight {
-      background-color: #e2e8f0 !important;
-      font-weight: bold;
-    }
-    .row-highlight td {
-      border-top: 2px solid #1e1b4b !important;
-      border-bottom: 2px solid #1e1b4b !important;
-      font-size: 13px !important;
-      color: #1e1b4b;
-    }
-    .signatures-block {
-      margin-top: 35px;
-      display: flex;
-      justify-content: space-between;
-      gap: 30px;
-    }
-    .signature-card {
-      flex: 1;
-      border: 1px solid #1e293b;
-      border-radius: 6px;
-      padding: 16px;
       text-align: center;
-      background-color: #f8fafc;
+      font-size: 10pt;
     }
-    .line-indicator {
-      border-top: 1px solid #475569;
-      margin-top: 35px;
-      padding-top: 6px;
-      font-size: 11px;
-      font-weight: bold;
-      color: #334155;
-    }
-    @media print {
-      body {
-        background-color: #ffffff;
-        padding: 0;
-      }
-      .no-print {
-        display: none !important;
-      }
-      .pdf-container {
-        border: none;
-        box-shadow: none;
-        padding: 0;
-        margin: 0 auto;
-        max-width: 100%;
-      }
-      .items-grid-table th {
-        background-color: #1e1b4b !important;
-        color: #ffffff !important;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-      }
-      .action-link {
-        border: none;
-        background: none;
-        color: #2563eb !important;
-        padding: 0;
-        text-decoration: underline !important;
-        box-shadow: none;
-      }
-    }
-  </style>
-</head>
-<body>
-  <div class="print-banner no-print">
-    <button class="print-btn" onclick="window.print()">
-      📱 IMPRIMIR / SALVAR COMO PDF
-    </button>
-    <button class="close-btn" onclick="window.close()">
-      FECHAR PREVIEW
-    </button>
-  </div>
-
-  <div class="pdf-container">
-    <table class="header-table">
-      <tr>
-        <td style="width: 55%; vertical-align: top;">
-          <h1 class="doc-logo">${userRole === 'colaborador' ? 'FTÉX' : 'GEORGEFCTECH 3D'}</h1>
-          <div style="font-size: 10px; font-weight: bold; color: #1e1b4b; letter-spacing: 1px;">SISTEMA GESTOR DE INSUMOS</div>
-          <p class="doc-subtitle">${userRole === 'colaborador' ? 'Pedido de Compra Comercial' : 'Planejamento de Compras de Materiais'}</p>
-        </td>
-        <td style="width: 45%; vertical-align: top; text-align: right;">
-          <div class="doc-meta">
-            <strong>PEDIDO DE INSUMOS COMERCIAL</strong><br>
-            Emissão: ${dateFormatted} às ${timeFormatted}<br>
-            Responsável: ${requestedBy || 'Colaborador'}<br>
-            Setor: ${department || 'Suprimentos'}
-          </div>
-        </td>
-      </tr>
-    </table>
-
-    <div class="divider-solid"></div>
-
-    <table class="info-grid">
-      <tr>
-        <td>
-          <div class="info-label">Custo Estimado Geral</div>
-          <div class="info-value" style="color: #4f46e5;">R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-        </td>
-        <td>
-          <div class="info-label">Firma / Empresa</div>
-          <div class="info-value">${userRole === 'colaborador' ? (company || 'Empresa Solicitante') : selectedCompany}</div>
-        </td>
-        <td>
-          <div class="info-label">Itens Pendentes</div>
-          <div class="info-value" style="color: #b45309;">${shopping.filter(i => !i.checked).length} de ${shopping.length}</div>
-        </td>
-      </tr>
-    </table>
-
-    <table class="items-grid-table">
-      <thead>
-        <tr>
-          <th style="width: 35%;">Material / Produto</th>
-          <th style="width: 15%;">Categoria</th>
-          <th style="width: 10%; text-align: center;">Qtd</th>
-          <th style="width: 15%; text-align: right;">Custo Unit.</th>
-          <th style="width: 15%; text-align: right;">Custo Total</th>
-          <th style="width: 10%; text-align: center;">Ações</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${filteredShopping.map(item => {
-          const itemTotal = item.qtyNeeded * item.estUnitCost;
-          const absoluteUrl = ensureAbsoluteUrl(item.purchaseLink, item.materialName);
-          const hasLink = item.purchaseLink && item.purchaseLink.trim() !== '';
-          
-          let catClass = 'badge-outros';
-          if (item.category === 'Filamento') catClass = 'badge-filamento';
-          else if (item.category === 'Peças de Reposição') catClass = 'badge-pecas';
-          else if (item.category === 'Acessórios/Insumos') catClass = 'badge-acessorios';
-          else if (item.category === 'Refrigeração') catClass = 'badge-refrigeracao';
-
-          return `
-            <tr>
-              <td>
-                <div style="font-weight: bold; color: #0f172a;">${item.materialName}</div>
-                ${item.barcode ? `<div class="barcode-label">Cód: ${item.barcode}</div>` : ''}
-                ${item.notes ? `<div class="notes-box">Obs: ${item.notes}</div>` : ''}
-              </td>
-              <td>
-                <span class="badge ${catClass}">${item.category || 'Outros'}</span>
-              </td>
-              <td style="text-align: center; font-weight: bold;">
-                ${item.qtyNeeded}
-              </td>
-              <td class="price-col">
-                R$ ${item.estUnitCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </td>
-              <td class="price-col" style="color: #4f46e5;">
-                R$ ${itemTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </td>
-              <td style="text-align: center;">
-                ${hasLink ? `
-                  <a href="${absoluteUrl}" class="action-link" target="_blank" rel="noreferrer">
-                    Link ↗
-                  </a>
-                ` : `
-                  <span style="font-size: 11px; color: #94a3b8; font-style: italic;">Sem link</span>
-                `}
-              </td>
-            </tr>
-          `;
-        }).join('')}
-        
-        <tr class="row-highlight">
-          <td colspan="4" style="text-align: right; font-weight: bold; padding-right: 15px;">VALOR TOTAL ESTIMADO DO PEDIDO:</td>
-          <td class="price-col" style="color: #1e1b4b; font-size: 14px;">
-            R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </td>
-          <td></td>
-        </tr>
-      </tbody>
-    </table>
-
-    <div class="signatures-block">
-      <div class="signature-card">
-        <div style="font-size: 10px; font-weight: bold; color: #64748b; text-transform: uppercase; text-align: left;">Responsável Técnico</div>
-        <div class="line-indicator">${requestedBy || 'Colaborador'}</div>
-        <div style="font-size: 10px; color: #94a3b8; margin-top: 3px;">Setor: ${department || 'Geral'}</div>
-      </div>
-      <div class="signature-card">
-        <div style="font-size: 10px; font-weight: bold; color: #64748b; text-transform: uppercase; text-align: left;">Aprovação Financeira</div>
-        <div class="line-indicator">Diretoria Executiva / GeorgeFctech-3D</div>
-        <div style="font-size: 10px; color: #94a3b8; margin-top: 3px;">Firma: ${userRole === 'colaborador' ? (company || 'Empresa Solicitante') : selectedCompany}</div>
-      </div>
-    </div>
-  </div>
-</body>
-</html>`;
-
-    // Download compiled HTML Document
-    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute('href', url);
-    downloadAnchor.setAttribute('download', `Pedido_Comercial_PDF_${new Date().toISOString().split('T')[0]}.html`);
-    downloadAnchor.click();
-    
-    // Also try to open immediately in a new tab for extreme smartphone convenience (Direct Print view!)
-    try {
-      const newTab = window.open();
-      if (newTab) {
-        newTab.document.write(htmlContent);
-        newTab.document.close();
-      }
-    } catch (e) {
-      console.warn("Popup block detected, download handled successfully", e);
-    }
-
-    setToastMessage("Sucesso! O relatório PDF foi baixado e a tela de visualização foi aberta.");
-    setTimeout(() => setToastMessage(null), 5000);
-  };
-
-  const handleSendEmail = () => {
-    const emailItems = userRole === 'colaborador' ? shopping.filter(item => !isAdministratorPurchase(item)) : shopping;
-    if (emailItems.length === 0) return;
-
-    const emailTotalValue = emailItems.reduce((acc, i) => acc + (i.qtyNeeded * i.estUnitCost), 0);
-    const defaultCompanyLabel = userRole === 'colaborador' ? (company || 'Ftéx') : 'GeorgeFctech-3D';
-    const selectedCompany = filterCompany !== 'Todos' ? filterCompany : (userRole === 'colaborador' ? (company || 'Ftéx') : `GERAL / ${defaultCompanyLabel}`);
-    const reportTitle = userRole === 'colaborador' ? 'PEDIDO COMERCIAL DE COMPRAS' : `${selectedCompany.toUpperCase()} - PEDIDO COMERCIAL`;
-    const dateFormatted = new Date().toLocaleDateString('pt-BR');
-    const timeFormatted = new Date().toLocaleTimeString('pt-BR');
-
-    let text = `📦 ${reportTitle.toUpperCase()}\n`;
-    text += `--------------------------------------------------\n`;
-    text += `📅 Data: ${dateFormatted} às ${timeFormatted}\n`;
-    text += `👤 Solicitante: ${requestedBy || (userRole === 'colaborador' ? 'Colaborador Ftéx' : 'Administrador')}\n`;
-    text += `🏢 Empresa: ${selectedCompany}\n`;
-    text += `📍 Setor: ${department || (userRole === 'colaborador' ? 'Faturamento/Comercial' : 'Geral')}\n`;
-    text += `--------------------------------------------------\n\n`;
-    text += `🛒 ITENS DO PEDIDO:\n\n`;
-
-    emailItems.forEach((item, index) => {
-      const itemTotal = item.qtyNeeded * item.estUnitCost;
-      text += `${index + 1}. ${item.materialName}\n`;
-      if (item.barcode) text += `   • Código/Modelo: ${item.barcode}\n`;
-      text += `   • Categoria: ${item.category || 'Outros'}\n`;
-      text += `   • Qtd: ${item.qtyNeeded}x\n`;
-      text += `   • Custo Unitário: R$ ${item.estUnitCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n`;
-      text += `   • Custo Total: R$ ${itemTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n`;
-      if (item.purchaseLink) {
-        const absUrl = ensureAbsoluteUrl(item.purchaseLink, item.materialName);
-        text += `   • Link: ${absUrl}\n`;
-      }
-      if (item.notes) text += `   • Obs: ${item.notes}\n`;
-      text += `\n`;
-    });
-
-    text += `--------------------------------------------------\n`;
-    text += `💰 VALOR TOTAL ESTIMADO: R$ ${emailTotalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n`;
-    text += `📊 Status: ${emailItems.filter(i => !i.checked).length} Pendente(s) | ${emailItems.filter(i => i.checked).length} Adquirido(s)\n`;
-    text += `--------------------------------------------------\n\n`;
-    text += `Enviado do Gestor de Insumos - GeorgeFctech 3D`;
-
-    // Try to copy to clipboard
-    try {
-      navigator.clipboard.writeText(text);
-    } catch (err) {
-      console.error("Clipboard write failed", err);
-    }
-
-    const mailtoSubject = encodeURIComponent(`${reportTitle} - ${selectedCompany}`);
-    const mailtoBody = encodeURIComponent(text);
-    
-    // Open in a mailto link
-    window.location.href = `mailto:?subject=${mailtoSubject}&body=${mailtoBody}`;
-
-    setToastMessage("Pedido copiado para a área de transferência! Seu aplicativo de e-mail foi acionado.");
-    setTimeout(() => setToastMessage(null), 5000);
-  };
-
-  const downloadCompletedPurchasesHtmlReport = () => {
-    let completedPurchases = shopping.filter(item => item.checked);
-
-    // Filtrar pelo período selecionado no histórico
-    if (completedPeriodFilter === 'hoje') {
-      completedPurchases = completedPurchases.filter(item => isToday(getPurchasedDate(item)));
-    } else if (completedPeriodFilter === 'semana') {
-      completedPurchases = completedPurchases.filter(item => isThisWeek(getPurchasedDate(item)));
-    } else if (completedPeriodFilter === 'mes') {
-      completedPurchases = completedPurchases.filter(item => isThisMonth(getPurchasedDate(item)));
-    }
-
-    if (completedPurchases.length === 0) {
-      setToastMessage("Aviso: Nenhuma compra encontrada para o período selecionado para gerar o relatório.");
-      setTimeout(() => setToastMessage(null), 4000);
-      return;
-    }
-
-    // Extrator de mês/ano baseado na nota (formato DD/MM/YYYY) ou fallback para o mês atual
-    const getMonthYearFromItem = (item: ShoppingItem): string => {
-      if (item.notes) {
-        const dateRegex = /(\d{2})\/(\d{2})\/(\d{4}|\d{2})/;
-        const match = item.notes.match(dateRegex);
-        if (match) {
-          const monthNum = parseInt(match[2], 10);
-          const months = [
-            'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-            'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-          ];
-          if (monthNum >= 1 && monthNum <= 12) {
-            let year = match[3];
-            if (year.length === 2) year = `20${year}`;
-            return `${months[monthNum - 1]} de ${year}`;
-          }
-        }
-      }
-      const currentDate = new Date();
-      const months = [
-        'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-      ];
-      return `${months[currentDate.getMonth()]} de ${currentDate.getFullYear()}`;
-    };
-
-    // Estrutura de agrupamento: Mês -> Setor | Responsável
-    const groups: {
-      [month: string]: {
-        [sectorAndResponsible: string]: {
-          sector: string;
-          responsible: string;
-          items: ShoppingItem[];
-          subtotal: number;
-        }
-      }
-    } = {};
-
-    completedPurchases.forEach(item => {
-      const month = getMonthYearFromItem(item);
-      const sector = item.department || 'Geral';
-      const responsible = item.requestedBy || 'Administração';
-      const key = `${sector} | ${responsible}`;
-
-      if (!groups[month]) {
-        groups[month] = {};
-      }
-
-      if (!groups[month][key]) {
-        groups[month][key] = {
-          sector,
-          responsible,
-          items: [],
-          subtotal: 0
-        };
-      }
-
-      groups[month][key].items.push(item);
-      groups[month][key].subtotal += item.qtyNeeded * item.estUnitCost;
-    });
-
-    const totalValueCompleted = completedPurchases.reduce((sum, item) => sum + (item.qtyNeeded * item.estUnitCost), 0);
-    const dateFormatted = new Date().toLocaleDateString('pt-BR');
-    const timeFormatted = new Date().toLocaleTimeString('pt-BR');
-
-    // Build HTML template
-    let htmlContent = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <title>Relatório Mensal de Compras Efetuadas</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body {
-      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-      margin: 0;
-      padding: 0;
-      background-color: #f1f5f9;
-      color: #0f172a;
-    }
-    .print-banner {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 12px;
-      padding: 16px;
-      background-color: #1e1b4b;
-      color: #ffffff;
-      position: sticky;
-      top: 0;
-      z-index: 1000;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    }
-    .print-btn {
-      background-color: #10b981;
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      font-size: 13px;
-      font-weight: bold;
-      border-radius: 6px;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      transition: background-color 0.15s ease;
-    }
-    .print-btn:hover {
-      background-color: #059669;
-    }
-    .close-btn {
-      background-color: #475569;
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      font-size: 13px;
-      font-weight: bold;
-      border-radius: 6px;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      transition: background-color 0.15s ease;
-    }
-    .close-btn:hover {
-      background-color: #334155;
-    }
-    .pdf-container {
-      max-width: 900px;
-      margin: 30px auto;
-      background-color: #ffffff;
-      border: 2px solid #1e293b;
-      border-radius: 8px;
-      padding: 30px;
-      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
-    }
-    .header-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 20px;
-    }
-    .header-table td {
-      border: none !important;
-      padding: 4px 0 !important;
-    }
-    .doc-logo {
-      font-size: 24px;
-      font-weight: 800;
-      color: #1e1b4b;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin: 0;
-    }
-    .doc-subtitle {
-      font-size: 11px;
-      color: #475569;
-      font-weight: bold;
-      letter-spacing: 1.5px;
-      text-transform: uppercase;
-      margin-top: 3px;
-    }
-    .doc-meta {
-      font-size: 12px;
-      color: #334155;
-      text-align: right;
-      line-height: 1.5;
-    }
-    .divider-solid {
-      border-top: 3px solid #1e1b4b;
-      margin: 15px 0 25px 0;
-    }
-    .info-grid {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 25px;
-    }
-    .info-grid td {
-      border: 1px solid #1e293b !important;
-      padding: 10px 14px !important;
-      font-size: 12px;
-      background-color: #f8fafc;
-      width: 33.33%;
-    }
-    .info-label {
-      font-size: 10px;
-      color: #64748b;
-      font-weight: bold;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 3px;
-    }
-    .info-value {
-      font-size: 14px;
-      font-weight: bold;
-      color: #0f172a;
-    }
-    .month-section {
-      margin-bottom: 35px;
-    }
-    .month-header {
-      background-color: #1e1b4b;
-      color: #ffffff;
-      padding: 8px 15px;
-      margin-bottom: 15px;
-      border-radius: 4px;
-      font-size: 14px;
-      font-weight: bold;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-    .group-wrapper {
-      border: 1px solid #1e293b;
-      border-radius: 6px;
-      margin-bottom: 25px;
-      overflow: hidden;
+    .tr-odd {
       background-color: #ffffff;
     }
-    .group-banner {
-      background-color: #f1f5f9;
-      padding: 12px 16px;
-      border-bottom: 1px solid #1e293b;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .group-title h3 {
-      margin: 0;
-      font-size: 13px;
-      font-weight: bold;
-      color: #1e293b;
-    }
-    .group-title p {
-      margin: 2px 0 0 0;
-      font-size: 11px;
-      color: #475569;
-    }
-    .group-subtotal {
-      font-size: 13px;
-      font-weight: bold;
-      color: #047857;
-      background-color: #d1fae5;
-      border: 1px solid #a7f3d0;
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-family: monospace;
-    }
-    table.items-grid-table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    table.items-grid-table th {
-      background-color: #f8fafc;
-      color: #1e293b;
-      font-weight: bold;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      padding: 8px 10px;
-      border: 1px solid #1e293b !important;
-      text-align: left;
-    }
-    table.items-grid-table td {
-      border: 1px solid #cbd5e1 !important;
-      padding: 10px;
-      font-size: 12px;
-      color: #0f172a;
-      vertical-align: middle;
-    }
-    table.items-grid-table tr:nth-child(even) {
+    .tr-even {
       background-color: #f8fafc;
     }
-    .badge {
-      display: inline-block;
-      padding: 3px 6px;
-      border-radius: 4px;
-      font-size: 9px;
-      font-weight: bold;
-      text-transform: uppercase;
-      border: 1px solid currentColor;
-    }
-    .badge-filamento { background-color: #eef2ff; color: #4338ca; }
-    .badge-pecas { background-color: #fef2f2; color: #b91c1c; }
-    .badge-acessorios { background-color: #f0fdfa; color: #0d9488; }
-    .badge-refrigeracao { background-color: #ecfeff; color: #0891b2; }
-    .badge-outros { background-color: #f1f5f9; color: #475569; }
-
-    .price-col {
-      font-family: monospace;
-      font-weight: bold;
-      text-align: right;
-      white-space: nowrap;
-    }
-    .action-link {
-      display: inline-flex;
-      align-items: center;
-      background-color: #e0f2fe;
-      color: #0369a1 !important;
-      text-decoration: none !important;
-      font-weight: bold;
-      padding: 5px 10px;
-      border-radius: 4px;
-      font-size: 10px;
-      border: 1px solid #bae6fd;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      white-space: nowrap;
-    }
-    .action-link:hover {
-      background-color: #0284c7;
-      color: white !important;
-    }
-    .notes-box {
-      font-size: 11px;
-      color: #475569;
-      margin-top: 5px;
-      font-style: italic;
-    }
-    .barcode-label {
-      font-family: monospace;
-      font-size: 10px;
-      color: #4338ca;
-      font-weight: bold;
-      background-color: #eef2ff;
-      border: 1px solid #c7d2fe;
-      padding: 1px 4px;
-      border-radius: 3px;
-      display: inline-block;
-      margin-top: 4px;
-    }
-    .signatures-block {
-      margin-top: 35px;
-      display: flex;
-      justify-content: space-between;
-      gap: 30px;
-    }
-    .signature-card {
-      flex: 1;
-      border: 1px solid #1e293b;
-      border-radius: 6px;
-      padding: 16px;
+    .cell-id {
+      font-family: 'Courier New', monospace;
       text-align: center;
-      background-color: #f8fafc;
-    }
-    .line-indicator {
-      border-top: 1px solid #475569;
-      margin-top: 35px;
-      padding-top: 6px;
-      font-size: 11px;
       font-weight: bold;
+      color: #475569;
+    }
+    .cell-number {
+      text-align: right;
+    }
+    .cell-currency {
+      text-align: right;
       color: #334155;
     }
-    @media print {
-      body {
-        background-color: #ffffff;
-        padding: 0;
-      }
-      .no-print {
-        display: none !important;
-      }
-      .pdf-container {
-        border: none;
-        box-shadow: none;
-        padding: 0;
-        margin: 0 auto;
-        max-width: 100%;
-      }
-      table.items-grid-table th {
-        background-color: #f1f5f9 !important;
-        color: #1e293b !important;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-      }
-      .action-link {
-        border: none;
-        background: none;
-        color: #0369a1 !important;
-        padding: 0;
-        text-decoration: underline !important;
-        box-shadow: none;
-      }
+    .cell-total-value {
+      text-align: right;
+      font-weight: bold;
+      color: #4f46e5;
+      background-color: #f5f3ff;
+    }
+    .cell-link {
+      text-align: center;
+    }
+    .total-row {
+      font-weight: bold;
+      background-color: #f1f5f9;
+      color: #0f172a;
+    }
+    .total-row-val {
+      font-weight: bold;
+      background-color: #f5f3ff;
+      color: #4f46e5;
     }
   </style>
 </head>
 <body>
-  <div class="print-banner no-print">
-    <button class="print-btn" onclick="window.print()">
-      📱 IMPRIMIR / SALVAR COMO PDF
-    </button>
-    <button class="close-btn" onclick="window.close()">
-      FECHAR PREVIEW
-    </button>
-  </div>
+  <table>
+    <colgroup>
+      <col width="110" />
+      <col width="300" />
+      <col width="160" />
+      <col width="80" />
+      <col width="130" />
+      <col width="140" />
+      <col width="110" />
+      <col width="160" />
+      <col width="140" />
+      <col width="160" />
+      <col width="130" />
+      <col width="170" />
+      <col width="280" />
+    </colgroup>
 
-  <div class="pdf-container">
-    <table class="header-table">
-      <tr>
-        <td style="width: 55%; vertical-align: top;">
-          <h1 class="doc-logo">${company || 'Ftéx'}</h1>
-          <div style="font-size: 10px; font-weight: bold; color: #1e1b4b; letter-spacing: 1px;">SISTEMA GESTOR DE INSUMOS</div>
-          <p class="doc-subtitle">Relatório Mensal de Compras Efetuadas</p>
-        </td>
-        <td style="width: 45%; vertical-align: top; text-align: right;">
-          <div class="doc-meta">
-            <strong>HISTÓRICO DE COMPRAS</strong><br>
-            Emissão: ${dateFormatted} às ${timeFormatted}<br>
-            Responsável: ${requestedBy || 'ftex'}<br>
-            Setor: ${department || 'Oficina'}
-          </div>
-        </td>
-      </tr>
-    </table>
+    <!-- Main Header -->
+    <tr height="55" style="height: 55px;">
+      <td colspan="13" class="header-main" style="background-color: #0f172a; color: #ffffff; font-size: 16pt; font-weight: bold; text-align: center; vertical-align: middle; border: 1px solid #cbd5e1;">${chosenCompany}</td>
+    </tr>
+    <tr height="35" style="height: 35px;">
+      <td colspan="13" class="header-sub" style="background-color: #1e293b; color: #cbd5e1; font-size: 10pt; font-style: italic; text-align: center; vertical-align: middle; border: 1px solid #cbd5e1;">Gestão de Suprimentos - Relatório Comercial de Pedidos</td>
+    </tr>
+    
+    <!-- Spacers -->
+    <tr height="12" style="height: 12px;"><td colspan="13" style="border: none;"></td></tr>
 
-    <div class="divider-solid"></div>
+    <!-- Meta Information -->
+    <tr height="28" style="height: 28px;">
+      <td colspan="2" class="meta-label" style="font-weight: bold; background-color: #f1f5f9; border: 1px solid #cbd5e1; vertical-align: middle;">Data de Emissão:</td>
+      <td colspan="4" class="meta-value" style="border: 1px solid #cbd5e1; vertical-align: middle;">${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}</td>
+      <td colspan="2" class="meta-label" style="font-weight: bold; background-color: #f1f5f9; border: 1px solid #cbd5e1; vertical-align: middle;">Filtros Ativos:</td>
+      <td colspan="5" class="meta-value" style="border: 1px solid #cbd5e1; vertical-align: middle;">Empresa: <strong>${filterCompany}</strong> | Categoria: <strong>${filterCategory}</strong> | Status: <strong>${filterStatus}</strong></td>
+    </tr>
 
-    <table class="info-grid">
-      <tr>
-        <td>
-          <div class="info-label">Total Investido</div>
-          <div class="info-value" style="color: #047857;">R$ ${totalValueCompleted.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-        </td>
-        <td>
-          <div class="info-label">Total de Itens</div>
-          <div class="info-value">${completedPurchases.length} finalizados</div>
-        </td>
-        <td>
-          <div class="info-label">Meses Ativos</div>
-          <div class="info-value">${Object.keys(groups).length}</div>
-        </td>
-      </tr>
-    </table>
-`;
+    <!-- Spacers -->
+    <tr height="12" style="height: 12px;"><td colspan="13" style="border: none;"></td></tr>
 
-    // Loop through each Month
-    Object.keys(groups).sort((a, b) => {
-      return b.localeCompare(a); // recent months first
-    }).forEach(month => {
-      htmlContent += `
-    <div class="month-section">
-      <div class="month-header">
-        ${month}
-      </div>
-      `;
+    <!-- Summary Box -->
+    <tr height="28" style="height: 28px;">
+      <td colspan="4" class="metric-title" style="font-weight: bold; background-color: #f1f5f9; text-align: center; border: 1px solid #cbd5e1; vertical-align: middle;">Total de Itens Lançados</td>
+      <td colspan="4" class="metric-title" style="font-weight: bold; background-color: #f1f5f9; text-align: center; border: 1px solid #cbd5e1; vertical-align: middle;">Comprados / Pendentes</td>
+      <td colspan="5" class="metric-title" style="font-weight: bold; background-color: #f1f5f9; text-align: center; border: 1px solid #cbd5e1; vertical-align: middle;">Custo Estimado Total</td>
+    </tr>
+    <tr height="32" style="height: 32px;">
+      <td colspan="4" class="metric-value" style="text-align: center; background-color: #ffffff; border: 1px solid #cbd5e1; font-weight: bold; vertical-align: middle;">${totalItemsCount} itens (Qtd: ${totalQty})</td>
+      <td colspan="4" class="metric-value" style="text-align: center; background-color: #ffffff; border: 1px solid #cbd5e1; font-weight: bold; color: #047857; vertical-align: middle;">${boughtCount} Comprados | ${pendingCount} Pendentes</td>
+      <td colspan="5" class="metric-value-total" style="text-align: center; background-color: #f5f3ff; color: #4f46e5; border: 1px solid #cbd5e1; font-weight: bold; vertical-align: middle;">${formatBRLHtml(totalEst)}</td>
+    </tr>
 
-      // Loop through Sector & Responsible groups in this Month
-      const monthGroups = groups[month];
-      Object.keys(monthGroups).sort().forEach(groupKey => {
-        const { sector, responsible, items, subtotal } = monthGroups[groupKey];
-        
-        htmlContent += `
-      <div class="group-wrapper">
-        <div class="group-banner">
-          <div class="group-title">
-            <h3>Setor: ${sector}</h3>
-            <p>Responsável Técnico: <strong>${responsible}</strong></p>
-          </div>
-          <div class="group-subtotal">
-            Subtotal: R$ ${subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </div>
-        </div>
-        <table class="items-grid-table">
-          <thead>
-            <tr>
-              <th style="width: 35%;">Item de Compra</th>
-              <th style="width: 15%;">Categoria</th>
-              <th style="width: 10%; text-align: center;">Qtd</th>
-              <th style="width: 15%; text-align: right;">Unitário</th>
-              <th style="width: 15%; text-align: right;">Total Pago</th>
-              <th style="width: 10%; text-align: center;">Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-        `;
+    <!-- Spacers -->
+    <tr height="15" style="height: 15px;"><td colspan="13" style="border: none;"></td></tr>
 
-        items.forEach(item => {
-          const itemTotal = item.qtyNeeded * item.estUnitCost;
-          const absoluteUrl = ensureAbsoluteUrl(item.purchaseLink, item.materialName);
-          const hasLink = item.purchaseLink && item.purchaseLink.trim() !== '';
+    <!-- Table Header -->
+    <tr height="35" style="height: 35px;">
+      <th class="th-col" style="background-color: #4f46e5; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #cbd5e1; vertical-align: middle; width: 110px;">ID do Pedido</th>
+      <th class="th-col" style="background-color: #4f46e5; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #cbd5e1; vertical-align: middle; width: 300px;">Descrição do Insumo / Material</th>
+      <th class="th-col" style="background-color: #4f46e5; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #cbd5e1; vertical-align: middle; width: 160px;">Categoria</th>
+      <th class="th-col" style="background-color: #4f46e5; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #cbd5e1; vertical-align: middle; width: 80px;">Qtd.</th>
+      <th class="th-col" style="background-color: #4f46e5; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #cbd5e1; vertical-align: middle; width: 130px;">Custo Unitário</th>
+      <th class="th-col" style="background-color: #4f46e5; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #cbd5e1; vertical-align: middle; width: 140px;">Custo Total</th>
+      <th class="th-col" style="background-color: #4f46e5; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #cbd5e1; vertical-align: middle; width: 110px;">Status</th>
+      <th class="th-col" style="background-color: #4f46e5; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #cbd5e1; vertical-align: middle; width: 160px;">Solicitado Por</th>
+      <th class="th-col" style="background-color: #4f46e5; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #cbd5e1; vertical-align: middle; width: 140px;">Departamento</th>
+      <th class="th-col" style="background-color: #4f46e5; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #cbd5e1; vertical-align: middle; width: 160px;">Empresa Destino</th>
+      <th class="th-col" style="background-color: #4f46e5; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #cbd5e1; vertical-align: middle; width: 130px;">Cód. / Modelo</th>
+      <th class="th-col" style="background-color: #4f46e5; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #cbd5e1; vertical-align: middle; width: 170px;">Link p/ Reposição</th>
+      <th class="th-col" style="background-color: #4f46e5; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #cbd5e1; vertical-align: middle; width: 280px;">Observações / Notas</th>
+    </tr>
 
-          let catClass = 'badge-outros';
-          if (item.category === 'Filamento') catClass = 'badge-filamento';
-          else if (item.category === 'Peças de Reposição') catClass = 'badge-pecas';
-          else if (item.category === 'Acessórios/Insumos') catClass = 'badge-acessorios';
-          else if (item.category === 'Refrigeração') catClass = 'badge-refrigeracao';
+    <!-- Table Rows -->
+    ${rowsHtml || '<tr height="28" style="height: 28px;"><td colspan="13" style="text-align: center; color: #64748b; border: 1px solid #cbd5e1;">Nenhum item lançado no escopo selecionado.</td></tr>'}
 
-          htmlContent += `
-            <tr>
-              <td>
-                <div style="font-weight: bold; color: #0f172a;">${item.materialName}</div>
-                ${item.barcode ? `<div class="barcode-label">Cód: ${item.barcode}</div>` : ''}
-                ${item.notes ? `<div class="notes-box">Obs: ${item.notes}</div>` : ''}
-              </td>
-              <td>
-                <span class="badge ${catClass}">${item.category || 'Outros'}</span>
-              </td>
-              <td style="text-align: center; font-weight: 700; color: #1e293b;">
-                ${item.qtyNeeded}
-              </td>
-              <td class="price-col" style="color: #475569;">
-                R$ ${item.estUnitCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </td>
-              <td class="price-col" style="color: #0f172a; font-weight: 800;">
-                R$ ${itemTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </td>
-              <td style="text-align: center;">
-                ${hasLink ? `
-                  <a href="${absoluteUrl}" class="action-link" target="_blank" rel="noreferrer" title="Acessar fornecedor">
-                    Comprar ↗
-                  </a>
-                ` : `
-                  <span style="font-size: 11px; color: #94a3b8; font-style: italic;">Sem link</span>
-                `}
-              </td>
-            </tr>
-          `;
-        });
-
-        htmlContent += `
-          </tbody>
-        </table>
-      </div>
-        `;
-      });
-
-      htmlContent += `
-    </div>
-      `;
-    });
-
-    htmlContent += `
-    <div class="signatures-block">
-      <div class="signature-card">
-        <div style="font-size: 10px; font-weight: bold; color: #64748b; text-transform: uppercase; text-align: left;">Conferência Física / Qualidade</div>
-        <div class="line-indicator">Gestão de Oficina & Estoque</div>
-        <div style="font-size: 10px; color: #94a3b8; margin-top: 3px;">Status: Auditado</div>
-      </div>
-      <div class="signature-card">
-        <div style="font-size: 10px; font-weight: bold; color: #64748b; text-transform: uppercase; text-align: left;">Homologação de Custos</div>
-        <div class="line-indicator">Diretoria Executiva / Comercial</div>
-        <div style="font-size: 10px; color: #94a3b8; margin-top: 3px;">Firma: ${company || 'Ftéx'}</div>
-      </div>
-    </div>
-  </div>
+    <!-- Table Totals Footer -->
+    <tr class="total-row" height="32" style="background-color: #f1f5f9; font-weight: bold; height: 32px;">
+      <td colspan="3" style="text-align: right; font-weight: bold; border: 1px solid #cbd5e1; vertical-align: middle;">TOTAIS CONSOLIDADOS:</td>
+      <td class="cell-number" style="font-weight: bold; border: 1px solid #cbd5e1; text-align: center; vertical-align: middle;">${totalQty}</td>
+      <td style="background-color: #f1f5f9; border: 1px solid #cbd5e1;"></td>
+      <td class="total-row-val" style="font-weight: bold; background-color: #f5f3ff; color: #4f46e5; border: 1px solid #cbd5e1; text-align: right; vertical-align: middle;">${formatBRLHtml(totalEst)}</td>
+      <td colspan="7" style="background-color: #f1f5f9; border: 1px solid #cbd5e1;"></td>
+    </tr>
+  </table>
 </body>
-</html>`;
+</html>
+    `;
 
-    // Download compiled HTML Document
-    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8;' });
+    const blob = new Blob([excelHtml], { type: 'application/vnd.ms-excel;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute('href', url);
-    downloadAnchor.setAttribute('download', `Relatorio_Compras_Efetuadas_Mensal_PDF_${new Date().toISOString().split('T')[0]}.html`);
+    downloadAnchor.setAttribute('download', `Pedido_Comercial_${chosenCompany.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.xls`);
     downloadAnchor.click();
-    
-    // Also try to open immediately in a new tab for extreme smartphone convenience (Direct Print view!)
-    try {
-      const newTab = window.open();
-      if (newTab) {
-        newTab.document.write(htmlContent);
-        newTab.document.close();
-      }
-    } catch (e) {
-      console.warn("Popup block detected, download handled successfully", e);
-    }
 
-    setToastMessage("Sucesso! O relatório mensal de compras efetuadas foi baixado e a tela de visualização foi aberta.");
-    setTimeout(() => setToastMessage(null), 5000);
+    setToastMessage(`Pedido comercial de ${chosenCompany} exportado com sucesso em formato Excel profissional!`);
+    setTimeout(() => setToastMessage(null), 4000);
   };
 
-  const handleSendCompletedEmail = () => {
-    let completedPurchases = shopping.filter(item => item.checked);
-
-    if (completedPeriodFilter === 'hoje') {
-      completedPurchases = completedPurchases.filter(item => isToday(getPurchasedDate(item)));
-    } else if (completedPeriodFilter === 'semana') {
-      completedPurchases = completedPurchases.filter(item => isThisWeek(getPurchasedDate(item)));
-    } else if (completedPeriodFilter === 'mes') {
-      completedPurchases = completedPurchases.filter(item => isThisMonth(getPurchasedDate(item)));
-    }
-
-    if (completedPurchases.length === 0) {
-      setToastMessage("Aviso: Nenhuma compra encontrada para o período selecionado para enviar por e-mail.");
-      setTimeout(() => setToastMessage(null), 4000);
-      return;
-    }
-
-    const dateFormatted = new Date().toLocaleDateString('pt-BR');
-    const timeFormatted = new Date().toLocaleTimeString('pt-BR');
-    const totalSpent = completedPurchases.reduce((acc, i) => acc + (i.qtyNeeded * i.estUnitCost), 0);
-
-    let text = `📜 HISTÓRICO DE COMPRAS EFETUADAS - ${userRole === 'colaborador' ? 'FTÉX' : 'GEORGEFCTECH 3D'}\n`;
-    text += `--------------------------------------------------\n`;
-    text += `📅 Gerado em: ${dateFormatted} às ${timeFormatted}\n`;
-    text += `⏱️ Período: ${completedPeriodFilter.toUpperCase()}\n`;
-    text += `--------------------------------------------------\n\n`;
-    text += `✅ ITENS COMPRADOS:\n\n`;
-
-    completedPurchases.forEach((item, index) => {
-      const itemTotal = item.qtyNeeded * item.estUnitCost;
-      text += `${index + 1}. ${item.materialName}\n`;
-      if (item.barcode) text += `   • Código/Modelo: ${item.barcode}\n`;
-      text += `   • Categoria: ${item.category || 'Outros'}\n`;
-      text += `   • Empresa: ${item.company || 'Ftéx'}\n`;
-      text += `   • Solicitante: ${item.requestedBy || 'Colaborador'}\n`;
-      if (item.department) text += `   • Setor: ${item.department}\n`;
-      text += `   • Qtd: ${item.qtyNeeded}x\n`;
-      text += `   • Unitário: R$ ${item.estUnitCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n`;
-      text += `   • Total Pago: R$ ${itemTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n`;
-      if (item.notes) text += `   • Obs: ${item.notes}\n`;
-      text += `\n`;
-    });
-
-    text += `--------------------------------------------------\n`;
-    text += `💰 VALOR TOTAL PAGO: R$ ${totalSpent.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n`;
-    text += `--------------------------------------------------\n\n`;
-    text += `Enviado do Gestor de Insumos - GeorgeFctech 3D`;
-
-    // Try to copy to clipboard
-    try {
-      navigator.clipboard.writeText(text);
-    } catch (err) {
-      console.error("Clipboard write failed", err);
-    }
-
-    const mailtoSubject = encodeURIComponent(`Histórico de Compras Efetuadas - ${completedPeriodFilter.toUpperCase()}`);
-    const mailtoBody = encodeURIComponent(text);
-
-    // Open in a mailto link
-    window.location.href = `mailto:?subject=${mailtoSubject}&body=${mailtoBody}`;
-
-    setToastMessage("Histórico copiado para a área de transferência! Seu aplicativo de e-mail foi acionado.");
-    setTimeout(() => setToastMessage(null), 5000);
-  };
-
-  // Export Completed purchases as Excel spreadsheet (XLSX)
-  const generateCompletedPurchasesExcelReport = (customMetadata?: { company: string, requestedBy: string, department: string }) => {
-    let completedPurchases = shopping.filter(item => item.checked);
-
-    // Filtrar pelo período selecionado no histórico
-    if (completedPeriodFilter === 'hoje') {
-      completedPurchases = completedPurchases.filter(item => isToday(getPurchasedDate(item)));
-    } else if (completedPeriodFilter === 'semana') {
-      completedPurchases = completedPurchases.filter(item => isThisWeek(getPurchasedDate(item)));
-    } else if (completedPeriodFilter === 'mes') {
-      completedPurchases = completedPurchases.filter(item => isThisMonth(getPurchasedDate(item)));
-    }
-
-    if (completedPurchases.length === 0) {
-      setToastMessage("Aviso: Nenhuma compra encontrada para o período selecionado para gerar a planilha.");
-      setTimeout(() => setToastMessage(null), 4000);
-      return;
-    }
-
-    const metaCompany = customMetadata ? customMetadata.company : (userRole === 'colaborador' ? (company || 'Ftéx') : 'GeorgeFctech-3D');
-    const metaRequestedBy = customMetadata ? customMetadata.requestedBy : (requestedBy || (userRole === 'colaborador' ? 'Colaborador Ftéx' : 'Administrador'));
-    const metaDepartment = customMetadata ? customMetadata.department : (department || (userRole === 'colaborador' ? 'Faturamento/Comercial' : 'Oficina'));
-    const dateFormatted = new Date().toLocaleDateString('pt-BR');
-    const timeFormatted = new Date().toLocaleTimeString('pt-BR');
-    const totalSpent = completedPurchases.reduce((acc, i) => acc + (i.qtyNeeded * i.estUnitCost), 0);
-
-    // Build array of arrays representation for the completed purchases sheet
-    const data: any[][] = [
-      [`RELATÓRIO DE COMPRAS EFETUADAS E AUDITADAS - ${metaCompany.toUpperCase()}`],
-      [`Histórico Consolidado de Suprimentos Recebidos - GeorgeFctech 3D`],
-      [],
-      [`Data de Emissão:`, `${dateFormatted} às ${timeFormatted}`, ``, `Responsável:`, metaRequestedBy, ``, `Setor:`, metaDepartment],
-      [`Empresa / Firma:`, metaCompany, ``, `Filtro de Período:`, completedPeriodFilter.toUpperCase(), ``, `Total Investido:`, totalSpent],
-      [], // Empty row spacer
-      [
-        'Material / Produto',
-        'Código / Modelo',
-        'Categoria',
-        'Quantidade',
-        'Custo Unitário',
-        'Total Pago',
-        'Observações / Notas',
-        'Solicitante',
-        'Setor',
-        'Empresa',
-        'Data da Compra'
-      ]
-    ];
-
-    // Add completed purchases rows
-    completedPurchases.forEach(item => {
-      const itemTotal = item.qtyNeeded * item.estUnitCost;
-      const purchaseDate = getPurchasedDate(item).toLocaleDateString('pt-BR');
-      
-      data.push([
-        item.materialName || '',
-        item.barcode || '',
-        item.category || 'Outros',
-        item.qtyNeeded,
-        item.estUnitCost,
-        itemTotal,
-        item.notes || '',
-        item.requestedBy || '',
-        item.department || '',
-        item.company || '',
-        purchaseDate
-      ]);
-    });
-
-    // Add Grand Total Row
-    data.push([]);
-    data.push([
-      'VALOR TOTAL DE COMPRAS EFETUADAS E AUDITADAS',
-      '',
-      '',
-      '',
-      '',
-      totalSpent,
-      '',
-      '',
-      '',
-      '',
-      ''
-    ]);
-
-    // Create worksheet
-    const ws = XLSX.utils.aoa_to_sheet(data);
-
-    // Set professional column widths
-    ws['!cols'] = [
-      { wch: 35 }, // Material / Produto
-      { wch: 18 }, // Código / Modelo
-      { wch: 18 }, // Categoria
-      { wch: 12 }, // Quantidade
-      { wch: 16 }, // Custo Unitário
-      { wch: 16 }, // Total Pago
-      { wch: 30 }, // Observações / Notas
-      { wch: 15 }, // Solicitante
-      { wch: 15 }, // Setor
-      { wch: 15 }, // Empresa
-      { wch: 15 }  // Data da Compra
-    ];
-
-    // Set professional row heights
-    const rowHeights = [
-      { hpt: 30 }, // Row 0 (Title)
-      { hpt: 20 }, // Row 1 (Subtitle)
-      { hpt: 12 }, // Row 2 (Spacer)
-      { hpt: 22 }, // Row 3 (Metadata 1)
-      { hpt: 22 }, // Row 4 (Metadata 2)
-      { hpt: 12 }, // Row 5 (Spacer)
-      { hpt: 28 }, // Row 6 (Headers)
-    ];
-    for (let i = 0; i < completedPurchases.length; i++) {
-      rowHeights.push({ hpt: 24 }); // Data Rows
-    }
-    rowHeights.push({ hpt: 12 }); // Total Spacer Row
-    rowHeights.push({ hpt: 30 }); // Grand Total Row
-    ws['!rows'] = rowHeights;
-
-    // Enable gridlines explicitly so they are visible
-    ws['!views'] = [{ showGridLines: true }];
-
-    // Merge cells for title block & grand total label
-    ws['!merges'] = [
-      { s: { r: 0, c: 0 }, e: { r: 0, c: 10 } }, // Title span
-      { s: { r: 1, c: 0 }, e: { r: 1, c: 10 } }, // Subtitle span
-      { s: { r: 8 + completedPurchases.length, c: 0 }, e: { r: 8 + completedPurchases.length, c: 4 } } // Merge "VALOR TOTAL DE COMPRAS..." label cell
-    ];
-
-    // Format numbers, currency and dynamic Excel formulas
-    const startRow = 7; // Header row is at index 6, data starts at index 7
-    completedPurchases.forEach((item, index) => {
-      const rIdx = startRow + index;
-      const excelRow = rIdx + 1; // 1-based Excel row number (e.g. 8, 9, 10...)
-
-      // Format unit cost as currency (BRL format)
-      const unitCostCellRef = XLSX.utils.encode_cell({ r: rIdx, c: 4 });
-      if (ws[unitCostCellRef]) {
-        ws[unitCostCellRef].t = 'n';
-        ws[unitCostCellRef].z = '"R$"#,##0.00';
-      }
-
-      // Format total cost cell as dynamic formula: Quantidade (D) * Custo Unitário (E)
-      const totalCostCellRef = XLSX.utils.encode_cell({ r: rIdx, c: 5 });
-      ws[totalCostCellRef] = {
-        t: 'n',
-        f: `D${excelRow}*E${excelRow}`,
-        v: item.qtyNeeded * item.estUnitCost,
-        z: '"R$"#,##0.00'
-      };
-
-      // Format qty as integer
-      const qtyCellRef = XLSX.utils.encode_cell({ r: rIdx, c: 3 });
-      if (ws[qtyCellRef]) {
-        ws[qtyCellRef].t = 'n';
-        ws[qtyCellRef].z = '#,##0';
-      }
-    });
-
-    const startDataRowExcel = startRow + 1; // Row 8
-    const endDataRowExcel = startRow + completedPurchases.length; // Row (7 + completedPurchases.length)
-
-    // Format grand total cell currency & dynamic SUM formula
-    const grandTotalRowIdx = 8 + completedPurchases.length;
-    const grandTotalRowExcel = grandTotalRowIdx + 1;
-    const grandTotalCellRef = XLSX.utils.encode_cell({ r: grandTotalRowIdx, c: 5 });
-    ws[grandTotalCellRef] = {
-      t: 'n',
-      f: `SUM(F${startDataRowExcel}:F${endDataRowExcel})`,
-      v: totalSpent,
-      z: '"R$"#,##0.00'
-    };
-
-    // Format header metadata total formula (Cell H5)
-    const metaTotalCellRef = XLSX.utils.encode_cell({ r: 4, c: 7 });
-    ws[metaTotalCellRef] = {
-      t: 'n',
-      f: `F${grandTotalRowExcel}`,
-      v: totalSpent,
-      z: '"R$"#,##0.00'
-    };
-
-    // Iterate over all keys in the completed purchases sheet and apply beautiful formatting
-    Object.keys(ws).forEach((cellKey) => {
-      if (cellKey.startsWith('!')) return; // skip metadata
-      
-      const cell = ws[cellKey];
-      const parsedCell = XLSX.utils.decode_cell(cellKey);
-      const r = parsedCell.r; // 0-based row index
-      const c = parsedCell.c; // 0-based column index
-
-      // Default font and borders
-      let font = { name: 'Segoe UI', sz: 10, color: { rgb: '1E293B' }, bold: false, italic: false };
-      let fill = {};
-      let alignment = { vertical: 'center', horizontal: 'left', wrapText: true };
-      let border = {
-        top: { style: 'thin', color: { rgb: 'E2E8F0' } },
-        bottom: { style: 'thin', color: { rgb: 'E2E8F0' } },
-        left: { style: 'thin', color: { rgb: 'E2E8F0' } },
-        right: { style: 'thin', color: { rgb: 'E2E8F0' } }
-      };
-
-      // 1. STYLE MAIN TITLE BLOCK (Row 0 & Row 1)
-      if (r === 0) {
-        font = { name: 'Segoe UI', sz: 14, color: { rgb: 'FFFFFF' }, bold: true, italic: false };
-        fill = { patternType: 'solid', fgColor: { rgb: '065F46' } }; // Forest Green Header for completed purchases
-        alignment = { vertical: 'center', horizontal: 'center', wrapText: false };
-        border = {
-          top: { style: 'medium', color: { rgb: '064E3B' } },
-          bottom: { style: 'none', color: { rgb: 'FFFFFF' } },
-          left: { style: 'medium', color: { rgb: '064E3B' } },
-          right: { style: 'medium', color: { rgb: '064E3B' } }
-        };
-      } else if (r === 1) {
-        font = { name: 'Segoe UI', sz: 10, color: { rgb: 'A7F3D0' }, bold: true, italic: true }; // Light green text
-        fill = { patternType: 'solid', fgColor: { rgb: '065F46' } }; // Forest Green
-        alignment = { vertical: 'center', horizontal: 'center', wrapText: false };
-        border = {
-          top: { style: 'none', color: { rgb: 'FFFFFF' } },
-          bottom: { style: 'medium', color: { rgb: '064E3B' } },
-          left: { style: 'medium', color: { rgb: '064E3B' } },
-          right: { style: 'medium', color: { rgb: '064E3B' } }
-        };
-      }
-      // 2. STYLE METADATA CELLS (Row 3 & Row 4)
-      else if (r === 3 || r === 4) {
-        const isLabelCell = (c === 0 || c === 3 || c === 6);
-        if (isLabelCell) {
-          font = { name: 'Segoe UI', sz: 9.5, color: { rgb: '475569' }, bold: true, italic: false };
-          fill = { patternType: 'solid', fgColor: { rgb: 'F1F5F9' } }; // Slate 100 label background
-          alignment = { vertical: 'center', horizontal: 'left', wrapText: false };
-        } else {
-          font = { name: 'Segoe UI', sz: 9.5, color: { rgb: '0F172A' }, bold: (r === 4 && c === 7), italic: false }; // Bold total cost value
-          fill = { patternType: 'solid', fgColor: { rgb: 'FFFFFF' } };
-          alignment = { vertical: 'center', horizontal: (r === 4 && c === 7) ? 'right' : 'left', wrapText: false };
-        }
-        border = {
-          top: { style: 'thin', color: { rgb: 'CBD5E1' } },
-          bottom: { style: 'thin', color: { rgb: 'CBD5E1' } },
-          left: { style: 'thin', color: { rgb: 'CBD5E1' } },
-          right: { style: 'thin', color: { rgb: 'CBD5E1' } }
-        };
-      }
-      // 3. STYLE TABLE HEADER ROW (Row 6)
-      else if (r === 6) {
-        font = { name: 'Segoe UI', sz: 10, color: { rgb: 'FFFFFF' }, bold: true, italic: false };
-        fill = { patternType: 'solid', fgColor: { rgb: '334155' } }; // Slate 700 header
-        alignment = { vertical: 'center', horizontal: (c === 0 || c === 6) ? 'left' : 'center', wrapText: false };
-        border = {
-          top: { style: 'medium', color: { rgb: '064E3B' } },
-          bottom: { style: 'medium', color: { rgb: '064E3B' } },
-          left: { style: 'thin', color: { rgb: '475569' } },
-          right: { style: 'thin', color: { rgb: '475569' } }
-        };
-      }
-      // 4. STYLE DATA ROWS (Row 7 to 7 + completedPurchases.length - 1)
-      else if (r >= 7 && r < 7 + completedPurchases.length) {
-        const isOddRow = (r % 2 !== 0);
-        fill = { patternType: 'solid', fgColor: { rgb: isOddRow ? 'F0FDF4' : 'FFFFFF' } }; // Soft light green row alternation
-
-        if (c === 0) {
-          alignment = { vertical: 'center', horizontal: 'left', wrapText: true };
-          font.bold = true;
-        } else if (c === 1 || c === 2 || c === 7 || c === 8 || c === 9 || c === 10) {
-          alignment = { vertical: 'center', horizontal: 'center', wrapText: false };
-        } else if (c === 3) {
-          alignment = { vertical: 'center', horizontal: 'center', wrapText: false };
-        } else if (c === 4 || c === 5) {
-          alignment = { vertical: 'center', horizontal: 'right', wrapText: false };
-        } else if (c === 6) {
-          alignment = { vertical: 'center', horizontal: 'left', wrapText: true };
-          font.italic = true;
-          font.color = { rgb: '475569' };
-        }
-      }
-      // 5. STYLE GRAND TOTAL ROW
-      else if (r === 8 + completedPurchases.length) {
-        font = { name: 'Segoe UI', sz: 10.5, color: { rgb: '065F46' }, bold: true, italic: false };
-        fill = { patternType: 'solid', fgColor: { rgb: 'D1FAE5' } }; // Highlight total in soft green
-        alignment = { vertical: 'center', horizontal: (c === 5) ? 'right' : 'left', wrapText: false };
-        border = {
-          top: { style: 'thin', color: { rgb: '059669' } },
-          bottom: { style: 'double', color: { rgb: '064E3B' } },
-          left: { style: 'thin', color: { rgb: 'CBD5E1' } },
-          right: { style: 'thin', color: { rgb: 'CBD5E1' } }
-        };
-      }
-      else {
-        border = {
-          top: { style: 'none', color: { rgb: 'FFFFFF' } },
-          bottom: { style: 'none', color: { rgb: 'FFFFFF' } },
-          left: { style: 'none', color: { rgb: 'FFFFFF' } },
-          right: { style: 'none', color: { rgb: 'FFFFFF' } }
-        };
-        fill = { patternType: 'none' };
-      }
-
-      // Assign styles back to cell object
-      cell.s = {
-        font,
-        fill,
-        alignment,
-        border
-      };
-    });
-
-    // Build workbook and write
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Histórico de Compras');
-    XLSX.writeFile(wb, `Historico_Compras_Efetuadas_${completedPeriodFilter.toUpperCase()}_${new Date().toISOString().split('T')[0]}.xlsx`);
-
-    setToastMessage("Sucesso! O histórico de compras foi exportado como Excel (.xlsx) profissional.");
-    setTimeout(() => setToastMessage(null), 5000);
-  };
-
-  // Import Purchased items directly to Active Inventory (Dar Baixa)
+  // Import Purchased Filament directly to Active Inventory
   const handleImportToStock = (item: ShoppingItem) => {
+    if (item.category !== 'Filamento') {
+      setToastMessage("Apenas itens da categoria 'Filamento' podem ser importados para o estoque de insumos.");
+      setTimeout(() => setToastMessage(null), 4000);
+      return;
+    }
+
     onAddInventoryItem({
       material: item.materialName.replace(" (Reposição)", ""),
       qty: item.qtyNeeded,
       unitCost: item.estUnitCost,
-      purchaseLink: item.purchaseLink,
-      category: item.category
+      purchaseLink: item.purchaseLink
     });
 
-    setToastMessage(`Sucesso! ${item.qtyNeeded} unidade(s) de "${item.materialName}" foram lançados no estoque ativo (Baixa Efetuada)!`);
-    setTimeout(() => setToastMessage(null), 5005);
+    setToastMessage(`Sucesso! ${item.qtyNeeded} rolo(s) de "${item.materialName}" foram lançados no estoque ativo!`);
+    setTimeout(() => setToastMessage(null), 5000);
   };
 
   // Calculations
@@ -2964,51 +1057,40 @@ export default function ShoppingListView({
   const companiesList = useMemo(() => {
     const list = new Set<string>();
     shopping.forEach(item => {
-      const cStr = String(item.company || '').trim();
-      if (cStr) {
-        if (userRole === 'colaborador' && (cStr.toLowerCase() === 'georgefctech-3d' || cStr.toLowerCase().includes('geral'))) {
-          // Skip admin-specific company name in collaborator view
-          return;
-        }
-        list.add(cStr);
+      if (item.company?.trim()) {
+        list.add(item.company.trim());
       }
     });
     return Array.from(list);
-  }, [shopping, userRole]);
+  }, [shopping]);
 
   // Filtering Logic
   const filteredShopping = shopping.filter(item => {
-    const q = searchQuery.toLowerCase();
-    const nameStr = String(item.materialName || '').toLowerCase();
-    const notesStr = String(item.notes || '').toLowerCase();
-    const barcodeStr = String(item.barcode || '').toLowerCase();
-    const reqByStr = String(item.requestedBy || '').toLowerCase();
-    const deptStr = String(item.department || '').toLowerCase();
-    const compStr = String(item.company || '').toLowerCase();
-
-    const matchesSearch = nameStr.includes(q) || 
-                          notesStr.includes(q) ||
-                          barcodeStr.includes(q) ||
-                          reqByStr.includes(q) ||
-                          deptStr.includes(q) ||
-                          compStr.includes(q) ||
+    const matchesSearch = item.materialName.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          (item.notes && item.notes.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                          (item.barcode && item.barcode.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                          (item.requestedBy && item.requestedBy.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                          (item.department && item.department.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                          (item.company && item.company.toLowerCase().includes(searchQuery.toLowerCase())) ||
                           (searchQuery.replace(/\D/g, '').length > 0 && 
-                           notesStr.replace(/\D/g, '').includes(searchQuery.replace(/\D/g, '')));
+                           item.notes && item.notes.replace(/\D/g, '').includes(searchQuery.replace(/\D/g, '')));
     const matchesCategory = filterCategory === 'Todos' || item.category === filterCategory;
     const matchesStatus = filterStatus === 'Todos' || 
                           (filterStatus === 'Pendentes' && !item.checked) || 
                           (filterStatus === 'Comprados' && item.checked);
     const matchesCompany = filterCompany === 'Todos' ||
-                          (compStr === filterCompany.toLowerCase()) ||
+                          (item.company && item.company.toLowerCase() === filterCompany.toLowerCase()) ||
                           (!item.company && filterCompany.toLowerCase() === 'georgefctech-3d');
 
     return matchesSearch && matchesCategory && matchesStatus && matchesCompany;
   });
 
   // Calculate stats per category
-  const categoriesList = ['Filamento', 'Placas & Fontes', 'Componentes Eletrônicos', 'Peças de Reposição', 'Refrigeração', 'Acessórios/Insumos', 'Outros'];
+  const categoriesList = userRole === 'colaborador'
+    ? ['Acessórios/Insumos', 'Outros']
+    : ['Filamento', 'Peças de Reposição', 'Acessórios/Insumos', 'Outros'];
   const getCategoryStats = (cat: string) => {
-    const items = shopping.filter(i => (i.category || 'Filamento') === cat);
+    const items = shopping.filter(i => i.category === cat);
     const count = items.length;
     const total = items.reduce((sum, i) => sum + (i.qtyNeeded * i.estUnitCost), 0);
     return { count, total };
@@ -3019,16 +1101,10 @@ export default function ShoppingListView({
     switch (cat) {
       case 'Filamento':
         return <Layers className={`${sizeClass} text-indigo-500`} />;
-      case 'Placas & Fontes':
-        return <Cpu className={`${sizeClass} text-amber-500`} />;
-      case 'Componentes Eletrônicos':
-        return <Cpu className={`${sizeClass} text-emerald-500`} />;
       case 'Peças de Reposição':
         return <Wrench className={`${sizeClass} text-rose-500`} />;
       case 'Acessórios/Insumos':
         return <Package className={`${sizeClass} text-sky-500`} />;
-      case 'Refrigeração':
-        return <Fan className={`${sizeClass} text-cyan-500`} />;
       default:
         return <Tag className={`${sizeClass} text-slate-500`} />;
     }
@@ -3041,123 +1117,34 @@ export default function ShoppingListView({
       <div className="hidden print:block border-b-2 border-indigo-600 pb-5 mb-8">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 bg-indigo-50 border border-slate-200 flex items-center justify-center p-0">
-              {userRole === 'colaborador' ? (
-                <ShoppingBag className="w-6 h-6 text-indigo-600" />
-              ) : (
-                <img 
-                  referrerPolicy="no-referrer"
-                  src="https://vyvompcoiaizoluuxnzx.supabase.co/storage/v1/object/sign/img/meu_logo.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9lYTFhZWQwNC03M2Y5LTQwODQtOWNiOS04ODBkMTA3MzAwY2UiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJpbWcvbWV1X2xvZ28ucG5nIiwic2NvcGUiOiJkb3dubG9hZCIsImlhdCI6MTc4MTc5NTUxOCwiZXhwIjoxODc2NDAzNTE4fQ.JgHY5piKmwxjB0nfW08joAWsNE-JYRA5kUUkVra9hFI"
-                  alt="Logo"
-                  className="w-full h-full object-cover"
-                />
-              )}
+            <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 bg-transparent border border-slate-200 flex items-center justify-center p-0">
+              <img 
+                referrerPolicy="no-referrer"
+                src={userRole === 'colaborador'
+                  ? "https://lh3.googleusercontent.com/gps-cs-s/APNQkAForRZzi0p_dHcu4q-uB5_6Hmh_ZWM1hwqil-EcrY-fKLUJWx-Z1RHuhgUQTtqJXsV29-B0tbj3CuhgI93tL_ygBJPL6nmLWh2TGr4Imchb-7y8ozTXVOdxt5UFk-PmJqQndhUJLw=w229-h164-n-k-no-nu"
+                  : "https://vyvompcoiaizoluuxnzx.supabase.co/storage/v1/object/sign/img/meu_logo.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9lYTFhZWQwNC03M2Y5LTQwODQtOWNiOS04ODBkMTA3MzAwY2UiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJpbWcvbWV1X2xvZ28ucG5nIiwic2NvcGUiOiJkb3dubG9hZCIsImlhdCI6MTc4MTc5NTUxOCwiZXhwIjoxODc2NDAzNTE4fQ.JgHY5piKmwxjB0nfW08joAWsNE-JYRA5kUUkVra9hFI"}
+                alt="GeorgeFctech Logo"
+                className="w-full h-full object-cover"
+              />
             </div>
             <div>
               <h2 className="text-xl font-bold text-slate-900">
-                {userRole === 'colaborador' ? (company || 'Empresa Solicitante') : 'GeorgeFctech-3D'}
+                {userRole === 'colaborador' ? 'GeorgeFctech Comercial' : 'GeorgeFctech-3D'}
               </h2>
               <p className="text-[10px] text-slate-500 font-mono">
-                {userRole === 'colaborador' ? 'Planejamento de Compras' : 'Gestão Comercial & Suprimentos de Impressão 3D'}
+                {userRole === 'colaborador' ? 'Gestão Comercial & Planejamento de Compras' : 'Gestão Comercial & Suprimentos de Impressão 3D'}
               </p>
             </div>
           </div>
           <div className="text-right">
             <h3 className="text-sm font-bold uppercase tracking-wider text-indigo-700 font-mono">Relatório Comercial de Pedidos</h3>
-            {userRole === 'colaborador' ? (
-              <>
-                <p className="text-[10px] text-slate-800 font-bold font-mono">Responsável: {requestedBy || 'Colaborador'}</p>
-                <p className="text-[10px] text-slate-800 font-bold font-mono">Setor Responsável: {department || 'Geral'}</p>
-                <p className="text-[10px] text-slate-800 font-bold font-mono">Empresa: {company || 'Empresa Solicitante'}</p>
-              </>
-            ) : (
-              <p className="text-[10px] text-slate-800 font-bold font-mono">Firma Responsável: GeorgeFctech-3D</p>
-            )}
             <p className="text-[10px] text-slate-500 font-mono">Data: {new Date().toLocaleDateString('pt-BR')}</p>
           </div>
         </div>
       </div>
-
-      {/* SECTOR & RESPONSIBLE EDITABLE INFO FOR PRINT */}
-      {(userRole === 'colaborador' || currentSubView === 'compras_efetuadas') && (
-        <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 mb-6 shadow-3xs no-print flex flex-col lg:flex-row items-center gap-4">
-          <div className="flex-1">
-            <span className="block text-[10px] uppercase font-bold text-indigo-600 dark:text-indigo-400 mb-1">Identificação do Relatório (Topo do Impresso)</span>
-            <p className="text-xs text-slate-500">
-              Preencha os campos abaixo para definir a empresa, funcionário responsável e setor que serão impressos no cabeçalho do relatório.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full lg:w-auto lg:min-w-[55%]">
-            <div>
-              <label className="block text-[9px] uppercase font-bold text-slate-450 dark:text-slate-500 mb-1">Empresa</label>
-              <input
-                type="text"
-                placeholder="Empresa"
-                value={company}
-                onChange={(e) => setCompany(e.target.value)}
-                className="w-full text-xs font-semibold px-3 py-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 rounded-lg focus:border-indigo-500 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-[9px] uppercase font-bold text-slate-450 dark:text-slate-500 mb-1">Funcionário Responsável</label>
-              <input
-                type="text"
-                placeholder="Nome do Funcionário"
-                value={requestedBy}
-                onChange={(e) => setRequestedBy(e.target.value)}
-                className="w-full text-xs font-semibold px-3 py-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 rounded-lg focus:border-indigo-500 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-[9px] uppercase font-bold text-slate-450 dark:text-slate-500 mb-1">Setor Responsável</label>
-              <input
-                type="text"
-                placeholder="Setor"
-                value={department}
-                onChange={(e) => setDepartment(e.target.value)}
-                className="w-full text-xs font-semibold px-3 py-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 rounded-lg focus:border-indigo-500 focus:outline-none"
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {currentSubView && (
-        <div className="mb-6 pb-4 border-b border-slate-200 dark:border-slate-800 no-print flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-extrabold font-display tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              {currentSubView === 'baixa' && (
-                <>
-                  <CheckSquare className="text-indigo-600 dark:text-indigo-400 w-8 h-8" />
-                  <span>Baixa de Compras (Recebimento)</span>
-                </>
-              )}
-              {currentSubView === 'compras_efetuadas' && (
-                <>
-                  <FileClock className="text-emerald-600 dark:text-emerald-400 w-8 h-8" />
-                  <span>Histórico de Compras Efetuadas</span>
-                </>
-              )}
-              {currentSubView === 'calculadoras' && (
-                <>
-                  <Calculator className="text-amber-500 dark:text-amber-400 w-8 h-8" />
-                  <span>{userRole === 'colaborador' ? 'Cálculos Gerais' : 'Calculadoras Oficina'}</span>
-                </>
-              )}
-            </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              {currentSubView === 'baixa' && 'Registre a chegada e baixa de suprimentos solicitados na oficina em tempo real.'}
-              {currentSubView === 'compras_efetuadas' && 'Visualize todos os itens de compra que já foram recebidos e auditados.'}
-              {currentSubView === 'calculadoras' && (userRole === 'colaborador' ? 'Calculadora de bolso integrada para contas rápidas, fechamentos e cálculos gerais.' : 'Estime o custo de gramas de filamento, comprimentos de rolo e orçamentos rápidos para novos lotes.')}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {!currentSubView && (
-        <>
-          {/* HEADER WITH INDUSTRIAL ACTIONS */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 pb-5 border-b border-slate-200 no-print">
+      
+      {/* HEADER WITH INDUSTRIAL ACTIONS */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 pb-5 border-b border-slate-200 no-print">
         <div>
           <h1 className="text-3xl font-bold font-display tracking-tight text-slate-950 mb-1">
             {userRole === 'colaborador' ? 'Fazer Pedido de Compras' : 'Planejamento de Compras & Suprimentos'}
@@ -3180,7 +1167,7 @@ export default function ShoppingListView({
           </button>
 
           <button
-            onClick={() => triggerExcelReportModal('pending')}
+            onClick={generateExcel}
             disabled={shopping.length === 0}
             className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg border font-bold text-xs uppercase tracking-wider shadow-sm transition-all duration-200 ${
               shopping.length === 0 
@@ -3189,33 +1176,20 @@ export default function ShoppingListView({
             }`}
           >
             <Download className="w-4 h-4" />
-            GERAR PLANILHA EXCEL (.XLSX)
+            GERAR PEDIDO COMERCIAL EXCEL
           </button>
 
           <button
-            onClick={downloadHtmlReport}
+            onClick={() => window.print()}
             disabled={shopping.length === 0}
             className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg border font-bold text-xs uppercase tracking-wider shadow-sm transition-all duration-200 ${
               shopping.length === 0 
-                ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
-                : 'bg-white text-blue-700 border-blue-200 hover:bg-blue-50 hover:text-blue-800 hover:scale-102 cursor-pointer'
-            }`}
-          >
-            <FileText className="w-4 h-4" />
-            SALVAR RELATÓRIO EM HTML
-          </button>
-
-          <button
-            onClick={downloadCompletedPurchasesHtmlReport}
-            disabled={shopping.filter(i => i.checked).length === 0}
-            className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg border font-bold text-xs uppercase tracking-wider shadow-sm transition-all duration-200 ${
-              shopping.filter(i => i.checked).length === 0 
                 ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
                 : 'bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50 hover:text-indigo-800 hover:scale-102 cursor-pointer'
             }`}
           >
             <Printer className="w-4 h-4" />
-            IMPRIMIR COMPRAS EFETUADAS
+            IMPRIMIR TABELA COMERCIAL
           </button>
         </div>
       </div>
@@ -3273,7 +1247,7 @@ export default function ShoppingListView({
               R$ {pendingValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </h4>
             <p className="text-[10px] text-amber-600 mt-1.5 flex items-center gap-1 font-medium">
-              <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
+              <AlertSquareSize className="w-3.5 h-3.5 text-amber-500" />
               {shopping.filter(i => !i.checked).length} aquisições pendentes
             </p>
           </div>
@@ -3298,19 +1272,6 @@ export default function ShoppingListView({
               <div className="md:col-span-2">
                 <div className="flex justify-between items-center mb-1.5">
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Nome do Material ou Insumo *</label>
-                  {userRole !== 'colaborador' && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setScannerMode('create');
-                        setScannerOpen(true);
-                      }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-indigo-700 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900 border border-indigo-200 dark:border-indigo-800 rounded-lg transition-all duration-150 cursor-pointer"
-                    >
-                      <QrCode className="w-3.5 h-3.5" />
-                      <span>Escanear Código (Barras/QR)</span>
-                    </button>
-                  )}
                 </div>
                 <input
                   type="text"
@@ -3329,11 +1290,8 @@ export default function ShoppingListView({
                   onChange={(e) => setCategory(e.target.value as any)}
                   className="w-full text-sm px-4 py-2 border border-slate-200 rounded-lg bg-white text-slate-800 focus:outline-none focus:border-indigo-500 shadow-xs"
                 >
-                  <option value="Filamento">Filamento de Impressão</option>
-                  <option value="Placas & Fontes">Placas & Fontes (Placas-mãe, Fontes 12V/24V)</option>
-                  <option value="Componentes Eletrônicos">Componentes Eletrônicos (Drivers, Sensores, Cabos)</option>
-                  <option value="Peças de Reposição">Peças de Reposição (Bicos, Correias, Extrusoras)</option>
-                  <option value="Refrigeração">Refrigeração (Coolers, Fans, Dutos)</option>
+                  {userRole !== 'colaborador' && <option value="Filamento">Filamento de Impressão</option>}
+                  {userRole !== 'colaborador' && <option value="Peças de Reposição">Peças de Reposição (Bicos, Correias)</option>}
                   <option value="Acessórios/Insumos">Acessórios / Outros Insumos</option>
                   <option value="Outros">Outras Despesas</option>
                 </select>
@@ -3422,7 +1380,7 @@ export default function ShoppingListView({
                 <input
                   type="text"
                   required
-                  placeholder={userRole === 'colaborador' ? "Ex: FTEX, Empresa Comercial..." : "Ex: FTEX, GeorgeFctech-3D..."}
+                  placeholder="Ex: FTEX, GeorgeFctech-3D..."
                   value={company}
                   onChange={(e) => setCompany(e.target.value)}
                   className="w-full text-sm px-4 py-2 border border-indigo-200 rounded-lg focus:outline-none focus:border-indigo-500 text-slate-800 bg-white shadow-xs font-medium"
@@ -3502,183 +1460,90 @@ export default function ShoppingListView({
         </div>
       )}
 
-      {/* FILTER & ADVANCED SEARCH HUB */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 md:p-5 mb-6 shadow-sm no-print space-y-4 select-none">
+      {/* FILTER & ADVANCED SEARCH BAR */}
+      <div className="bg-white border border-slate-200 rounded-xl p-4 mb-6 shadow-3xs no-print flex flex-col lg:flex-row lg:items-center gap-4 select-none">
         
-        {/* ROW 1: SEARCH BAR & BARCODE SCANNER (RESPONSIVE FULL-WIDTH) */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        {/* Search input */}
+        <div className="relative flex-1 flex gap-2">
           <div className="relative flex-1">
-            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+            <span className="absolute left-3.5 top-2.5 text-slate-400">
               <Search className="w-4 h-4" />
             </span>
             <input
               type="text"
-              placeholder="🔍 Digite o nome do item, código de barras (ex: 789...), modelo ou solicitante..."
+              placeholder="Filtrar por nome do material, notas ou especificações..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full text-xs md:text-sm pl-10 pr-24 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-950 focus:bg-white dark:focus:bg-slate-900 font-medium transition"
+              className="w-full text-xs pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 text-slate-800 bg-slate-50 focus:bg-white"
             />
-            <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-              {searchQuery ? (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery('')}
-                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-sm font-bold h-6 w-6 flex items-center justify-center rounded-full hover:bg-slate-200/60 dark:hover:bg-slate-800 transition cursor-pointer"
-                  title="Limpar busca"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              ) : (
-                <span className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/50" title="Pronto para leitor de código de barras ou digitação">
-                  <Barcode className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Leitor Ativo</span>
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Quick Scanner Camera Button or Clear Filters */}
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => {
-                setScannerMode('search');
-                setScannerOpen(true);
-              }}
-              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800 rounded-xl transition cursor-pointer"
-              title="Abrir Câmera para Escanear Código de Barras / QR Code"
-            >
-              <QrCode className="w-4 h-4" />
-              <span>Escanear Câmera</span>
-            </button>
-
-            {(searchQuery || filterCategory !== 'Todos' || filterStatus !== 'Todos' || filterCompany !== 'Todos' || filterOnlyMine) && (
+            {searchQuery && (
               <button
                 type="button"
-                onClick={() => {
-                  setSearchQuery('');
-                  setFilterCategory('Todos');
-                  setFilterStatus('Todos');
-                  setFilterCompany('Todos');
-                  setFilterOnlyMine(false);
-                }}
-                className="inline-flex items-center justify-center gap-1 px-3 py-2.5 text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 border border-rose-200 dark:border-rose-900 rounded-xl transition cursor-pointer"
-                title="Limpar todos os filtros"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 text-xs font-bold"
               >
-                <X className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Limpar</span>
+                ×
               </button>
             )}
           </div>
         </div>
 
-        {/* SUBTEXT / HELPER FOR BARCODE SCANNING */}
-        <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 px-1 border-b border-slate-100 dark:border-slate-800 pb-3">
-          <div className="flex items-center gap-1.5">
-            <Barcode className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-            <span><strong>Busca por Código de Barras ou Nome:</strong> compatível com leitor USB/Bluetooth e digitação instantânea.</span>
-          </div>
-          <div className="hidden md:block font-mono text-[10px] text-slate-400 shrink-0">
-            {filteredShopping.length} de {shopping.length} {shopping.length === 1 ? 'item' : 'itens'}
-          </div>
-        </div>
-
-        {/* ROW 2: CATEGORY FILTER CHIPS (CLEAN HORIZONTAL WRAP WITH ICONS & COUNTS) */}
-        <div className="space-y-1.5">
-          <span className="text-[10px] font-bold font-mono uppercase tracking-wider text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
-            <Filter className="w-3 h-3 text-indigo-500" /> CATEGORIA:
+        {/* Categories selector Buttons */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[10px] font-bold font-mono uppercase text-slate-400 mr-1 flex items-center gap-1">
+            <Filter className="w-3 h-3" /> CATEGORIA:
           </span>
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-            {['Todos', ...categoriesList].map((cat) => {
-              const stats = cat !== 'Todos' ? getCategoryStats(cat) : { count: shopping.length };
-              const isSelected = filterCategory === cat;
-              return (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setFilterCategory(cat)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer select-none ${
-                    isSelected
-                      ? 'border-indigo-600 bg-indigo-600 text-white shadow-xs font-bold'
-                      : 'border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-950 text-slate-650 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-900 hover:border-slate-300'
-                  }`}
-                >
-                  {cat !== 'Todos' && getCategoryIcon(cat, isSelected ? "w-3.5 h-3.5 text-white" : "w-3.5 h-3.5")}
-                  <span>{cat}</span>
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
-                    isSelected 
-                      ? 'bg-white/20 text-white' 
-                      : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                  }`}>
-                    {stats.count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          {['Todos', ...categoriesList].map((cat) => {
+            const stats = cat !== 'Todos' ? getCategoryStats(cat) : { count: shopping.length };
+            return (
+              <button
+                key={cat}
+                onClick={() => setFilterCategory(cat)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
+                  filterCategory === cat
+                    ? 'border-indigo-600 bg-indigo-50 text-indigo-700' 
+                    : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {cat} {stats.count > 0 && <span className="text-[10px] ml-1 opacity-70 font-mono">({stats.count})</span>}
+              </button>
+            );
+          })}
         </div>
 
-        {/* ROW 3: STATUS, COLLABORATOR & COMPANY FILTERS */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-          
-          {/* Status Tabs */}
-          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
-            {[
-              { key: 'Todos', label: 'Todos', count: shopping.length },
-              { key: 'Pendentes', label: 'Pendentes', count: shopping.filter(i => !i.checked).length },
-              { key: 'Comprados', label: 'Comprados', count: shopping.filter(i => i.checked).length }
-            ].map(({ key, label, count }) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setFilterStatus(key)}
-                className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-lg transition cursor-pointer select-none ${
-                  filterStatus === key
-                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-3xs'
-                    : 'text-slate-550 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-              >
-                <span>{label}</span>
-                <span className="text-[10px] opacity-70 font-mono">({count})</span>
-              </button>
+        {/* Status filters */}
+        <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-lg">
+          {['Todos', 'Pendentes', 'Comprados'].map((st) => (
+            <button
+              key={st}
+              onClick={() => setFilterStatus(st)}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${
+                filterStatus === st 
+                  ? 'bg-white text-slate-900 shadow-3xs' 
+                  : 'text-slate-550 hover:text-slate-800'
+              }`}
+            >
+              {st}
+            </button>
+          ))}
+        </div>
+
+        {/* Company filter dropdown */}
+        <div className="flex items-center gap-1.5 bg-slate-150 p-1 rounded-lg">
+          <span className="text-[10px] font-bold font-mono uppercase text-slate-500 px-1.5">
+            Empresa:
+          </span>
+          <select
+            value={filterCompany}
+            onChange={(e) => setFilterCompany(e.target.value)}
+            className="text-xs font-semibold bg-white border border-slate-200 rounded-md py-1 px-2.5 focus:outline-none focus:border-indigo-500 text-slate-800"
+          >
+            <option value="Todos">Todas</option>
+            <option value="georgefctech-3d">GeorgeFctech-3D</option>
+            {companiesList.filter(c => c.toLowerCase() !== 'georgefctech-3d').map(c => (
+              <option key={c} value={c}>{c}</option>
             ))}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2.5">
-            {/* Toggle Apenas Minhas Solicitações if colaborador */}
-            {userRole === 'colaborador' && (
-              <button
-                type="button"
-                onClick={() => setFilterOnlyMine(!filterOnlyMine)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 cursor-pointer select-none ${
-                  filterOnlyMine
-                    ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 shadow-3xs'
-                    : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-650 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900'
-                }`}
-              >
-                <CheckSquare className={`w-3.5 h-3.5 ${filterOnlyMine ? 'text-indigo-600' : 'text-slate-400'}`} />
-                <span>Apenas Minhas Solicitações</span>
-              </button>
-            )}
-
-            {/* Company Filter Dropdown */}
-            <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-950 px-2 py-1 rounded-xl border border-slate-200 dark:border-slate-800">
-              <span className="text-[10px] font-bold font-mono uppercase text-slate-500 dark:text-slate-400">
-                Empresa:
-              </span>
-              <select
-                value={filterCompany}
-                onChange={(e) => setFilterCompany(e.target.value)}
-                className="text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg py-1 px-2.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-800 dark:text-slate-100"
-              >
-                <option value="Todos">Todas</option>
-                {userRole !== 'colaborador' && <option value="georgefctech-3d">GeorgeFctech-3D</option>}
-                {companiesList.filter(c => c.toLowerCase() !== 'georgefctech-3d').map(c => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-            </div>
-          </div>
+          </select>
         </div>
       </div>
 
@@ -3706,7 +1571,7 @@ export default function ShoppingListView({
           
           {/* DESKTOP TABLE */}
           <div className="hidden md:block print:block overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full min-w-[1100px] text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 select-none">
                   <th className="py-3 px-5 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono w-12 text-center no-print">Status</th>
@@ -3735,7 +1600,7 @@ export default function ShoppingListView({
                       {/* Checkbox Status */}
                       <td className="py-3 px-5 text-center no-print">
                         <button
-                          onClick={() => handleToggleOrValidate(item)}
+                          onClick={() => onToggleShoppingItemChecked(item.id)}
                           className={`mx-auto h-5 w-5 rounded border flex items-center justify-center transition cursor-pointer select-none ${
                             item.checked 
                               ? 'bg-emerald-600 border-emerald-600 text-white' 
@@ -3792,47 +1657,58 @@ export default function ShoppingListView({
                             </div>
                           </div>
                         ) : (
-                          <div className="min-w-0 py-1">
-                            <span className={`font-bold text-sm leading-tight block ${
-                              item.checked ? 'text-slate-400 line-through font-semibold' : 'text-slate-900 font-sans'
-                            }`}>
-                              {item.materialName}
-                            </span>
-                            {item.barcode && (
-                              <div className="mt-0.5">
-                                <span className="inline-block font-mono text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded px-1.5 py-0.5 select-all dark:bg-indigo-950/40 dark:border-indigo-900">
-                                  Cód/Modelo: {item.barcode}
-                                </span>
-                              </div>
-                            )}
-                            {item.notes && (
-                              <p className={`text-xs mt-0.5 max-w-md truncate ${item.checked ? 'text-slate-400 line-through' : 'text-slate-500'}`}>
-                                {item.notes}
-                              </p>
-                            )}
-                            {item.purchaseLink ? (
-                              <a
-                                href={ensureAbsoluteUrl(item.purchaseLink, item.materialName)}
-                                target="_blank"
+                          <div className="flex items-center gap-3">
+                            {/* Product Image Thumbnail */}
+                            <div className="w-12 h-12 rounded-lg overflow-hidden border border-slate-200 bg-slate-50 shrink-0 flex items-center justify-center shadow-3xs print:border print:border-slate-300">
+                              <img 
+                                src={getProductImage(item)} 
+                                alt={item.materialName} 
+                                className="w-full h-full object-cover"
                                 referrerPolicy="no-referrer"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-650 hover:text-indigo-800 mt-1 hover:underline print:text-blue-600 print:underline"
-                              >
-                                <ExternalLink className="w-3.5 h-3.5 no-print" />
-                                <span>Acessar Link de Compra</span>
-                              </a>
-                            ) : (
-                              <a
-                                href={ensureAbsoluteUrl(undefined, item.materialName)}
-                                target="_blank"
-                                referrerPolicy="no-referrer"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-450 hover:text-indigo-700 mt-1 hover:underline print:text-blue-600 print:underline"
-                              >
-                                <ExternalLink className="w-3.5 h-3.5 no-print" />
-                                <span>Pesquisar para Comprar</span>
-                              </a>
-                            )}
+                              />
+                            </div>
+                            <div className="min-w-0">
+                              <span className={`font-bold text-sm leading-tight block ${
+                                item.checked ? 'text-slate-400 line-through font-semibold' : 'text-slate-900 font-sans'
+                              }`}>
+                                {item.materialName}
+                              </span>
+                              {item.barcode && (
+                                <div className="mt-0.5">
+                                  <span className="inline-block font-mono text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded px-1.5 py-0.5 select-all dark:bg-indigo-950/40 dark:border-indigo-900">
+                                    Cód/Modelo: {item.barcode}
+                                  </span>
+                                </div>
+                              )}
+                              {item.notes && (
+                                <p className={`text-xs mt-0.5 max-w-md truncate ${item.checked ? 'text-slate-400 line-through' : 'text-slate-500'}`}>
+                                  {item.notes}
+                                </p>
+                              )}
+                              {item.purchaseLink ? (
+                                <a
+                                  href={ensureAbsoluteUrl(item.purchaseLink, item.materialName)}
+                                  target="_blank"
+                                  referrerPolicy="no-referrer"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-650 hover:text-indigo-800 mt-1 hover:underline print:text-blue-600 print:underline"
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5 no-print" />
+                                  <span>Acessar Link de Compra</span>
+                                </a>
+                              ) : (
+                                <a
+                                  href={ensureAbsoluteUrl(undefined, item.materialName)}
+                                  target="_blank"
+                                  referrerPolicy="no-referrer"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-450 hover:text-indigo-700 mt-1 hover:underline print:text-blue-600 print:underline"
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5 no-print" />
+                                  <span>Pesquisar para Comprar</span>
+                                </a>
+                              )}
+                            </div>
                           </div>
                         )}
                       </td>
@@ -3844,7 +1720,6 @@ export default function ShoppingListView({
                             item.category === 'Filamento' ? 'bg-indigo-50 text-indigo-700' :
                             item.category === 'Peças de Reposição' ? 'bg-rose-50 text-rose-700' :
                             item.category === 'Acessórios/Insumos' ? 'bg-sky-50 text-sky-700' :
-                            item.category === 'Refrigeração' ? 'bg-cyan-50 text-cyan-700' :
                             'bg-slate-100 text-slate-700'
                           }`}>
                             {getCategoryIcon(item.category, "w-3.5 h-3.5")}
@@ -3964,11 +1839,11 @@ export default function ShoppingListView({
                             </div>
                           ) : (
                             <div className="flex items-center justify-center gap-2">
-                              {/* Import to Stock (Any category & Checked) */}
-                              {item.checked && (
+                              {/* Import to Stock Filament (Only Filament & Checked) */}
+                              {item.category === 'Filamento' && item.checked && userRole !== 'colaborador' && (
                                 <button
                                   onClick={() => handleImportToStock(item)}
-                                  title="Dar baixa no estoque ativo de suprimentos"
+                                  title="Enviar peças faturadas ao estoque ativo de Filamentos"
                                   className="p-1 px-2 rounded-lg bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 flex items-center gap-1 text-[10px] font-bold uppercase cursor-pointer transition-all duration-150"
                                 >
                                   <ArchiveRestore className="w-3.5 h-3.5" />
@@ -3976,50 +1851,21 @@ export default function ShoppingListView({
                                 </button>
                               )}
 
-                              {!item.checked && (
-                                <button
-                                  onClick={() => handleToggleOrValidate(item)}
-                                  title="Validar compra e dar baixa"
-                                  className="p-1 px-2 rounded-lg bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 flex items-center gap-1 text-[10px] font-bold uppercase cursor-pointer transition-all duration-150"
-                                >
-                                  <Check className="w-3.5 h-3.5 stroke-[3]" />
-                                  Validar
-                                </button>
-                              )}
-
-                              {(() => {
-                                const canEdit = canUserEditOrDeleteShoppingItem(item, userRole, currentUsername, currentUserEmail);
-                                if (!canEdit && userRole === 'colaborador') {
-                                  return (
-                                    <span 
-                                      title={item.checked ? "Item concluído/baixado - Apenas Administradores podem editar ou excluir" : "Solicitação restrita ao autor ou Administrador"} 
-                                      className="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 rounded text-[10px] font-mono cursor-not-allowed select-none"
-                                    >
-                                      <Lock className="w-3 h-3 text-slate-400" />
-                                      <span>Bloqueado</span>
-                                    </span>
-                                  );
-                                }
-                                return (
-                                  <>
-                                    <button
-                                      onClick={() => handleStartEdit(item)}
-                                      title="Editar entrada técnico comercial"
-                                      className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition cursor-pointer"
-                                    >
-                                      <Edit2 className="w-4 h-4" />
-                                    </button>
-                                    
-                                    <button
-                                      onClick={() => handleDeleteShoppingItem(item.id)}
-                                      title="Remover do cronograma"
-                                      className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition cursor-pointer"
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </button>
-                                  </>
-                                );
-                              })()}
+                              <button
+                                onClick={() => handleStartEdit(item)}
+                                title="Editar entrada técnico comercial"
+                                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              
+                              <button
+                                onClick={() => onDeleteShoppingItem(item.id)}
+                                title="Remover do cronograma"
+                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
                             </div>
                           )}
                         </td>
@@ -4046,7 +1892,7 @@ export default function ShoppingListView({
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3 w-full">
                       <button
-                        onClick={() => handleToggleOrValidate(item)}
+                        onClick={() => onToggleShoppingItemChecked(item.id)}
                         className={`mt-1.5 h-6 w-6 rounded border flex items-center justify-center transition cursor-pointer no-print shrink-0 ${
                           item.checked 
                             ? 'bg-emerald-600 border-emerald-600 text-white' 
@@ -4211,7 +2057,7 @@ export default function ShoppingListView({
                       </div>
 
                       <div className="flex items-center gap-1 no-print">
-                        {item.checked && (
+                        {item.category === 'Filamento' && item.checked && userRole !== 'colaborador' && (
                           <button
                             onClick={() => handleImportToStock(item)}
                             className="p-1 px-2 rounded-md bg-indigo-50 border border-indigo-100 text-indigo-700 flex items-center gap-1 text-[10px] font-bold uppercase cursor-pointer"
@@ -4219,44 +2065,18 @@ export default function ShoppingListView({
                             +Estoque
                           </button>
                         )}
-                        {!item.checked && (
-                          <button
-                            onClick={() => handleToggleOrValidate(item)}
-                            className="p-1 px-2 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center gap-1 text-[10px] font-bold uppercase cursor-pointer hover:bg-emerald-100"
-                          >
-                            Validar
-                          </button>
-                        )}
-                        {(() => {
-                          const canEdit = canUserEditOrDeleteShoppingItem(item, userRole, currentUsername, currentUserEmail);
-                          if (!canEdit && userRole === 'colaborador') {
-                            return (
-                              <span 
-                                title={item.checked ? "Item concluído/baixado - Apenas Administradores podem editar ou excluir" : "Solicitação restrita ao autor ou Administrador"} 
-                                className="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 rounded text-[10px] font-mono cursor-not-allowed select-none"
-                              >
-                                <Lock className="w-3 h-3 text-slate-400" />
-                                <span>Bloqueado</span>
-                              </span>
-                            );
-                          }
-                          return (
-                            <>
-                              <button
-                                onClick={() => handleStartEdit(item)}
-                                className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition cursor-pointer"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteShoppingItem(item.id)}
-                                className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded transition cursor-pointer"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </>
-                          );
-                        })()}
+                        <button
+                          onClick={() => handleStartEdit(item)}
+                          className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded transition cursor-pointer"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => onDeleteShoppingItem(item.id)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
                   )}
@@ -4271,815 +2091,6 @@ export default function ShoppingListView({
           </div>
         </div>
       )}
-      </>
-      )}
-
-      {/* HUB OPERACIONAL DO COLABORADOR */}
-      <div className={`${currentSubView ? 'bg-transparent border-none' : 'mt-12 mb-8 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden no-print'}`}>
-        {/* Tab headers */}
-        {!currentSubView && (
-          <div className="bg-slate-100 dark:bg-slate-950 p-4 border-b border-slate-200 dark:border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-lg">
-              <Layers className="w-5 h-5 animate-pulse" />
-            </div>
-            <div>
-              <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100 uppercase tracking-wider">
-                Central de Operações do Colaborador
-              </h3>
-              <p className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">
-                Controles rápidos de recebimento, histórico de auditoria e utilitários
-              </p>
-            </div>
-          </div>
-
-          {/* Tabs list with beautiful icons */}
-          <div className="flex flex-wrap gap-1 bg-slate-200 dark:bg-slate-900 p-1 rounded-xl">
-            <button
-              onClick={() => setColabActiveTab('baixa')}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition duration-150 cursor-pointer ${
-                colabActiveTab === 'baixa'
-                  ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-3xs'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-            >
-              <CheckCircle className="w-4 h-4" />
-              Baixa de Compras
-            </button>
-            <button
-              onClick={() => setColabActiveTab('compras')}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition duration-150 cursor-pointer ${
-                colabActiveTab === 'compras'
-                  ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-3xs'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-            >
-              <FileText className="w-4 h-4" />
-              Compras Efetuadas
-            </button>
-            <button
-              onClick={() => setColabActiveTab('calculadora')}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition duration-150 cursor-pointer ${
-                colabActiveTab === 'calculadora'
-                  ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-3xs'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-            >
-              <Wrench className="w-4 h-4" />
-              Calculadoras
-            </button>
-          </div>
-        </div>
-        )}
-
-        {/* TAB CONTENT: BAIXA DE COMPRAS */}
-        {colabActiveTab === 'baixa' && (
-          <div className="p-6">
-            <div className="flex flex-col md:flex-row items-start justify-between gap-4 mb-6">
-              <div>
-                <h4 className="font-bold text-slate-800 dark:text-slate-150 text-sm mb-1 flex items-center gap-2">
-                  <span>📦 Recebimento e Baixa Rápida de Suprimentos</span>
-                </h4>
-                <p className="text-xs text-slate-450 leading-relaxed">
-                  Os itens listados abaixo foram solicitados pela empresa e estão pendentes. Ao chegarem na oficina, dê a baixa para que o setor comercial saiba que já estão disponíveis.
-                </p>
-              </div>
-              
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={() => setStockConsultModalOpen(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 font-bold text-[10px] uppercase tracking-wider hover:bg-indigo-100 transition duration-150 cursor-pointer"
-                    title="Consultar estoque atual de insumos e matérias-primas"
-                  >
-                    <Database className="w-3.5 h-3.5" />
-                    <span>Consultar Estoque</span>
-                  </button>
-
-                  <button
-                    onClick={downloadHtmlReport}
-                    disabled={shopping.length === 0}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 font-bold text-[10px] uppercase tracking-wider hover:bg-blue-100 transition duration-150 cursor-pointer disabled:opacity-50"
-                    title="Gerar Relatório HTML dos Pedidos"
-                  >
-                    <FileText className="w-3.5 h-3.5" />
-                    <span>Relatório Pedidos (HTML)</span>
-                  </button>
-
-                  <button
-                    onClick={() => triggerExcelReportModal('pending')}
-                    disabled={shopping.length === 0}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 font-bold text-[10px] uppercase tracking-wider hover:bg-emerald-100 transition duration-150 cursor-pointer disabled:opacity-50"
-                    title="Exportar Pedidos para Planilha Excel (.xlsx)"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Planilha Excel (.XLSX)</span>
-                  </button>
-                </div>
-
-                <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-xl p-3 text-right">
-                  <span className="block text-[10px] font-bold uppercase text-amber-600 font-mono">Pedidos Pendentes</span>
-                  <span className="text-xl font-bold font-mono text-amber-700 dark:text-amber-400">
-                    {shopping.filter(i => !i.checked).length} itens
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {shopping.filter(i => !i.checked).length === 0 ? (
-              <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-8 text-center">
-                <CheckCircle className="w-10 h-10 text-emerald-500 mx-auto mb-3" />
-                <h5 className="font-bold text-slate-700 dark:text-slate-300 text-sm mb-1">Tudo Recebido!</h5>
-                <p className="text-xs text-slate-400">Nenhum pedido de compra pendente na fila no momento.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {shopping.filter(i => !i.checked).map(item => {
-                  const costValue = item.qtyNeeded * item.estUnitCost;
-                  return (
-                    <div 
-                      key={item.id} 
-                      className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-xl p-4 flex flex-col justify-between hover:border-indigo-400 dark:hover:border-indigo-900 transition-all duration-200"
-                    >
-                      <div>
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400">
-                            {item.category}
-                          </span>
-                          <span className="font-mono text-[10px] text-slate-400">
-                            Qtd: <strong className="text-slate-700 dark:text-slate-300 font-bold">{item.qtyNeeded} un</strong>
-                          </span>
-                        </div>
-                        
-                        <h5 className="font-bold text-slate-850 dark:text-slate-100 text-sm line-clamp-1 mb-1">
-                          {item.materialName}
-                        </h5>
-                        
-                        {item.barcode && (
-                          <p className="text-[10px] font-mono font-bold text-slate-400 mb-1">
-                            Cód: {item.barcode}
-                          </p>
-                        )}
-
-                        {(() => {
-                          const stockItem = getMatchingInventoryItem(item.materialName);
-                          if (stockItem) {
-                            return (
-                              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-mono bg-slate-100 dark:bg-slate-850 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-750 mb-2">
-                                <Database className="w-3 h-3 text-indigo-500 shrink-0" />
-                                <span>Estoque Atual: <strong className="text-indigo-600 dark:text-indigo-400">{stockItem.qty} un</strong> ({stockItem.status || 'Em Estoque'})</span>
-                              </div>
-                            );
-                          }
-                          return (
-                            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-mono bg-slate-50 dark:bg-slate-900 text-slate-400 border border-slate-200 dark:border-slate-800 mb-2">
-                              <span>Novo no Estoque após Baixa</span>
-                            </div>
-                          );
-                        })()}
-
-                        <div className="flex flex-wrap items-center gap-2 mb-3 text-[10px] text-slate-400">
-                          <span>Solicitante: <strong>{item.requestedBy || 'Ftéx'}</strong></span>
-                          <span>•</span>
-                          <span>Empresa: <strong>{item.company || 'Ftéx'}</strong></span>
-                        </div>
-                      </div>
-
-                      <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
-                        <div className="font-mono text-xs">
-                          <span className="text-slate-400 text-[10px] block">Estimativa:</span>
-                          <strong className="text-slate-700 dark:text-slate-200 font-bold">
-                            R$ {costValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                          </strong>
-                        </div>
-
-                        <div className="flex gap-1.5">
-                          <button
-                            onClick={() => handleToggleOrValidate(item)}
-                            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition shadow-3xs cursor-pointer"
-                            title="Validar compra e dar baixa no estoque"
-                          >
-                            <CheckCircle className="w-3.5 h-3.5" />
-                            Validar & Baixar
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* TAB CONTENT: COMPRAS EFETUADAS (HISTORICO) */}
-        {colabActiveTab === 'compras' && (
-          <div className="p-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-              <div>
-                <h4 className="font-bold text-slate-800 dark:text-slate-150 text-sm mb-1 flex items-center gap-2">
-                  <span>📜 Histórico de Compras Efetuadas (Entregues)</span>
-                </h4>
-                <p className="text-xs text-slate-450 leading-relaxed">
-                  Histórico consolidado dos itens de compras que já foram adquiridos e receberam baixa pela equipe da empresa.
-                </p>
-              </div>
-
-              {/* Filtros de Período & Busca */}
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-1 bg-slate-150 dark:bg-slate-900 p-1 rounded-xl border border-slate-250 dark:border-slate-800">
-                  <button
-                    onClick={() => setCompletedPeriodFilter('todos')}
-                    className={`px-3 py-1 text-[10px] uppercase font-bold rounded-lg transition-all cursor-pointer ${
-                      completedPeriodFilter === 'todos'
-                        ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-3xs'
-                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
-                    }`}
-                  >
-                    Todos
-                  </button>
-                  <button
-                    onClick={() => setCompletedPeriodFilter('hoje')}
-                    className={`px-3 py-1 text-[10px] uppercase font-bold rounded-lg transition-all cursor-pointer ${
-                      completedPeriodFilter === 'hoje'
-                        ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-3xs'
-                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
-                    }`}
-                  >
-                    Hoje
-                  </button>
-                  <button
-                    onClick={() => setCompletedPeriodFilter('semana')}
-                    className={`px-3 py-1 text-[10px] uppercase font-bold rounded-lg transition-all cursor-pointer ${
-                      completedPeriodFilter === 'semana'
-                        ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-3xs'
-                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
-                    }`}
-                  >
-                    Semanal
-                  </button>
-                  <button
-                    onClick={() => setCompletedPeriodFilter('mes')}
-                    className={`px-3 py-1 text-[10px] uppercase font-bold rounded-lg transition-all cursor-pointer ${
-                      completedPeriodFilter === 'mes'
-                        ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-3xs'
-                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
-                    }`}
-                  >
-                    Mensal
-                  </button>
-                </div>
-
-                {/* Search Input for Completed Purchases */}
-                <div className="relative w-full md:w-48">
-                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                    <Search className="w-3.5 h-3.5" />
-                  </span>
-                  <input
-                    type="text"
-                    value={completedSearchQuery}
-                    onChange={(e) => setCompletedSearchQuery(e.target.value)}
-                    placeholder="Pesquisar histórico..."
-                    className="w-full pl-9 pr-4 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-
-                {/* Relatórios e Pedidos Buttons */}
-                <button
-                  onClick={() => setStockConsultModalOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 font-bold text-[10px] uppercase tracking-wider hover:bg-indigo-100 transition duration-150 cursor-pointer"
-                  title="Consultar estoque atual de insumos"
-                >
-                  <Database className="w-3.5 h-3.5" />
-                  <span>Consultar Estoque</span>
-                </button>
-
-                <button
-                  onClick={downloadCompletedPurchasesHtmlReport}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 font-bold text-[10px] uppercase tracking-wider hover:bg-indigo-100 transition duration-150 cursor-pointer"
-                  title="Gerar Relatório Comercial das Compras Efetuadas"
-                >
-                  <FileText className="w-3.5 h-3.5" />
-                  <span>Gerar Relatório HTML</span>
-                </button>
-
-                <button
-                  onClick={() => triggerExcelReportModal('completed')}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 font-bold text-[10px] uppercase tracking-wider hover:bg-emerald-100 transition duration-150 cursor-pointer"
-                  title="Exportar Compras Efetuadas para Planilha Excel (.xlsx)"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Exportar Planilha Excel</span>
-                </button>
-              </div>
-            </div>
-
-            {(() => {
-              let baseCompletedItems = shopping.filter(item => item.checked);
-
-              // Aplicar filtro de período
-              if (completedPeriodFilter === 'hoje') {
-                baseCompletedItems = baseCompletedItems.filter(item => isToday(getPurchasedDate(item)));
-              } else if (completedPeriodFilter === 'semana') {
-                baseCompletedItems = baseCompletedItems.filter(item => isThisWeek(getPurchasedDate(item)));
-              } else if (completedPeriodFilter === 'mes') {
-                baseCompletedItems = baseCompletedItems.filter(item => isThisMonth(getPurchasedDate(item)));
-              }
-
-              // Aplicar busca
-              const completedItems = baseCompletedItems.filter(item => {
-                if (!completedSearchQuery) return true;
-                const q = completedSearchQuery.toLowerCase();
-                return (
-                  String(item.materialName || '').toLowerCase().includes(q) ||
-                  String(item.barcode || '').toLowerCase().includes(q) ||
-                  String(item.company || '').toLowerCase().includes(q) ||
-                  String(item.requestedBy || '').toLowerCase().includes(q)
-                );
-              });
-
-              // Estatísticas calculadas dinamicamente com baseCompletedItems
-              const totalSpent = baseCompletedItems.reduce((acc, i) => acc + (i.qtyNeeded * i.estUnitCost), 0);
-              const itemsCount = baseCompletedItems.length;
-              const avgUnitCost = baseCompletedItems.reduce((acc, i) => acc + i.estUnitCost, 0) / (itemsCount || 1);
-
-              return (
-                <>
-                  {/* Cost Statistics Card for History */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-                    <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900 rounded-xl p-4 flex flex-col">
-                      <span className="text-[10px] font-bold uppercase text-emerald-600 font-mono mb-1">
-                        Total Economizado / Investido ({completedPeriodFilter === 'todos' ? 'Geral' : completedPeriodFilter === 'hoje' ? 'Hoje' : completedPeriodFilter === 'semana' ? 'Esta Semana' : 'Este Mês'})
-                      </span>
-                      <strong className="text-xl font-bold font-mono text-emerald-700 dark:text-emerald-400">
-                        R$ {totalSpent.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </strong>
-                    </div>
-                    <div className="bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-900 rounded-xl p-4 flex flex-col">
-                      <span className="text-[10px] font-bold uppercase text-indigo-600 font-mono mb-1">Total de Itens Recebidos</span>
-                      <strong className="text-xl font-bold font-mono text-indigo-700 dark:text-indigo-400">
-                        {itemsCount} itens
-                      </strong>
-                    </div>
-                    <div className="bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-xl p-4 flex flex-col">
-                      <span className="text-[10px] font-bold uppercase text-slate-500 font-mono mb-1">Custo Médio por Unidade</span>
-                      <strong className="text-xl font-bold font-mono text-slate-700 dark:text-slate-300">
-                        R$ {avgUnitCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </strong>
-                    </div>
-                  </div>
-
-                  {completedItems.length === 0 ? (
-                    <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-8 text-center text-slate-400">
-                      <ClipboardList className="w-8 h-8 mx-auto mb-2 opacity-55" />
-                      <p className="text-xs">Nenhum item encontrado no histórico para os filtros ativos.</p>
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
-                      <table className="w-full text-left border-collapse">
-                        <thead>
-                          <tr className="bg-slate-50 dark:bg-slate-905 border-b border-slate-200 dark:border-slate-800 select-none text-[10px] font-mono text-slate-500 uppercase">
-                            <th className="p-3">Item / Especificação</th>
-                            <th className="p-3">Categoria</th>
-                            <th className="p-3">Empresa</th>
-                            <th className="p-3">Qtd</th>
-                            <th className="p-3 text-right">Unitário</th>
-                            <th className="p-3 text-right">Total Pago</th>
-                            <th className="p-3 text-center">Status</th>
-                            {userRole !== 'colaborador' && <th className="p-3 text-center">Ações</th>}
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
-                          {completedItems.map(item => (
-                            <tr key={item.id} className="hover:bg-slate-50/55 dark:hover:bg-slate-800/30 transition">
-                              <td className="p-3">
-                                <span className="font-bold text-slate-800 dark:text-slate-100 block">{item.materialName}</span>
-                                {item.barcode && <span className="text-[10px] text-slate-400 font-mono">Código: {item.barcode}</span>}
-                              </td>
-                              <td className="p-3">
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold">
-                                  {item.category}
-                                </span>
-                              </td>
-                              <td className="p-3 text-slate-500 dark:text-slate-400">{item.company || 'Ftéx'}</td>
-                              <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{item.qtyNeeded}x</td>
-                              <td className="p-3 text-right font-mono text-slate-600 dark:text-slate-400">R$ {item.estUnitCost.toFixed(2)}</td>
-                              <td className="p-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                                R$ {(item.qtyNeeded * item.estUnitCost).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                              </td>
-                              <td className="p-3 text-center">
-                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-400 px-2 py-0.5 rounded">
-                                  <Check className="w-3 h-3 stroke-[3]" /> Recebido
-                                </span>
-                              </td>
-                              {userRole !== 'colaborador' && (
-                                <td className="p-3 text-center">
-                                  <div className="flex items-center justify-center gap-1.5">
-                                    <button
-                                      onClick={() => handleStartEdit(item)}
-                                      title="Editar registro do histórico"
-                                      className="p-1 text-slate-400 hover:text-slate-755 hover:bg-slate-100 rounded-lg transition cursor-pointer"
-                                    >
-                                      <Edit2 className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      onClick={() => handleDeleteShoppingItem(item.id)}
-                                      title="Remover do histórico"
-                                      className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                </td>
-                              )}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </>
-              );
-            })()}
-          </div>
-        )}
-
-        {/* TAB CONTENT: CALCULADORAS OPERACIONAIS */}
-        {colabActiveTab === 'calculadora' && (
-          <div className="p-6">
-            <div className="mb-6 bg-slate-50 dark:bg-slate-900/40 p-4 rounded-xl border border-slate-100 dark:border-slate-800">
-              <h4 className="font-bold text-slate-800 dark:text-slate-150 text-sm mb-1 flex items-center gap-1.5">
-                <Wrench className="w-4 h-4 text-indigo-500 animate-spin-slow" />
-                <span>{userRole === 'colaborador' ? '🧮 Cálculos Gerais' : '🧮 Calculadoras e Utilitários de Impressão & Compras'}</span>
-              </h4>
-              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                {userRole === 'colaborador' ? 'Calculadora de bolso integrada para auxiliar colaboradores em contas rápidas de compras, rateio de insumos e fechamento de valores.' : 'Ferramentas interativas para ajudar colaboradores no planejamento de consumo de insumos de impressão 3D e cálculo de orçamentos rápidos para compras.'}
-              </p>
-            </div>
-
-            <div className={userRole === 'colaborador' ? "max-w-md mx-auto" : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"}>
-              {userRole !== 'colaborador' && (
-                <>
-                  {/* 1. FILAMENT COST CALCULATOR */}
-              <div className="bg-white dark:bg-slate-950 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Layers className="w-4 h-4 text-indigo-500" />
-                    <h5 className="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                      Custo por Grama (Filamentos)
-                    </h5>
-                  </div>
-                  <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-4 leading-relaxed">
-                    Descubra o custo por grama com base no preço do rolo. Crucial para faturar peças impressas em 3D.
-                  </p>
-
-                  <div className="space-y-3.5">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Preço do Rolo (R$)</label>
-                      <input
-                        type="number"
-                        value={calcFilPrice === 0 ? '' : calcFilPrice}
-                        onChange={(e) => setCalcFilPrice(parseFloat(e.target.value) || 0)}
-                        className="w-full text-xs font-mono font-bold px-3 py-1.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 rounded-lg focus:border-indigo-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Peso do Rolo (Gramas)</label>
-                      <div className="flex gap-1.5">
-                        <input
-                          type="number"
-                          value={calcFilWeight === 0 ? '' : calcFilWeight}
-                          onChange={(e) => setCalcFilWeight(parseInt(e.target.value) || 0)}
-                          className="w-full text-xs font-mono font-bold px-3 py-1.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 rounded-lg focus:border-indigo-500"
-                        />
-                        <button
-                          onClick={() => setCalcFilWeight(1000)}
-                          className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[10px] font-bold rounded duration-100 cursor-pointer text-slate-700 dark:text-slate-300"
-                        >
-                          1kg
-                        </button>
-                        <button
-                          onClick={() => setCalcFilWeight(500)}
-                          className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[10px] font-bold rounded duration-100 cursor-pointer text-slate-700 dark:text-slate-300"
-                        >
-                          500g
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 text-center">
-                  <span className="block text-[10px] text-slate-400 uppercase tracking-wider mb-0.5">Custo Estimado por Grama</span>
-                  <strong className="text-xl font-bold font-mono text-indigo-650 dark:text-indigo-400">
-                    R$ {(calcFilPrice / (calcFilWeight || 1)).toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
-                  </strong>
-                </div>
-              </div>
-
-              {/* 2. BATCH BUDGET ESTIMATOR */}
-              <div className="bg-white dark:bg-slate-950 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <ShoppingBag className="w-4 h-4 text-emerald-500" />
-                    <h5 className="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                      Orçamento de Lote de Compras
-                    </h5>
-                  </div>
-                  <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-4 leading-relaxed">
-                    Consolide preços com cálculo rápido de quantidade, frete e tarifas para compras comerciais rápidas.
-                  </p>
-
-                  <div className="space-y-3.5">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Quantidade</label>
-                        <input
-                          type="number"
-                          value={calcQty === 0 ? '' : calcQty}
-                          onChange={(e) => setCalcQty(parseInt(e.target.value) || 0)}
-                          className="w-full text-xs font-mono font-bold px-3 py-1.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 rounded-lg focus:border-indigo-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Custo Unit. (R$)</label>
-                        <input
-                          type="number"
-                          value={calcUnitPrice === 0 ? '' : calcUnitPrice}
-                          onChange={(e) => setCalcUnitPrice(parseFloat(e.target.value) || 0)}
-                          className="w-full text-xs font-mono font-bold px-3 py-1.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 rounded-lg focus:border-indigo-500"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Frete / Custos Extras (R$)</label>
-                      <input
-                        type="number"
-                        value={calcShipping === 0 ? '' : calcShipping}
-                        onChange={(e) => setCalcShipping(parseFloat(e.target.value) || 0)}
-                        className="w-full text-xs font-mono font-bold px-3 py-1.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 rounded-lg focus:border-indigo-500"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 text-center">
-                  <span className="block text-[10px] text-slate-400 uppercase tracking-wider mb-0.5">Custo Total de Aquisição</span>
-                  <strong className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
-                    R$ {((calcQty * calcUnitPrice) + calcShipping).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </strong>
-                </div>
-              </div>
-
-              {/* 3. FILAMENT LENGTH CALCULATOR */}
-              <div className="bg-white dark:bg-slate-950 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Layers className="w-4 h-4 text-rose-500" />
-                    <h5 className="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                      Conversor de Comprimento (1.75mm)
-                    </h5>
-                  </div>
-                  <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-4 leading-relaxed">
-                    Estime o comprimento total em metros disponível em um rolo com base no seu peso e material.
-                  </p>
-
-                  <div className="space-y-3.5">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Material do Insumo</label>
-                      <select
-                        value={calcFilType}
-                        onChange={(e) => setCalcFilType(e.target.value as any)}
-                        className="w-full text-xs font-bold px-3 py-1.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 rounded-lg focus:border-indigo-500"
-                      >
-                        <option value="PLA">PLA (Densidade ~1.24 g/cm³)</option>
-                        <option value="PETG">PETG (Densidade ~1.27 g/cm³)</option>
-                        <option value="ABS">ABS (Densidade ~1.04 g/cm³)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Peso Total (Kg)</label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={calcFilTotalWeight === 0 ? '' : calcFilTotalWeight}
-                        onChange={(e) => setCalcFilTotalWeight(parseFloat(e.target.value) || 0)}
-                        className="w-full text-xs font-mono font-bold px-3 py-1.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 rounded-lg focus:border-indigo-500"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 text-center">
-                  <span className="block text-[10px] text-slate-400 uppercase tracking-wider mb-0.5">Comprimento Estimado</span>
-                  <strong className="text-xl font-bold font-mono text-rose-600 dark:text-rose-500">
-                    {(() => {
-                      const metersPerKg = calcFilType === 'PLA' ? 330 : calcFilType === 'PETG' ? 310 : 400;
-                      return `${(calcFilTotalWeight * metersPerKg).toFixed(0)} metros`;
-                    })()}
-                  </strong>
-                </div>
-              </div>
-                </>
-              )}
-
-              {/* 4. DIGITAL POCKET CALCULATOR */}
-              <div className="bg-gradient-to-b from-[#24282e] to-[#121417] text-white p-6 rounded-[24px] border-4 border-[#3a3f47] flex flex-col justify-between shadow-[0_20px_40px_rgba(0,0,0,0.6),inset_0_2px_4px_rgba(255,255,255,0.15)] relative overflow-hidden select-none max-w-sm mx-auto w-full">
-                {/* Visual glass sheen across the entire calculator */}
-                <div className="absolute top-0 left-0 right-0 h-[40%] bg-gradient-to-b from-white/5 to-white/0 pointer-events-none skew-y-6 origin-top-left" />
-
-                {/* Brand Header */}
-                <div className="flex items-center justify-between mb-4 pb-2 border-b border-[#2d323b] relative z-10">
-                  <div className="flex flex-col">
-                    <span className="text-[10px] font-mono tracking-widest text-slate-300 font-extrabold uppercase">
-                      GeorgeFctech
-                    </span>
-                    <span className="text-[7px] font-mono tracking-wider text-slate-500 uppercase -mt-0.5">
-                      ELECTRONIC GT-1200X
-                    </span>
-                  </div>
-
-                  {/* SOLAR CELL PANEL */}
-                  <div className="bg-gradient-to-r from-[#201008] via-[#4d2512] to-[#201008] rounded border border-black flex gap-0.5 p-0.5 h-5 w-14 shadow-[inset_0_1px_3px_rgba(0,0,0,0.8)] relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none" />
-                    <span className="w-full bg-[#3c1e0f]/80 rounded-[1px] border-r border-[#1a0c06]" />
-                    <span className="w-full bg-[#3c1e0f]/80 rounded-[1px] border-r border-[#1a0c06]" />
-                    <span className="w-full bg-[#3c1e0f]/80 rounded-[1px] border-r border-[#1a0c06]" />
-                    <span className="w-full bg-[#3c1e0f]/80 rounded-[1px]" />
-                  </div>
-                </div>
-
-                <div>
-                  {/* SCREEN / LCD DISPLAY */}
-                  <div 
-                    className="border-3 border-[#0b0c0e] rounded-xl p-3.5 text-right font-mono relative overflow-hidden mb-5 select-text shadow-[inset_0_4px_10px_rgba(0,0,0,0.8),0_1px_2px_rgba(255,255,255,0.1)]"
-                    style={{
-                      backgroundColor: '#9cae8d',
-                      backgroundImage: 'radial-gradient(circle, rgba(156,174,141,1) 0%, rgba(144,161,129,1) 100%)',
-                      boxShadow: 'inset 0 4px 10px rgba(0,0,0,0.8), 0 1px 2px rgba(255,255,255,0.1)',
-                      color: '#1d2618'
-                    }}
-                  >
-                    {/* Retro LCD screen glass glare */}
-                    <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/10 to-transparent pointer-events-none" />
-                    
-                    {/* Faint LCD background numbers to simulate segmented screen */}
-                    <div className="absolute right-3.5 bottom-3 text-2xl font-bold tracking-tight text-[#1d2618]/5 select-none font-mono pointer-events-none">
-                      8888888888
-                    </div>
-
-                    {/* Formula / Sub-display */}
-                    <div className="text-[10px] text-[#1d2618]/60 min-h-[15px] truncate tracking-normal font-bold">
-                      {calcSubDisplay || '\u00A0'}
-                    </div>
-
-                    {/* Main Display value */}
-                    <div className="text-2xl font-black truncate tracking-tight mt-0.5 select-all font-mono drop-shadow-[0.5px_0.5px_0px_rgba(255,255,255,0.4)]">
-                      {calcDisplay}
-                    </div>
-                  </div>
-
-                  {/* BUTTONS GRID WITH REALISTIC 3D MECHANICAL KEY PRESS FEEL */}
-                  <div className="grid grid-cols-4 gap-2.5 text-xs font-mono">
-                    {/* Row 1 */}
-                    <button
-                      onClick={() => handleCalcKeyPress('C')}
-                      className="h-10 font-bold bg-[#df4242] hover:bg-[#eb4e4e] text-white rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center border-b-[3px] border-[#8a2121] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.25)] select-none text-sm"
-                    >
-                      C
-                    </button>
-                    <button
-                      onClick={() => handleCalcKeyPress('DEL')}
-                      className="h-10 font-bold bg-[#e07431] hover:bg-[#ed813e] text-white rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center border-b-[3px] border-[#9c4a16] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.25)] select-none"
-                    >
-                      DEL
-                    </button>
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(calcDisplay);
-                        setToastMessage("Valor copiado!");
-                        setTimeout(() => setToastMessage(null), 2500);
-                      }}
-                      title="Copiar resultado"
-                      className="h-10 text-[9px] font-extrabold bg-[#555d6a] hover:bg-[#626a79] text-[#ffd26a] rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center border-b-[3px] border-[#363b44] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.25)] select-none tracking-tighter"
-                    >
-                      COPIAR
-                    </button>
-                    <button
-                      onClick={() => handleCalcKeyPress('÷')}
-                      className="h-10 font-extrabold bg-[#47608a] hover:bg-[#5470a1] text-indigo-150 rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center text-sm border-b-[3px] border-[#293a57] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.25)] select-none"
-                    >
-                      ÷
-                    </button>
-
-                    {/* Row 2 */}
-                    <button
-                      onClick={() => handleCalcKeyPress('7')}
-                      className="h-10 font-bold bg-[#373d47] hover:bg-[#434b57] text-white rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center border-b-[3px] border-[#1d2127] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] select-none text-sm"
-                    >
-                      7
-                    </button>
-                    <button
-                      onClick={() => handleCalcKeyPress('8')}
-                      className="h-10 font-bold bg-[#373d47] hover:bg-[#434b57] text-white rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center border-b-[3px] border-[#1d2127] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] select-none text-sm"
-                    >
-                      8
-                    </button>
-                    <button
-                      onClick={() => handleCalcKeyPress('9')}
-                      className="h-10 font-bold bg-[#373d47] hover:bg-[#434b57] text-white rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center border-b-[3px] border-[#1d2127] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] select-none text-sm"
-                    >
-                      9
-                    </button>
-                    <button
-                      onClick={() => handleCalcKeyPress('×')}
-                      className="h-10 font-extrabold bg-[#47608a] hover:bg-[#5470a1] text-indigo-150 rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center text-sm border-b-[3px] border-[#293a57] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.25)] select-none"
-                    >
-                      ×
-                    </button>
-
-                    {/* Row 3 */}
-                    <button
-                      onClick={() => handleCalcKeyPress('4')}
-                      className="h-10 font-bold bg-[#373d47] hover:bg-[#434b57] text-white rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center border-b-[3px] border-[#1d2127] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] select-none text-sm"
-                    >
-                      4
-                    </button>
-                    <button
-                      onClick={() => handleCalcKeyPress('5')}
-                      className="h-10 font-bold bg-[#373d47] hover:bg-[#434b57] text-white rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center border-b-[3px] border-[#1d2127] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] select-none text-sm"
-                    >
-                      5
-                    </button>
-                    <button
-                      onClick={() => handleCalcKeyPress('6')}
-                      className="h-10 font-bold bg-[#373d47] hover:bg-[#434b57] text-white rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center border-b-[3px] border-[#1d2127] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] select-none text-sm"
-                    >
-                      6
-                    </button>
-                    <button
-                      onClick={() => handleCalcKeyPress('-')}
-                      className="h-10 font-extrabold bg-[#47608a] hover:bg-[#5470a1] text-indigo-150 rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center text-sm border-b-[3px] border-[#293a57] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.25)] select-none"
-                    >
-                      -
-                    </button>
-
-                    {/* Row 4 */}
-                    <button
-                      onClick={() => handleCalcKeyPress('1')}
-                      className="h-10 font-bold bg-[#373d47] hover:bg-[#434b57] text-white rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center border-b-[3px] border-[#1d2127] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] select-none text-sm"
-                    >
-                      1
-                    </button>
-                    <button
-                      onClick={() => handleCalcKeyPress('2')}
-                      className="h-10 font-bold bg-[#373d47] hover:bg-[#434b57] text-white rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center border-b-[3px] border-[#1d2127] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] select-none text-sm"
-                    >
-                      2
-                    </button>
-                    <button
-                      onClick={() => handleCalcKeyPress('3')}
-                      className="h-10 font-bold bg-[#373d47] hover:bg-[#434b57] text-white rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center border-b-[3px] border-[#1d2127] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] select-none text-sm"
-                    >
-                      3
-                    </button>
-                    <button
-                      onClick={() => handleCalcKeyPress('+')}
-                      className="h-10 font-extrabold bg-[#47608a] hover:bg-[#5470a1] text-indigo-150 rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center text-sm border-b-[3px] border-[#293a57] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.25)] select-none"
-                    >
-                      +
-                    </button>
-
-                    {/* Row 5 */}
-                    <button
-                      onClick={() => handleCalcKeyPress('0')}
-                      className="h-10 font-bold bg-[#373d47] hover:bg-[#434b57] text-white rounded-lg col-span-2 transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center border-b-[3px] border-[#1d2127] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] select-none text-sm"
-                    >
-                      0
-                    </button>
-                    <button
-                      onClick={() => handleCalcKeyPress('.')}
-                      className="h-10 font-bold bg-[#373d47] hover:bg-[#434b57] text-white rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center border-b-[3px] border-[#1d2127] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] select-none text-sm"
-                    >
-                      .
-                    </button>
-                    <button
-                      onClick={() => handleCalcKeyPress('=')}
-                      className="h-10 font-extrabold bg-[#1e8f54] hover:bg-[#25ad67] text-white rounded-lg transition duration-75 cursor-pointer active:translate-y-[3px] active:border-b-0 flex items-center justify-center text-base border-b-[3px] border-[#0f5430] shadow-[0_3px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.25)] select-none"
-                    >
-                      =
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mt-5 pt-3.5 border-t border-[#22252c] text-[8px] text-center text-slate-500 font-mono tracking-widest uppercase">
-                  Pocket Calculator GT-1200
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
 
       {/* FOOTER TIPS CARD */}
       {userRole !== 'colaborador' && (
@@ -5101,452 +2112,12 @@ export default function ShoppingListView({
         </div>
       )}
 
-      {/* VALIDATION MODAL */}
-      {validatingItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in no-print">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col">
-            {/* Modal Header */}
-            <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-emerald-50/30 dark:bg-slate-950/20">
-              <div className="flex items-center gap-2">
-                <CheckSquare className="w-5 h-5 text-emerald-600 dark:text-emerald-400 animate-pulse" />
-                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800 dark:text-white">
-                  Validar Compra Efetuada
-                </h3>
-              </div>
-              <button 
-                onClick={() => setValidatingItem(null)}
-                className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-white transition duration-150 cursor-pointer text-xl font-bold"
-              >
-                ×
-              </button>
-            </div>
-
-            {/* Modal Content */}
-            <div className="p-6 space-y-4">
-              <div className="space-y-1">
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 uppercase">
-                  {validatingItem.category}
-                </span>
-                <h4 className="font-bold text-slate-800 dark:text-slate-100 text-base leading-snug">
-                  {validatingItem.materialName}
-                </h4>
-                {validatingItem.barcode && (
-                  <p className="text-[10px] font-mono font-bold text-slate-400">
-                    Código de Barras / SKU: {validatingItem.barcode}
-                  </p>
-                )}
-              </div>
-
-              {/* Purchase Details Card */}
-              <div className="bg-slate-50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-850 rounded-xl p-3.5 space-y-2 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Solicitante:</span>
-                  <span className="font-bold text-slate-700 dark:text-slate-200">{validatingItem.requestedBy || 'Ftéx'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Empresa Responsável:</span>
-                  <span className="font-bold text-slate-700 dark:text-slate-200">{validatingItem.company || 'Ftéx'}</span>
-                </div>
-                {validatingItem.department && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Setor do Pedido:</span>
-                    <span className="font-bold text-slate-700 dark:text-slate-200">{validatingItem.department}</span>
-                  </div>
-                )}
-                <div className="border-t border-slate-200/60 dark:border-slate-800/60 my-2 pt-2 flex justify-between font-mono">
-                  <span className="text-slate-400">Quantidade x Unitário:</span>
-                  <span className="text-slate-600 dark:text-slate-300">{validatingItem.qtyNeeded}x R$ {validatingItem.estUnitCost.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between font-mono text-sm pt-1">
-                  <span className="text-slate-500 font-bold">Total a Pagar:</span>
-                  <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                    R$ {(validatingItem.qtyNeeded * validatingItem.estUnitCost).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
-              </div>
-
-              {/* Option to give Baixa to Stock */}
-              <div className="bg-emerald-50/20 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-950/30 rounded-xl p-4 flex items-start gap-3">
-                <input
-                  type="checkbox"
-                  id="autoPushToStock"
-                  checked={autoPushToStock}
-                  onChange={(e) => setAutoPushToStock(e.target.checked)}
-                  className="mt-1 h-4.5 w-4.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                />
-                <div className="space-y-0.5">
-                  <label htmlFor="autoPushToStock" className="text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer select-none">
-                    Dar Baixa Automática no Estoque Ativo
-                  </label>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-normal">
-                    Se marcado, adicionará automaticamente esta quantidade ({validatingItem.qtyNeeded} un) ao seu estoque atual de suprimentos sem necessidade de reinserção de dados.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/20 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setValidatingItem(null)}
-                className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-slate-700 dark:hover:text-white bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg duration-150 cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmValidation}
-                className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg duration-150 shadow-sm flex items-center gap-1.5 cursor-pointer"
-              >
-                <Check className="w-4 h-4 stroke-[3]" />
-                Confirmar e Salvar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL PARA EDITAR METADADOS DO EXCEL */}
-      {excelModalOpen && (
-        <div id="excel-metadata-modal" className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 flex items-center justify-center p-4 z-50 animate-[fadeIn_0.15s_ease-out] no-print">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-[scaleUp_0.18s_ease-out]">
-            
-            {/* Modal Header */}
-            <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-950/20">
-              <div className="flex items-center gap-2">
-                <FileText className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800 dark:text-slate-100 font-display">
-                  Configurar Cabeçalho Excel
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setExcelModalOpen(false)}
-                className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg transition"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              setExcelModalOpen(false);
-              const meta = {
-                company: excelCompany.trim(),
-                requestedBy: excelRequestedBy.trim(),
-                department: excelDepartment.trim(),
-                category: excelCategory
-              };
-              if (excelModalType === 'pending') {
-                generateReportExcel(meta);
-              } else {
-                generateCompletedPurchasesExcelReport(meta);
-              }
-            }} className="p-5 space-y-4">
-              
-              <p className="text-xs text-slate-500 dark:text-slate-400 leading-normal">
-                Confirme ou altere os dados organizacionais abaixo. Eles serão incluídos no cabeçalho formal da planilha Excel gerada (.xlsx).
-              </p>
-
-              {/* Filtro de Categoria na Exportação */}
-              {excelModalType === 'pending' && (
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                    Filtrar / Imprimir por Categoria
-                  </label>
-                  <select
-                    value={excelCategory}
-                    onChange={(e) => setExcelCategory(e.target.value)}
-                    className="w-full px-3.5 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-800 dark:text-white bg-white dark:bg-slate-950 focus:outline-none focus:border-indigo-500 text-xs transition"
-                  >
-                    <option value="Todos">Todas as Categorias (Abas Separadas por Categoria)</option>
-                    <option value="Filamento">🧵 Apenas Filamento de Impressão</option>
-                    <option value="Placas & Fontes">⚡ Apenas Placas & Fontes</option>
-                    <option value="Componentes Eletrônicos">🔌 Apenas Componentes Eletrônicos</option>
-                    <option value="Refrigeração">❄️ Apenas Refrigeração (Coolers, Fans, Dutos)</option>
-                    <option value="Peças de Reposição">🔧 Apenas Peças de Reposição</option>
-                    <option value="Acessórios/Insumos">📦 Apenas Acessórios / Insumos</option>
-                    <option value="Outros">🏷️ Apenas Outras Despesas</option>
-                  </select>
-                  <p className="text-[10px] text-slate-400 dark:text-slate-500">
-                    Selecione uma categoria específica para imprimir apenas seus produtos, sem misturar com outras categorias.
-                  </p>
-                </div>
-              )}
-
-              {/* Empresa */}
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                  Empresa Solicitante / Firma
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={excelCompany}
-                  onChange={(e) => setExcelCompany(e.target.value)}
-                  placeholder="Ex: GeorgeFctech-3D ou Ftéx"
-                  className="w-full px-3.5 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-800 dark:text-white bg-white dark:bg-slate-950 focus:outline-none focus:border-indigo-500 text-xs transition"
-                />
-              </div>
-
-              {/* Solicitante / Responsável */}
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                  Solicitante / Responsável
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={excelRequestedBy}
-                  onChange={(e) => setExcelRequestedBy(e.target.value)}
-                  placeholder="Ex: George"
-                  className="w-full px-3.5 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-800 dark:text-white bg-white dark:bg-slate-950 focus:outline-none focus:border-indigo-500 text-xs transition"
-                />
-              </div>
-
-              {/* Setor */}
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                  Setor / Departamento
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={excelDepartment}
-                  onChange={(e) => setExcelDepartment(e.target.value)}
-                  placeholder="Ex: Oficina / Comercial"
-                  className="w-full px-3.5 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-800 dark:text-white bg-white dark:bg-slate-950 focus:outline-none focus:border-indigo-500 text-xs transition"
-                />
-              </div>
-
-              {/* Buttons */}
-              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setExcelModalOpen(false)}
-                  className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-slate-700 dark:hover:text-white bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg duration-150 cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg duration-150 shadow-sm flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Download className="w-4 h-4" />
-                  Gerar Planilha (.XLSX)
-                </button>
-              </div>
-
-            </form>
-
-          </div>
-        </div>
-      )}
-
-      {/* QUICK STOCK CONSULTATION MODAL */}
-      {stockConsultModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            {/* Header */}
-            <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-950/50">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900">
-                  <Database className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-slate-800 dark:text-slate-100 text-base flex items-center gap-2">
-                    Consulta Rápida de Estoque & Insumos
-                    <span className="text-xs font-normal font-mono px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300">
-                      {inventory.length} itens cadastrados
-                    </span>
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    Acompanhe a quantidade disponível em tempo real e exporte planilhas de conferência.
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={downloadStockExcelDirect}
-                  disabled={inventory.length === 0}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 font-bold text-xs hover:bg-emerald-100 transition cursor-pointer disabled:opacity-50"
-                  title="Baixar Planilha de Estoque Completa em Excel (.xlsx)"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Baixar Planilha (.XLSX)</span>
-                </button>
-                {onNavigate && (
-                  <button
-                    onClick={() => {
-                      setStockConsultModalOpen(false);
-                      onNavigate('suprimentos');
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-xs hover:bg-slate-100 dark:hover:bg-slate-700 transition cursor-pointer"
-                    title="Ir para tela completa de Insumos & Estoque"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    <span>Gerenciar Estoque</span>
-                  </button>
-                )}
-                <button
-                  onClick={() => setStockConsultModalOpen(false)}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
-            {/* Filters Bar */}
-            <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-wrap items-center gap-3">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                <input
-                  type="text"
-                  value={stockSearchQuery}
-                  onChange={(e) => setStockSearchQuery(e.target.value)}
-                  placeholder="Pesquisar material, SKU ou especificação..."
-                  className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <label className="text-xs text-slate-400">Categoria:</label>
-                <select
-                  value={stockCategoryFilter}
-                  onChange={(e) => setStockCategoryFilter(e.target.value)}
-                  className="text-xs px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
-                >
-                  <option value="Todos">Todas as Categorias</option>
-                  <option value="Filamento">Filamento</option>
-                  <option value="Peças de Reposição">Peças de Reposição</option>
-                  <option value="Acessórios/Insumos">Acessórios/Insumos</option>
-                  <option value="Refrigeração">Refrigeração</option>
-                  <option value="Outros">Outros</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Stock Items Table */}
-            <div className="flex-1 overflow-y-auto p-4 max-h-[50vh]">
-              {(() => {
-                const filteredStock = inventory.filter(inv => {
-                  const matchesSearch = !stockSearchQuery || (
-                    (inv.material || '').toLowerCase().includes(stockSearchQuery.toLowerCase()) ||
-                    (inv.id || '').toLowerCase().includes(stockSearchQuery.toLowerCase()) ||
-                    (inv.category || '').toLowerCase().includes(stockSearchQuery.toLowerCase())
-                  );
-                  const matchesCat = stockCategoryFilter === 'Todos' || inv.category === stockCategoryFilter;
-                  return matchesSearch && matchesCat;
-                });
-
-                if (filteredStock.length === 0) {
-                  return (
-                    <div className="p-8 text-center text-slate-400">
-                      <Database className="w-10 h-10 mx-auto mb-2 opacity-40" />
-                      <p className="text-xs">Nenhum insumo encontrado no estoque com os filtros aplicados.</p>
-                    </div>
-                  );
-                }
-
-                return (
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-200 dark:border-slate-800 text-[10px] font-mono text-slate-400 uppercase bg-slate-50/50 dark:bg-slate-950/30">
-                        <th className="p-2.5">Insumo / Matéria-Prima</th>
-                        <th className="p-2.5">Categoria</th>
-                        <th className="p-2.5 text-center">Quantidade</th>
-                        <th className="p-2.5 text-right">Custo Unitário</th>
-                        <th className="p-2.5 text-right">Total em Estoque</th>
-                        <th className="p-2.5 text-center">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                      {filteredStock.map(item => {
-                        const isOut = (item.qty || 0) === 0;
-                        const isLow = (item.qty || 0) > 0 && (item.qty || 0) <= 2;
-                        const totalItemVal = (item.qty || 0) * (item.unitCost || 0);
-
-                        return (
-                          <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-850/40 transition">
-                            <td className="p-2.5 font-medium text-slate-800 dark:text-slate-150">
-                              <div>{item.material}</div>
-                              {item.purchaseLink && (
-                                <a
-                                  href={ensureAbsoluteUrl(item.purchaseLink, item.material)}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-[10px] text-indigo-500 hover:underline inline-flex items-center gap-1 mt-0.5"
-                                >
-                                  <span>Link fornecedor</span>
-                                  <ExternalLink className="w-2.5 h-2.5" />
-                                </a>
-                              )}
-                            </td>
-                            <td className="p-2.5">
-                              <span className="inline-block px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                                {item.category || 'Filamento'}
-                              </span>
-                            </td>
-                            <td className="p-2.5 text-center font-mono font-bold">
-                              <span className={isOut ? 'text-rose-600' : isLow ? 'text-amber-600' : 'text-emerald-600'}>
-                                {item.qty || 0} un
-                              </span>
-                            </td>
-                            <td className="p-2.5 text-right font-mono text-slate-600 dark:text-slate-300">
-                              R$ {(item.unitCost || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                            </td>
-                            <td className="p-2.5 text-right font-mono font-bold text-slate-800 dark:text-slate-100">
-                              R$ {totalItemVal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                            </td>
-                            <td className="p-2.5 text-center">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
-                                isOut
-                                  ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 border border-rose-200 dark:border-rose-900'
-                                  : isLow
-                                  ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 border border-amber-200 dark:border-amber-900'
-                                  : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 border border-emerald-200 dark:border-emerald-900'
-                              }`}>
-                                {isOut ? 'Esgotado' : isLow ? 'Poucas Unidades' : 'Em Estoque'}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                );
-              })()}
-            </div>
-
-            {/* Modal Footer Summary */}
-            <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-4 text-slate-500 font-mono text-[11px]">
-                <span>Total de Itens: <strong className="text-slate-800 dark:text-slate-200">{inventory.length}</strong></span>
-                <span>•</span>
-                <span>Unidades Totais: <strong className="text-slate-800 dark:text-slate-200">{inventory.reduce((acc, i) => acc + (i.qty || 0), 0)} un</strong></span>
-                <span>•</span>
-                <span>Valor Imobilizado: <strong className="text-emerald-600 dark:text-emerald-400">R$ {inventory.reduce((acc, i) => acc + ((i.qty || 0) * (i.unitCost || 0)), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></span>
-              </div>
-
-              <button
-                onClick={() => setStockConsultModalOpen(false)}
-                className="px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition cursor-pointer"
-              >
-                Fechar Consulta
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* SCANNER MODAL */}
       <ScannerModal
         isOpen={scannerOpen}
         onClose={() => setScannerOpen(false)}
         onScanSuccess={handleScanSuccess}
+        inventory={inventory}
       />
 
     </div>
@@ -5557,68 +2128,16 @@ interface ScannerModalProps {
   isOpen: boolean;
   onClose: () => void;
   onScanSuccess: (code: string, productData?: any) => void;
+  inventory: InventoryItem[];
 }
 
-export function ScannerModal({ isOpen, onClose, onScanSuccess }: ScannerModalProps) {
-  const [activeTab, setActiveTab] = useState<'simulation' | 'camera'>('simulation');
+export function ScannerModal({ isOpen, onClose, onScanSuccess, inventory }: ScannerModalProps) {
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [typedCode, setTypedCode] = useState('');
 
-  const MOCK_BARCODES: Record<string, { name: string; cost: number; category: 'Acessórios/Insumos' | 'Outros'; company: string; notes: string }> = {
-    "7891000311500": {
-      name: "Papel Sulfite A4 Report 75g (Pacote 500 folhas)",
-      cost: 32.50,
-      category: "Acessórios/Insumos",
-      company: "GeorgeFctech Comercial",
-      notes: "Papel de alta alvura para relatórios e faturas comerciais"
-    },
-    "7891234567890": {
-      name: "Caneta Esferográfica Azul Bic (Caixa com 50un)",
-      cost: 45.00,
-      category: "Acessórios/Insumos",
-      company: "GeorgeFctech Comercial",
-      notes: "Canetas para preenchimento de termos e notas"
-    },
-    "7890123456789": {
-      name: "Teclado USB Com Fio Standard Dell",
-      cost: 89.90,
-      category: "Outros",
-      company: "GeorgeFctech Comercial",
-      notes: "Substituição de periférico operacional"
-    },
-    "7896001201550": {
-      name: "Fita Adesiva Larga Marrom 45mm x 50m (Pacote com 4)",
-      cost: 28.00,
-      category: "Acessórios/Insumos",
-      company: "GeorgeFctech Comercial",
-      notes: "Embalagens de remessas comerciais"
-    },
-    "7898000505100": {
-      name: "Grampeador de Mesa de Metal Standard",
-      cost: 42.90,
-      category: "Acessórios/Insumos",
-      company: "GeorgeFctech Comercial",
-      notes: "Organização de tabelas e recibos de compras"
-    },
-    "QR_ORGANIZER_PRO": {
-      name: "Organizador de Documentos Acrílico Triplo",
-      cost: 65.00,
-      category: "Acessórios/Insumos",
-      company: "GeorgeFctech Comercial",
-      notes: "Organização de notas e relatórios mensais"
-    },
-    "QR_CHAIR_PAD": {
-      name: "Almofada Ergonômica de Assento de Espuma de Memória",
-      cost: 120.00,
-      category: "Outros",
-      company: "GeorgeFctech Comercial",
-      notes: "Ergonomia para o caixa comercial"
-    }
-  };
-
   useEffect(() => {
-    if (!isOpen || activeTab !== 'camera') return;
+    if (!isOpen) return;
 
     let html5QrCode: Html5Qrcode | null = null;
     const elementId = "qr-reader-container";
@@ -5639,7 +2158,6 @@ export function ScannerModal({ isOpen, onClose, onScanSuccess }: ScannerModalPro
             },
           },
           (decodedText) => {
-            // Success
             handleCodeScanned(decodedText);
           },
           () => {
@@ -5648,7 +2166,7 @@ export function ScannerModal({ isOpen, onClose, onScanSuccess }: ScannerModalPro
         );
       } catch (err: any) {
         console.error("Camera access error:", err);
-        setCameraError("Não foi possível acessar a câmera do dispositivo. Certifique-se de que o aplicativo tem permissão de acesso à câmera ou use a Simulação.");
+        setCameraError("Não foi possível acessar a câmera do dispositivo.");
         setScanning(false);
       }
     };
@@ -5664,14 +2182,31 @@ export function ScannerModal({ isOpen, onClose, onScanSuccess }: ScannerModalPro
         }
       }
     };
-  }, [isOpen, activeTab]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
   const handleCodeScanned = (code: string) => {
     const codeTrimmed = code.trim();
-    const matched = MOCK_BARCODES[codeTrimmed];
-    onScanSuccess(codeTrimmed, matched);
+    
+    // Busca inteligente de código ou modelo no estoque real de filamentos
+    const matchedItem = inventory.find(i => 
+      i.id.toLowerCase() === codeTrimmed.toLowerCase() ||
+      i.material.toLowerCase().includes(codeTrimmed.toLowerCase())
+    );
+
+    let matchedProduct = undefined;
+    if (matchedItem) {
+      matchedProduct = {
+        name: matchedItem.material,
+        cost: matchedItem.unitCost,
+        category: "Filamento" as const,
+        company: "GeorgeFctech Comercial",
+        notes: "Insumo técnico correspondente do Estoque Ativo"
+      };
+    }
+
+    onScanSuccess(codeTrimmed, matchedProduct);
   };
 
   const handleManualSubmit = (e: React.FormEvent) => {
@@ -5689,7 +2224,7 @@ export function ScannerModal({ isOpen, onClose, onScanSuccess }: ScannerModalPro
           <div className="flex items-center gap-2">
             <QrCode className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
             <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800 dark:text-white">
-              Leitor de Código de Barras / QR Code
+              Buscar Código de Barras / Modelo
             </h3>
           </div>
           <button 
@@ -5700,116 +2235,65 @@ export function ScannerModal({ isOpen, onClose, onScanSuccess }: ScannerModalPro
           </button>
         </div>
 
-        {/* Tabs switcher */}
-        <div className="flex border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-955/40 p-1">
-          <button
-            type="button"
-            onClick={() => setActiveTab('simulation')}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition ${
-              activeTab === 'simulation'
-                ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-400 shadow-3xs'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
-            }`}
-          >
-            Simulador / Entrada Manual
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('camera')}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition ${
-              activeTab === 'camera'
-                ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-400 shadow-3xs'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
-            }`}
-          >
-            Leitor via Câmera (Real)
-          </button>
-        </div>
-
-        {/* Tab Content */}
-        <div className="p-5 overflow-y-auto flex-1 space-y-4">
-          {activeTab === 'camera' ? (
-            <div className="space-y-4">
-              <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
-                Aponte a câmera para o código de barras ou código QR do produto.
-              </p>
-              
-              <div className="relative">
-                <div id="qr-reader-container" className="overflow-hidden rounded-xl bg-black aspect-video w-full max-w-sm mx-auto border border-slate-200 dark:border-slate-800 flex items-center justify-center">
-                  {!scanning && !cameraError && (
-                    <span className="text-xs text-slate-400">Iniciando câmera...</span>
-                  )}
-                  {cameraError && (
-                    <div className="p-4 text-center max-w-xs space-y-2">
-                      <AlertTriangle className="w-8 h-8 text-rose-500 mx-auto" />
-                      <p className="text-[11px] text-rose-600 dark:text-rose-400 leading-normal">{cameraError}</p>
-                    </div>
-                  )}
-                </div>
-                {scanning && !cameraError && (
-                  <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                    <div className="w-48 h-48 border-2 border-indigo-500 border-dashed rounded-lg animate-pulse flex items-center justify-center">
-                      <ScanLine className="w-full text-indigo-450 animate-bounce" />
-                    </div>
+        {/* Modal Content */}
+        <div className="p-5 overflow-y-auto flex-1 space-y-5">
+          {/* Camera Scanner Panel */}
+          <div className="space-y-3">
+            <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
+              Aponte a câmera para o código de barras ou QR Code do produto.
+            </p>
+            
+            <div className="relative">
+              <div id="qr-reader-container" className="overflow-hidden rounded-xl bg-black aspect-video w-full max-w-sm mx-auto border border-slate-200 dark:border-slate-800 flex items-center justify-center">
+                {!scanning && !cameraError && (
+                  <span className="text-xs text-slate-400">Iniciando câmera...</span>
+                )}
+                {cameraError && (
+                  <div className="p-4 text-center max-w-xs space-y-2">
+                    <AlertTriangle className="w-8 h-8 text-rose-500 mx-auto" />
+                    <p className="text-[11px] text-rose-600 dark:text-rose-400 leading-normal">
+                      Câmera indisponível. Utilize a busca manual abaixo.
+                    </p>
                   </div>
                 )}
               </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {/* Manual Input */}
-              <form onSubmit={handleManualSubmit} className="space-y-2">
-                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                  Digite ou Cole o Código de Barras / QR Code
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={typedCode}
-                    onChange={(e) => setTypedCode(e.target.value)}
-                    placeholder="Ex: 7891000311500 ou QR_ORGANIZER_PRO"
-                    className="flex-1 text-xs px-3.5 py-2 border border-slate-200 dark:border-slate-850 rounded-lg text-slate-800 dark:text-white bg-white dark:bg-slate-950 focus:outline-none focus:border-indigo-500 font-mono"
-                  />
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider rounded-lg shadow-sm transition cursor-pointer"
-                  >
-                    Simular
-                  </button>
+              {scanning && !cameraError && (
+                <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                  <div className="w-48 h-48 border-2 border-indigo-500 border-dashed rounded-lg animate-pulse flex items-center justify-center">
+                    <ScanLine className="w-full text-indigo-450 animate-bounce" />
+                  </div>
                 </div>
-              </form>
+              )}
+            </div>
+          </div>
 
-              {/* Simulation options */}
-              <div className="space-y-2 pt-2 border-t border-dashed border-slate-100 dark:border-slate-800">
-                <span className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  Sugestões de Produtos Comerciais Prontos
-                </span>
-                <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto">
-                  {Object.entries(MOCK_BARCODES).map(([code, prod]) => (
-                    <button
-                      key={code}
-                      type="button"
-                      onClick={() => handleCodeScanned(code)}
-                      className="p-3 bg-slate-50 dark:bg-slate-950/50 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 border border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-800 rounded-xl text-left transition text-xs font-medium cursor-pointer"
-                    >
-                      <div className="font-bold text-slate-800 dark:text-white flex items-center justify-between gap-1">
-                        <span className="truncate">{prod.name}</span>
-                        <span className="text-[10px] text-indigo-650 dark:text-indigo-400 shrink-0 font-mono font-bold">R$ {prod.cost.toFixed(2)}</span>
-                      </div>
-                      <div className="text-[10px] text-slate-400 dark:text-slate-500 font-mono mt-1 flex items-center justify-between">
-                        <span>Código: {code}</span>
-                        <span>{prod.category}</span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
+          {/* Manual Input Search Panel */}
+          <div className="pt-4 border-t border-slate-150 dark:border-slate-800 space-y-2.5">
+            <form onSubmit={handleManualSubmit} className="space-y-2">
+              <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                Busca Manual (Digite o Código ou Modelo)
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={typedCode}
+                  onChange={(e) => setTypedCode(e.target.value)}
+                  placeholder="Ex: 7891000311500, PECA-MEC, bico-04..."
+                  className="flex-1 text-xs px-3.5 py-2.5 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-800 dark:text-white bg-white dark:bg-slate-950 focus:outline-none focus:border-indigo-500 font-mono shadow-xs"
+                />
+                <button
+                  type="submit"
+                  className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider rounded-lg shadow-sm transition cursor-pointer"
+                >
+                  Buscar
+                </button>
               </div>
-            </div>
-          )}
+            </form>
+          </div>
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/20 flex justify-end">
+        <div className="p-4 border-t border-slate-150 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/20 flex justify-end">
           <button
             type="button"
             onClick={onClose}

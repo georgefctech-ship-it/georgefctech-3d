@@ -4,14 +4,15 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Printer, Calendar, FileText, CheckCircle2, AlertTriangle } from 'lucide-react';
-import { ProjectOrder } from '../types';
+import { Printer, Calendar, FileText, CheckCircle2, AlertTriangle, FileSpreadsheet } from 'lucide-react';
+import { ProjectOrder, InventoryItem } from '../types';
 
 interface ReportViewProps {
   projects: ProjectOrder[];
+  inventory: InventoryItem[];
 }
 
-export default function ReportView({ projects }: ReportViewProps) {
+export default function ReportView({ projects, inventory }: ReportViewProps) {
   const [selectedSub, setSelectedSub] = useState('Todos');
   const [showIframeNotice, setShowIframeNotice] = useState(false);
 
@@ -30,6 +31,264 @@ export default function ReportView({ projects }: ReportViewProps) {
     return (p.hours * p.hourlyRate) + (p.weight * p.materialRate) + p.profitMargin;
   };
 
+  const generateExcelReport = () => {
+    const findInventoryItem = (materialName: string) => {
+      if (!inventory) return null;
+      return inventory.find(i => 
+        i.material.toLowerCase().includes(materialName.toLowerCase()) ||
+        materialName.toLowerCase().includes(i.material.toLowerCase())
+      );
+    };
+
+    const formatBRLHtml = (val: number) => {
+      return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    };
+
+    const ensureAbsoluteUrl = (url?: string, searchFallback?: string) => {
+      if (!url) {
+        return `https://lista.mercadolivre.com.br/${encodeURIComponent(searchFallback || 'filamento 3d')}`;
+      }
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        return url;
+      }
+      return `https://${url}`;
+    };
+
+    const rowsHtml = filteredProjects.map((p, idx) => {
+      const matchedFilament = findInventoryItem(p.materialType);
+      const filamentPurchaseLink = ensureAbsoluteUrl(matchedFilament?.purchaseLink, `filamento ${p.materialType}`);
+      const projectPrice = calculateEarnings(p);
+      const rowClass = idx % 2 === 0 ? 'tr-odd' : 'tr-even';
+
+      return `
+        <tr class="${rowClass}">
+          <td class="cell-id">${p.id}</td>
+          <td style="text-align: center; border: 1px solid #cbd5e1;">${new Date(p.date).toLocaleDateString('pt-BR')}</td>
+          <td style="border: 1px solid #cbd5e1;">${p.client}</td>
+          <td style="border: 1px solid #cbd5e1;">${p.name}</td>
+          <td style="font-family: monospace; text-align: center; border: 1px solid #cbd5e1;">${p.barcode || '-'}</td>
+          <td style="border: 1px solid #cbd5e1;">${p.materialType}</td>
+          <td class="cell-number" style="border: 1px solid #cbd5e1;">${p.hours.toFixed(1)}</td>
+          <td class="cell-currency" style="border: 1px solid #cbd5e1;">${formatBRLHtml(p.hourlyRate)}</td>
+          <td class="cell-number" style="border: 1px solid #cbd5e1;">${p.weight.toFixed(2)}</td>
+          <td class="cell-currency" style="border: 1px solid #cbd5e1;">${formatBRLHtml(p.materialRate)}</td>
+          <td class="cell-currency" style="border: 1px solid #cbd5e1;">${formatBRLHtml(p.profitMargin)}</td>
+          <td class="cell-total-value" style="border: 1px solid #cbd5e1;">${formatBRLHtml(projectPrice)}</td>
+          <td class="cell-link" style="border: 1px solid #cbd5e1;"><a href="${filamentPurchaseLink}" style="color: #2563eb; text-decoration: underline; font-weight: bold;">Ver Filamento 🔗</a></td>
+        </tr>
+      `;
+    }).join('');
+
+    const excelHtml = `
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:x="urn:schemas-microsoft-com:office:excel"
+      xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+  <meta charset="utf-8"/>
+  <!--[if gte mso 9]>
+  <xml>
+    <x:ExcelWorkbook>
+      <x:ExcelWorksheets>
+        <x:ExcelWorksheet>
+          <x:Name>Faturamento GeorgeFctech-3D</x:Name>
+          <x:WorksheetOptions>
+            <x:DisplayGridlines/>
+          </x:WorksheetOptions>
+        </x:ExcelWorksheet>
+      </x:ExcelWorksheets>
+    </x:ExcelWorkbook>
+  </xml>
+  <![endif]-->
+  <style>
+    table {
+      border-collapse: collapse;
+      font-family: 'Segoe UI', 'Calibri', sans-serif;
+    }
+    td, th {
+      border: 1px solid #cbd5e1;
+      padding: 8px 12px;
+      font-size: 10pt;
+    }
+    .header-main {
+      background-color: #0f172a;
+      color: #ffffff;
+      font-size: 16pt;
+      font-weight: bold;
+      text-align: center;
+      height: 40px;
+    }
+    .header-sub {
+      background-color: #1e293b;
+      color: #cbd5e1;
+      font-size: 10pt;
+      font-style: italic;
+      text-align: center;
+      height: 25px;
+    }
+    .meta-label {
+      font-weight: bold;
+      color: #475569;
+      background-color: #f1f5f9;
+      text-align: left;
+    }
+    .meta-value {
+      color: #0f172a;
+      text-align: left;
+    }
+    .metric-title {
+      font-size: 11pt;
+      font-weight: bold;
+      color: #1e293b;
+      background-color: #f1f5f9;
+      text-align: center;
+    }
+    .metric-value {
+      font-size: 13pt;
+      font-weight: bold;
+      text-align: center;
+      color: #0f172a;
+      background-color: #ffffff;
+    }
+    .metric-value-total {
+      font-size: 13pt;
+      font-weight: bold;
+      text-align: center;
+      color: #059669;
+      background-color: #ecfdf5;
+    }
+    .th-col {
+      background-color: #4f46e5;
+      color: #ffffff;
+      font-weight: bold;
+      text-align: center;
+      font-size: 10pt;
+    }
+    .tr-odd {
+      background-color: #ffffff;
+    }
+    .tr-even {
+      background-color: #f8fafc;
+    }
+    .cell-id {
+      font-family: 'Courier New', monospace;
+      text-align: center;
+      font-weight: bold;
+      color: #475569;
+    }
+    .cell-number {
+      text-align: right;
+    }
+    .cell-currency {
+      text-align: right;
+      color: #334155;
+    }
+    .cell-total-value {
+      text-align: right;
+      font-weight: bold;
+      color: #059669;
+      background-color: #ecfdf5;
+    }
+    .cell-link {
+      text-align: center;
+    }
+    .total-row {
+      font-weight: bold;
+      background-color: #f1f5f9;
+      color: #0f172a;
+    }
+    .total-row-val {
+      font-weight: bold;
+      background-color: #ecfdf5;
+      color: #059669;
+    }
+  </style>
+</head>
+<body>
+  <table>
+    <!-- Main Header -->
+    <tr>
+      <td colspan="13" class="header-main" style="background-color: #0f172a; color: #ffffff; font-size: 16pt; font-weight: bold; text-align: center; height: 40px; border: 1px solid #cbd5e1;">GeorgeFctech-3D</td>
+    </tr>
+    <tr>
+      <td colspan="13" class="header-sub" style="background-color: #1e293b; color: #cbd5e1; font-size: 10pt; font-style: italic; text-align: center; height: 25px; border: 1px solid #cbd5e1;">Modelagem, Escultura & Manufatura Aditiva - Relatório de Faturamento</td>
+    </tr>
+    
+    <!-- Spacers -->
+    <tr><td colspan="13" style="border: none; height: 10px;"></td></tr>
+
+    <!-- Meta Information -->
+    <tr>
+      <td colspan="2" class="meta-label" style="font-weight: bold; background-color: #f1f5f9; border: 1px solid #cbd5e1;">Data de Geração:</td>
+      <td colspan="4" class="meta-value" style="border: 1px solid #cbd5e1;">${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}</td>
+      <td colspan="2" class="meta-label" style="font-weight: bold; background-color: #f1f5f9; border: 1px solid #cbd5e1;">Filtro Cliente:</td>
+      <td colspan="5" class="meta-value" style="border: 1px solid #cbd5e1;"><strong>${selectedSub}</strong></td>
+    </tr>
+
+    <!-- Spacers -->
+    <tr><td colspan="13" style="border: none; height: 10px;"></td></tr>
+
+    <!-- Summary Box -->
+    <tr>
+      <td colspan="4" class="metric-title" style="font-weight: bold; background-color: #f1f5f9; text-align: center; border: 1px solid #cbd5e1;">Horas Técnicas Totais</td>
+      <td colspan="4" class="metric-title" style="font-weight: bold; background-color: #f1f5f9; text-align: center; border: 1px solid #cbd5e1;">Peso de Filamento Consumido</td>
+      <td colspan="5" class="metric-title" style="font-weight: bold; background-color: #f1f5f9; text-align: center; border: 1px solid #cbd5e1;">Valor Total Faturado (BRL)</td>
+    </tr>
+    <tr>
+      <td colspan="4" class="metric-value" style="text-align: center; background-color: #ffffff; border: 1px solid #cbd5e1; font-weight: bold;">${totalHours.toFixed(1)} h</td>
+      <td colspan="4" class="metric-value" style="text-align: center; background-color: #ffffff; border: 1px solid #cbd5e1; font-weight: bold;">${totalWeight.toFixed(2)} g</td>
+      <td colspan="5" class="metric-value-total" style="text-align: center; background-color: #ecfdf5; color: #059669; border: 1px solid #cbd5e1; font-weight: bold;">${formatBRLHtml(totalValue)}</td>
+    </tr>
+
+    <!-- Spacers -->
+    <tr><td colspan="13" style="border: none; height: 15px;"></td></tr>
+
+    <!-- Table Header -->
+    <tr>
+      <th class="th-col" style="background-color: #4f46e5; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #cbd5e1; width: 100px;">Cód. Serviço</th>
+      <th class="th-col" style="background-color: #4f46e5; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #cbd5e1; width: 100px;">Data</th>
+      <th class="th-col" style="background-color: #4f46e5; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #cbd5e1; width: 150px;">Cliente</th>
+      <th class="th-col" style="background-color: #4f46e5; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #cbd5e1; width: 250px;">Nome do Projeto</th>
+      <th class="th-col" style="background-color: #4f46e5; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #cbd5e1; width: 120px;">Cód / Modelo</th>
+      <th class="th-col" style="background-color: #4f46e5; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #cbd5e1; width: 150px;">Tipo de Material</th>
+      <th class="th-col" style="background-color: #4f46e5; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #cbd5e1; width: 80px;">Horas (h)</th>
+      <th class="th-col" style="background-color: #4f46e5; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #cbd5e1; width: 100px;">Taxa/h</th>
+      <th class="th-col" style="background-color: #4f46e5; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #cbd5e1; width: 80px;">Peso (g)</th>
+      <th class="th-col" style="background-color: #4f46e5; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #cbd5e1; width: 100px;">Taxa/g</th>
+      <th class="th-col" style="background-color: #4f46e5; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #cbd5e1; width: 100px;">Margem</th>
+      <th class="th-col" style="background-color: #4f46e5; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #cbd5e1; width: 120px;">Valor Total</th>
+      <th class="th-col" style="background-color: #4f46e5; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #cbd5e1; width: 160px;">Link p/ Reposição</th>
+    </tr>
+
+    <!-- Table Rows -->
+    ${rowsHtml || '<tr><td colspan="13" style="text-align: center; color: #64748b; border: 1px solid #cbd5e1;">Nenhum item lançado no escopo selecionado.</td></tr>'}
+
+    <!-- Table Totals Footer -->
+    <tr class="total-row" style="background-color: #f1f5f9; font-weight: bold;">
+      <td colspan="6" style="text-align: right; font-weight: bold; border: 1px solid #cbd5e1;">TOTAIS CONSOLIDADOS:</td>
+      <td class="cell-number" style="font-weight: bold; border: 1px solid #cbd5e1; text-align: right;">${totalHours.toFixed(1)}</td>
+      <td style="background-color: #f1f5f9; border: 1px solid #cbd5e1;"></td>
+      <td class="cell-number" style="font-weight: bold; border: 1px solid #cbd5e1; text-align: right;">${totalWeight.toFixed(2)}</td>
+      <td style="background-color: #f1f5f9; border: 1px solid #cbd5e1;"></td>
+      <td class="cell-number" style="font-weight: bold; border: 1px solid #cbd5e1; text-align: right;">${formatBRLHtml(filteredProjects.reduce((sum, p) => sum + p.profitMargin, 0))}</td>
+      <td class="total-row-val" style="font-weight: bold; background-color: #ecfdf5; color: #059669; border: 1px solid #cbd5e1; text-align: right;">${formatBRLHtml(totalValue)}</td>
+      <td style="background-color: #f1f5f9; border: 1px solid #cbd5e1;"></td>
+    </tr>
+  </table>
+</body>
+</html>
+    `;
+
+    const blob = new Blob([excelHtml], { type: 'application/vnd.ms-excel;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `relatorio-faturamento-G3D-${new Date().toISOString().split('T')[0]}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   // Extract unique clients for filtering report
   const clients = ['Todos', ...Array.from(new Set(projects.map(p => p.client)))];
 
@@ -43,280 +302,6 @@ export default function ReportView({ projects }: ReportViewProps) {
 
   const formatBRL = (val: number) => {
     return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  };
-
-  const downloadHtmlReport = () => {
-    if (filteredProjects.length === 0) return;
-
-    const clientLabel = selectedSub === 'Todos' ? 'Geral / Setores Consolidados' : selectedSub;
-    const reportTitle = `Demonstrativo_Tecnico_${clientLabel.replace(/[^a-zA-Z0-9]/g, '_')}`;
-    const dateFormatted = new Date().toLocaleDateString('pt-BR');
-    const timeFormatted = new Date().toLocaleTimeString('pt-BR');
-
-    const htmlContent = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <title>Demonstrativo Técnico & Faturamento Comercial - GeorgeFctech-3D</title>
-  <style>
-    body {
-      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-      margin: 0;
-      padding: 40px 20px;
-      background-color: #f8fafc;
-      color: #1e293b;
-    }
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-      background-color: #ffffff;
-      border: 1px solid #e2e8f0;
-      border-radius: 12px;
-      padding: 50px;
-      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
-    }
-    .header {
-      border-bottom: 2px solid #0f172a;
-      padding-bottom: 20px;
-      margin-bottom: 30px;
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-    }
-    .logo-title h1 {
-      margin: 0;
-      font-size: 26px;
-      font-weight: 800;
-      letter-spacing: -0.02em;
-      color: #0f172a;
-      text-transform: uppercase;
-    }
-    .logo-title h1 span {
-      color: #4f46e5;
-    }
-    .logo-title p.subtitle {
-      margin: 4px 0 0 0;
-      font-size: 11px;
-      font-family: monospace;
-      letter-spacing: 0.1em;
-      color: #4f46e5;
-      text-transform: uppercase;
-      font-weight: bold;
-    }
-    .logo-title p.desc {
-      margin: 8px 0 0 0;
-      font-size: 13px;
-      color: #64748b;
-    }
-    .header-meta {
-      text-align: right;
-      font-family: monospace;
-      font-size: 12px;
-      color: #475569;
-    }
-    .header-meta .doc-title {
-      font-weight: bold;
-      color: #0f172a;
-      font-size: 13px;
-      margin-bottom: 6px;
-    }
-    .intro-details {
-      background-color: #f8fafc;
-      border-left: 4px solid #0f172a;
-      padding: 16px;
-      font-size: 13px;
-      color: #334155;
-      border-radius: 0 8px 8px 0;
-      margin-bottom: 30px;
-      line-height: 1.6;
-    }
-    .section-title {
-      font-size: 12px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: #0f172a;
-      border-bottom: 2px solid #e2e8f0;
-      padding-bottom: 8px;
-      margin-bottom: 15px;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 30px;
-    }
-    th {
-      background-color: #f1f5f9;
-      color: #475569;
-      font-weight: bold;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      padding: 10px 12px;
-      border-bottom: 1px solid #cbd5e1;
-      text-align: left;
-    }
-    td {
-      padding: 12px;
-      border-bottom: 1px solid #f1f5f9;
-      font-size: 12px;
-      color: #334155;
-    }
-    .metric-table td {
-      font-size: 13px;
-    }
-    .metric-dot {
-      display: inline-block;
-      width: 6px;
-      height: 6px;
-      background-color: #0f172a;
-      border-radius: 50%;
-      margin-right: 8px;
-    }
-    .price-col {
-      text-align: right;
-      font-family: monospace;
-      font-weight: bold;
-    }
-    .commercial-terms {
-      border-top: 1px solid #e2e8f0;
-      padding-top: 20px;
-      margin-bottom: 40px;
-      font-size: 11px;
-      color: #64748b;
-      line-height: 1.6;
-    }
-    .signatures {
-      border-top: 1px solid #cbd5e1;
-      padding-top: 30px;
-      display: grid;
-      grid-template-cols: 1fr 1fr;
-      gap: 40px;
-    }
-    .signature-line {
-      border-top: 1px solid #94a3b8;
-      margin-top: 50px;
-      padding-top: 8px;
-      font-size: 12px;
-      color: #475569;
-      text-align: center;
-      font-weight: 600;
-    }
-    @media print {
-      body {
-        background-color: #ffffff;
-        padding: 0;
-      }
-      .container {
-        border: none;
-        box-shadow: none;
-        padding: 0;
-        max-width: 100%;
-      }
-      tr {
-        page-break-inside: avoid;
-      }
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <div class="logo-title">
-        <h1>GeorgeFctech-<span>3D</span></h1>
-        <p class="subtitle">Modelagem • Escultura • Impressão 3D</p>
-        <p class="desc">Manufatura Aditiva de Engenharia & Prototipagem Avançada</p>
-      </div>
-      <div class="header-meta">
-        <div class="doc-title" style="font-weight: bold; font-size: 13px;">PROPOSTA DE FATURAMENTO</div>
-        <div style="font-weight: bold; color: #1e1b4b; margin: 4px 0;">Firma Responsável: GeorgeFctech-3D</div>
-        <div>Emissão: ${dateFormatted}</div>
-        <div>ID: G3D-REP-${new Date().getFullYear()}</div>
-      </div>
-    </div>
-
-    <div class="intro-details">
-      <div><strong>Destinatário / Solicitante:</strong> ${clientLabel}</div>
-      <div style="margin-top: 6px;"><strong>Descrição do Escopo:</strong> Consolidação periódica de serviços englobando Engenharia Mecânica de Campo, Modelagem Tridimensional Paramétrica de Peças Técnicas, Fatiamento Computacional e Impressão 3D (FDM). Valores baseados em custos operacionais e técnicos de peças.</div>
-    </div>
-
-    <div class="section-title">1. Demonstrativo Financeiro Comercial</div>
-    <table class="metric-table">
-      <thead>
-        <tr>
-          <th>Métrica Técnica</th>
-          <th style="text-align: right;">Valor Acumulado</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td><span class="metric-dot"></span>Tempo Alocado em Processamento / Máquina Ativo</td>
-          <td style="text-align: right; font-family: monospace; font-weight: bold;">${totalHours.toFixed(1)} h</td>
-        </tr>
-        <tr>
-          <td><span class="metric-dot"></span>Massa Total de Polímeros Termoplásticos Utilizada</td>
-          <td style="text-align: right; font-family: monospace; font-weight: bold;">${totalWeight.toFixed(2)} g</td>
-        </tr>
-        <tr style="background-color: #f8fafc; font-weight: bold;">
-          <td style="font-size: 14px; color: #0f172a;">VALOR LÍQUIDO TOTAL A FATURAR DA ORDEM</td>
-          <td style="text-align: right; font-size: 16px; color: #059669; font-family: monospace;">${formatBRL(totalValue)}</td>
-        </tr>
-      </tbody>
-    </table>
-
-    <div class="section-title">2. Detalhamento de Serviços Realizados</div>
-    <table>
-      <thead>
-        <tr>
-          <th>Origem</th>
-          <th>Modelo / Especificação Física</th>
-          <th>Material</th>
-          <th style="text-align: center;">Tempo (h)</th>
-          <th style="text-align: right;">Preço</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${filteredProjects.map(p => `
-          <tr>
-            <td style="font-weight: bold; color: #0f172a;">${p.client}</td>
-            <td>
-              <div style="font-weight: bold;">${p.name}</div>
-              <div style="font-size: 10px; color: #64748b; font-style: italic; margin-top: 2px;">${p.description}</div>
-            </td>
-            <td style="font-family: monospace; color: #475569;">${p.materialType}</td>
-            <td style="text-align: center; font-family: monospace; font-weight: 600;">${p.hours.toFixed(1)}h</td>
-            <td class="price-col">${formatBRL(calculateEarnings(p))}</td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-
-    <div class="commercial-terms">
-      <div style="font-weight: bold; margin-bottom: 6px; color: #0f172a;">Termos & Condições Comerciais:</div>
-      <div>• <strong>Prazo de Validade Comercial</strong>: Esta estimativa/proposta é válida por 10 dias úteis a contar de sua emissão.</div>
-      <div>• <strong>Garantia Mecânica</strong>: Todas as peças técnicas de reposição passam por inspeção de tensões físicas e térmicas antes do envio.</div>
-      <div>• <strong>Observação</strong>: Impressão realizada por deposição de termoplástico fundido (FDM) calibrado sob bicos de engenharia.</div>
-    </div>
-
-    <div class="signatures">
-      <div>
-        <div class="signature-line">GeorgeFctech-3D<br><span style="font-size: 10px; font-weight: normal; color: #64748b;">Especialista Responsável</span></div>
-      </div>
-      <div>
-        <div class="signature-line">Conferido por / Setor<br><span style="font-size: 10px; font-weight: normal; color: #64748b;">Visto de Recepção</span></div>
-      </div>
-    </div>
-  </div>
-</body>
-</html>`;
-
-    // Download compiled HTML Document
-    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute('href', url);
-    downloadAnchor.setAttribute('download', `${reportTitle}_${new Date().toISOString().split('T')[0]}.html`);
-    downloadAnchor.click();
   };
 
   return (
@@ -348,16 +333,16 @@ export default function ReportView({ projects }: ReportViewProps) {
           </div>
 
           <button
-            onClick={downloadHtmlReport}
-            className="flex items-center justify-center gap-2 px-5 py-3 rounded-lg border border-indigo-200 bg-white hover:bg-indigo-50 text-indigo-700 font-bold text-sm tracking-wide shadow-sm hover:shadow-md transition duration-200 cursor-pointer"
+            onClick={generateExcelReport}
+            className="flex items-center justify-center gap-2 px-5 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm tracking-wide shadow-sm hover:shadow-md transition duration-200 cursor-pointer"
           >
-            <FileText className="w-4 h-4" />
-            SALVAR EM HTML
+            <FileSpreadsheet className="w-4 h-4" />
+            EXPORTAR PARA EXCEL
           </button>
 
           <button
             onClick={() => window.print()}
-            className="flex items-center justify-center gap-2 px-5 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm tracking-wide shadow-sm hover:shadow-md transition duration-200"
+            className="flex items-center justify-center gap-2 px-5 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm tracking-wide shadow-sm hover:shadow-md transition duration-200 cursor-pointer"
           >
             <Printer className="w-4 h-4" />
             IMPRIMIR DOCUMENTO
@@ -402,7 +387,6 @@ export default function ReportView({ projects }: ReportViewProps) {
           
           <div className="text-right mt-4 sm:mt-0 font-mono text-xs text-slate-600">
             <div className="font-bold text-slate-950 uppercase tracking-wider mb-1">PROPOSTA DE FATURAMENTO</div>
-            <div className="font-bold text-slate-900 mb-1">Firma Responsável: GeorgeFctech-3D</div>
             <div>Emissão: {new Date().toLocaleDateString('pt-BR')}</div>
             <div className="text-[10px] mt-1 text-slate-500">Documento ID: G3D-REP-{new Date().getFullYear()}</div>
           </div>

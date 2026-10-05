@@ -30,10 +30,12 @@ import {
   Clock,
   UserPlus,
   RefreshCw,
-  Palette,
-  Image
+  Eye,
+  EyeOff,
+  Mail,
+  KeyRound
 } from 'lucide-react';
-import { SettingsConfig, getAdminLogo, getColabLogo, getAdminName, getColabName, getAdminSub, getColabSub } from '../types';
+import { SettingsConfig } from '../types';
 import { SUPABASE_SQL_BOOTSTRAP, getSupabaseClient, hasSupabaseConfigured } from '../lib/supabase';
 
 interface SettingsViewProps {
@@ -53,24 +55,26 @@ export default function SettingsView({
   const [materialRate, setMaterialRate] = useState(String(settings.defaultMaterialRate));
   const [profitMargin, setProfitMargin] = useState(String(settings.defaultProfitMargin));
   
-  // States for visual profiles custom configurations
-  const [adminLogo, setAdminLogo] = useState(getAdminLogo());
-  const [adminName, setAdminName] = useState(getAdminName());
-  const [adminSub, setAdminSub] = useState(getAdminSub());
-
-  const [colabLogo, setColabLogo] = useState(getColabLogo());
-  const [colabName, setColabName] = useState(getColabName());
-  const [colabSub, setColabSub] = useState(getColabSub());
-
-  const [visualSuccess, setVisualSuccess] = useState(false);
-  
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // States for Security / Master Password
   const [newPassword, setNewPassword] = useState('');
+  const [confirmMasterPassword, setConfirmMasterPassword] = useState('');
+  const [showMasterPw, setShowMasterPw] = useState(false);
+  const [showCurrentMasterPw, setShowCurrentMasterPw] = useState(false);
+  const [currentMasterPw, setCurrentMasterPw] = useState(() => localStorage.getItem('g3d_master_password') || '');
   const [pwSuccess, setPwSuccess] = useState(false);
   const [pwError, setPwError] = useState('');
+
+  // States for Cloud Administrator Password
+  const [cloudNewPassword, setCloudNewPassword] = useState('');
+  const [confirmCloudNewPassword, setConfirmCloudNewPassword] = useState('');
+  const [showCloudPw, setShowCloudPw] = useState(false);
+  const [syncCloudWithMaster, setSyncCloudWithMaster] = useState(true);
+  const [cloudPwLoading, setCloudPwLoading] = useState(false);
+  const [cloudPwSuccess, setCloudPwSuccess] = useState(false);
+  const [cloudPwError, setCloudPwError] = useState('');
 
   // States for Supabase
   const [supabaseUrl, setSupabaseUrl] = useState(() => localStorage.getItem('g3d_supabase_url') || '');
@@ -86,302 +90,147 @@ export default function SettingsView({
   const [newCollabEmail, setNewCollabEmail] = useState('');
   const [newCollabRole, setNewCollabRole] = useState('colaborador_pendente');
 
-  const isPendingRole = (role?: string | null) => {
-    const normalizedRole = String(role ?? '').trim().toLowerCase();
-    return normalizedRole === 'pendente' || normalizedRole === 'colaborador_pendente' || normalizedRole === 'admin_pendente';
-  };
-
-  const getApprovalRole = (role?: string | null) => {
-    const normalizedRole = String(role ?? '').trim().toLowerCase();
-    return normalizedRole.includes('admin') ? 'admin' : 'colaborador';
-  };
-
   const fetchCollaborators = async () => {
+    const supabase = getSupabaseClient();
+    if (!supabase) return;
     setCollabLoading(true);
     setCollabError(null);
-    
-    // Check local storage users
-    const localUsersStr = localStorage.getItem('g3d_local_users') || '[]';
-    let localUsers: any[] = [];
     try {
-      localUsers = JSON.parse(localUsersStr);
-    } catch (e) {
-      localUsers = [];
-    }
-
-    const supabase = getSupabaseClient();
-    if (supabase && hasSupabaseConfigured()) {
-      try {
-        if (localUsers.length > 0) {
-          for (const lu of localUsers) {
-            if (lu.email) {
-              const userRoleToSync = String(lu.role || 'colaborador_pendente');
-              await supabase.from('g3d_user_roles').upsert({
-                email: String(lu.email).toLowerCase().trim(),
-                username: lu.username || lu.email.split('@')[0],
-                password: lu.password || '123',
-                role: userRoleToSync
-              }, { onConflict: 'email' });
-            }
-          }
-        }
-
-        const { data, error } = await supabase
-          .from('g3d_user_roles')
-          .select('*')
-          .order('email', { ascending: true });
-        if (error) throw error;
-        
-        setCollaborators(data || []);
-      } catch (err: any) {
-        console.warn("Erro ao buscar no Supabase, exibindo locais:", err);
-        setCollaborators(localUsers);
-      } finally {
-        setCollabLoading(false);
-      }
-    } else {
-      setCollaborators(localUsers);
+      const { data, error } = await supabase
+        .from('g3d_user_roles')
+        .select('*')
+        .order('email', { ascending: true });
+      if (error) throw error;
+      setCollaborators(data || []);
+    } catch (err: any) {
+      setCollabError(err.message || 'Erro ao carregar lista de colaboradores.');
+    } finally {
       setCollabLoading(false);
     }
   };
 
   const handleApproveCollaborator = async (email: string) => {
+    const supabase = getSupabaseClient();
+    if (!supabase) return;
     setCollabLoading(true);
     setCollabError(null);
-    
-    // 1. Update in local storage
-    const localUsersStr = localStorage.getItem('g3d_local_users') || '[]';
-    let localUsers: any[] = [];
     try {
-      localUsers = JSON.parse(localUsersStr);
-    } catch (e) {}
-    
-    const targetCollab = collaborators.find(u => u.email?.toLowerCase() === email.toLowerCase()) || 
-                         localUsers.find(u => u.email?.toLowerCase() === email.toLowerCase());
-    const nextRole = getApprovalRole(targetCollab?.role);
-
-    const existsInLocal = localUsers.some(u => u.email?.toLowerCase() === email.toLowerCase());
-    if (existsInLocal) {
-      localUsers = localUsers.map(u => {
-        if (u.email?.toLowerCase() === email.toLowerCase()) {
-          return { ...u, role: nextRole };
-        }
-        return u;
-      });
-    } else if (targetCollab) {
-      localUsers.push({
-        email: targetCollab.email,
-        username: targetCollab.username || email.split('@')[0],
-        password: targetCollab.password || '123',
-        role: nextRole
-      });
+      const { error } = await supabase
+        .from('g3d_user_roles')
+        .update({ role: 'colaborador' })
+        .eq('email', email);
+      if (error) throw error;
+      
+      setCollabSuccess(`Acesso do colaborador ${email} liberado com sucesso!`);
+      await fetchCollaborators();
+      setTimeout(() => setCollabSuccess(null), 3500);
+    } catch (err: any) {
+      setCollabError(err.message || 'Erro ao aprovar colaborador.');
+    } finally {
+      setCollabLoading(false);
     }
-    localStorage.setItem('g3d_local_users', JSON.stringify(localUsers));
-
-    // 2. Update in Supabase
-    const supabase = getSupabaseClient();
-    if (supabase && hasSupabaseConfigured()) {
-      try {
-        const { error } = await supabase
-          .from('g3d_user_roles')
-          .update({ role: nextRole })
-          .eq('email', email);
-        if (error) throw error;
-      } catch (err: any) {
-        console.error("Erro ao atualizar no Supabase:", err);
-      }
-    }
-
-    setCollabSuccess(`Acesso do colaborador ${email} liberado com sucesso!`);
-    await fetchCollaborators();
-    setTimeout(() => setCollabSuccess(null), 3500);
-    setCollabLoading(false);
   };
 
   const handleBlockCollaborator = async (email: string) => {
+    const supabase = getSupabaseClient();
+    if (!supabase) return;
     setCollabLoading(true);
     setCollabError(null);
-
-    // 1. Update in local storage
-    const localUsersStr = localStorage.getItem('g3d_local_users') || '[]';
-    let localUsers: any[] = [];
     try {
-      localUsers = JSON.parse(localUsersStr);
-    } catch (e) {}
-
-    const targetCollab = collaborators.find(u => u.email?.toLowerCase() === email.toLowerCase()) || 
-                         localUsers.find(u => u.email?.toLowerCase() === email.toLowerCase());
-    const nextRole = targetCollab?.role?.toLowerCase().includes('admin') ? 'admin_pendente' : 'colaborador_pendente';
-
-    const existsInLocal = localUsers.some(u => u.email?.toLowerCase() === email.toLowerCase());
-    if (existsInLocal) {
-      localUsers = localUsers.map(u => {
-        if (u.email?.toLowerCase() === email.toLowerCase()) {
-          return { ...u, role: nextRole };
-        }
-        return u;
-      });
-    } else if (targetCollab) {
-      localUsers.push({
-        email: targetCollab.email,
-        username: targetCollab.username || email.split('@')[0],
-        password: targetCollab.password || '123',
-        role: nextRole
-      });
+      const { error } = await supabase
+        .from('g3d_user_roles')
+        .update({ role: 'colaborador_pendente' })
+        .eq('email', email);
+      if (error) throw error;
+      
+      setCollabSuccess(`Acesso de ${email} suspenso/colocado em pendência.`);
+      await fetchCollaborators();
+      setTimeout(() => setCollabSuccess(null), 3500);
+    } catch (err: any) {
+      setCollabError(err.message || 'Erro ao suspender colaborador.');
+    } finally {
+      setCollabLoading(false);
     }
-    localStorage.setItem('g3d_local_users', JSON.stringify(localUsers));
-
-    // 2. Update in Supabase
-    const supabase = getSupabaseClient();
-    if (supabase && hasSupabaseConfigured()) {
-      try {
-        const { error } = await supabase
-          .from('g3d_user_roles')
-          .update({ role: nextRole })
-          .eq('email', email);
-        if (error) throw error;
-      } catch (err: any) {
-        console.error("Erro ao suspender no Supabase:", err);
-      }
-    }
-
-    setCollabSuccess(`Acesso de ${email} suspenso/colocado em pendência.`);
-    await fetchCollaborators();
-    setTimeout(() => setCollabSuccess(null), 3500);
-    setCollabLoading(false);
   };
 
   const handleChangeRole = async (email: string, newRole: string) => {
+    const supabase = getSupabaseClient();
+    if (!supabase) return;
     setCollabLoading(true);
     setCollabError(null);
-
-    // 1. Update in local storage
-    const localUsersStr = localStorage.getItem('g3d_local_users') || '[]';
-    let localUsers: any[] = [];
     try {
-      localUsers = JSON.parse(localUsersStr);
-    } catch (e) {}
-
-    localUsers = localUsers.map(u => {
-      if (u.email?.toLowerCase() === email.toLowerCase()) {
-        return { ...u, role: newRole };
-      }
-      return u;
-    });
-    localStorage.setItem('g3d_local_users', JSON.stringify(localUsers));
-
-    // 2. Update in Supabase
-    const supabase = getSupabaseClient();
-    if (supabase && hasSupabaseConfigured()) {
-      try {
-        const { error } = await supabase
-          .from('g3d_user_roles')
-          .update({ role: newRole })
-          .eq('email', email);
-        if (error) throw error;
-      } catch (err: any) {
-        console.error("Erro ao alterar cargo no Supabase:", err);
-      }
+      const { error } = await supabase
+        .from('g3d_user_roles')
+        .update({ role: newRole })
+        .eq('email', email);
+      if (error) throw error;
+      
+      setCollabSuccess(`Cargo de ${email} alterado para ${newRole === 'admin' ? 'Administrador' : (newRole === 'colaborador' ? 'Colaborador Ativo' : 'Pendente')}!`);
+      await fetchCollaborators();
+      setTimeout(() => setCollabSuccess(null), 3500);
+    } catch (err: any) {
+      setCollabError(err.message || 'Erro ao alterar cargo.');
+    } finally {
+      setCollabLoading(false);
     }
-
-    setCollabSuccess(`Cargo de ${email} alterado para ${newRole === 'admin' ? 'Administrador' : (newRole === 'colaborador' ? 'Colaborador Ativo' : 'Pendente')}!`);
-    await fetchCollaborators();
-    setTimeout(() => setCollabSuccess(null), 3500);
-    setCollabLoading(false);
   };
 
   const handleDeleteCollaborator = async (email: string) => {
     if (!window.confirm(`Tem certeza que deseja remover o colaborador ${email} do sistema?`)) {
       return;
     }
+    const supabase = getSupabaseClient();
+    if (!supabase) return;
     setCollabLoading(true);
     setCollabError(null);
-
-    // 1. Delete in local storage
-    const localUsersStr = localStorage.getItem('g3d_local_users') || '[]';
-    let localUsers: any[] = [];
     try {
-      localUsers = JSON.parse(localUsersStr);
-    } catch (e) {}
-
-    localUsers = localUsers.filter(u => u.email?.toLowerCase() !== email.toLowerCase());
-    localStorage.setItem('g3d_local_users', JSON.stringify(localUsers));
-
-    // 2. Delete in Supabase
-    const supabase = getSupabaseClient();
-    if (supabase && hasSupabaseConfigured()) {
-      try {
-        const { error } = await supabase
-          .from('g3d_user_roles')
-          .delete()
-          .eq('email', email);
-        if (error) throw error;
-      } catch (err: any) {
-        console.error("Erro ao deletar no Supabase:", err);
-      }
+      const { error } = await supabase
+        .from('g3d_user_roles')
+        .delete()
+        .eq('email', email);
+      if (error) throw error;
+      
+      setCollabSuccess(`Cadastro de ${email} foi excluído do sistema!`);
+      await fetchCollaborators();
+      setTimeout(() => setCollabSuccess(null), 3500);
+    } catch (err: any) {
+      setCollabError(err.message || 'Erro ao deletar colaborador.');
+    } finally {
+      setCollabLoading(false);
     }
-
-    setCollabSuccess(`Cadastro de ${email} foi excluído do sistema!`);
-    await fetchCollaborators();
-    setTimeout(() => setCollabSuccess(null), 3500);
-    setCollabLoading(false);
   };
 
   const handleAddCollaboratorDirectly = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCollabEmail.trim()) return;
+    const supabase = getSupabaseClient();
+    if (!supabase) return;
     setCollabLoading(true);
     setCollabError(null);
-
-    const emailVal = newCollabEmail.trim().toLowerCase();
-
-    // 1. Add/Upsert in local storage
-    const localUsersStr = localStorage.getItem('g3d_local_users') || '[]';
-    let localUsers: any[] = [];
     try {
-      localUsers = JSON.parse(localUsersStr);
-    } catch (e) {}
-
-    const existingIdx = localUsers.findIndex(u => u.email?.toLowerCase() === emailVal);
-    if (existingIdx >= 0) {
-      localUsers[existingIdx] = { ...localUsers[existingIdx], role: newCollabRole };
-    } else {
-      localUsers.push({
-        email: emailVal,
-        username: emailVal.split('@')[0],
-        password: '123', // Default password for pre-added
-        role: newCollabRole
-      });
+      const { error } = await supabase
+        .from('g3d_user_roles')
+        .upsert({
+          email: newCollabEmail.trim().toLowerCase(),
+          role: newCollabRole
+        });
+      if (error) throw error;
+      
+      setCollabSuccess(`Colaborador ${newCollabEmail} registrado diretamente no banco!`);
+      setNewCollabEmail('');
+      await fetchCollaborators();
+      setTimeout(() => setCollabSuccess(null), 3500);
+    } catch (err: any) {
+      setCollabError(err.message || 'Erro ao registrar colaborador diretamente.');
+    } finally {
+      setCollabLoading(false);
     }
-    localStorage.setItem('g3d_local_users', JSON.stringify(localUsers));
-
-    // 2. Update/Upsert in Supabase
-    const supabase = getSupabaseClient();
-    if (supabase && hasSupabaseConfigured()) {
-      try {
-        const { error } = await supabase
-          .from('g3d_user_roles')
-          .upsert({
-            email: emailVal,
-            role: newCollabRole,
-            username: emailVal.split('@')[0],
-            password: '123'
-          });
-        if (error) throw error;
-      } catch (err: any) {
-        console.error("Erro ao cadastrar diretamente no Supabase:", err);
-      }
-    }
-
-    setCollabSuccess(`Colaborador ${newCollabEmail} registrado diretamente no sistema!`);
-    setNewCollabEmail('');
-    await fetchCollaborators();
-    setTimeout(() => setCollabSuccess(null), 3500);
-    setCollabLoading(false);
   };
 
   useEffect(() => {
-    fetchCollaborators();
+    if (hasSupabaseConfigured()) {
+      fetchCollaborators();
+    }
   }, []);
 
   const handleSaveSupabase = async (e: React.FormEvent) => {
@@ -391,18 +240,6 @@ export default function SettingsView({
     if (!supabaseUrl.trim() || !supabaseKey.trim()) {
       localStorage.removeItem('g3d_supabase_url');
       localStorage.removeItem('g3d_supabase_key');
-      
-      // Clear on the server as well
-      try {
-        await fetch('/api/config', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: '', key: '' })
-        });
-      } catch (err) {
-        console.error('Erro ao limpar config no servidor:', err);
-      }
-
       setSupabaseConnectionStatus('Chaves de conexão limpas. Reiniciando em modo local...');
       setTimeout(() => window.location.reload(), 1500);
       return;
@@ -421,18 +258,6 @@ export default function SettingsView({
 
       localStorage.setItem('g3d_supabase_url', supabaseUrl.trim());
       localStorage.setItem('g3d_supabase_key', supabaseKey.trim());
-
-      // Save to server
-      try {
-        await fetch('/api/config', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: supabaseUrl.trim(), key: supabaseKey.trim() })
-        });
-      } catch (err) {
-        console.error('Erro ao salvar config no servidor:', err);
-      }
-
       setSupabaseConnectionStatus('Sucesso: Conectado e autenticado! Reiniciando seu console de gestão...');
       setTimeout(() => {
         window.location.reload();
@@ -440,18 +265,6 @@ export default function SettingsView({
     } catch (err: any) {
       localStorage.setItem('g3d_supabase_url', supabaseUrl.trim());
       localStorage.setItem('g3d_supabase_key', supabaseKey.trim());
-
-      // Save to server anyway so it can be preserved
-      try {
-        await fetch('/api/config', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: supabaseUrl.trim(), key: supabaseKey.trim() })
-        });
-      } catch (err) {
-        console.error('Erro ao salvar config no servidor:', err);
-      }
-
       setSupabaseConnectionStatus(`Alerta: Credenciais salvas, mas houve erro no ping. Verifique se você executou o código SQL no console do Supabase para inicializar as tabelas.`);
     }
   };
@@ -468,11 +281,17 @@ export default function SettingsView({
 
     const cleanPass = newPassword.trim();
     if (cleanPass.length < 4) {
-      setPwError('A nova senha deve ter no mínimo 4 caracteres.');
+      setPwError('A nova senha mestra deve ter no mínimo 4 caracteres.');
+      return;
+    }
+
+    if (cleanPass !== confirmMasterPassword.trim()) {
+      setPwError('As senhas digitadas não coincidem.');
       return;
     }
 
     localStorage.setItem('g3d_master_password', cleanPass);
+    setCurrentMasterPw(cleanPass);
     
     // Sync to Supabase in background if active
     const supabase = getSupabaseClient();
@@ -488,8 +307,80 @@ export default function SettingsView({
     }
 
     setNewPassword('');
+    setConfirmMasterPassword('');
     setPwSuccess(true);
     setTimeout(() => setPwSuccess(false), 3500);
+  };
+
+  const handleUpdateCloudPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCloudPwError('');
+    setCloudPwSuccess(false);
+
+    const cleanPass = cloudNewPassword.trim();
+    if (cleanPass.length < 6) {
+      setCloudPwError('A nova senha da conta na nuvem deve possuir no mínimo 6 caracteres.');
+      return;
+    }
+
+    if (cleanPass !== confirmCloudNewPassword.trim()) {
+      setCloudPwError('A confirmação da nova senha não confere.');
+      return;
+    }
+
+    setCloudPwLoading(true);
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      setCloudPwError('Supabase desconectado ou não configurado.');
+      setCloudPwLoading(false);
+      return;
+    }
+
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: cleanPass
+      });
+
+      if (error) throw error;
+
+      if (syncCloudWithMaster) {
+        localStorage.setItem('g3d_master_password', cleanPass);
+        setCurrentMasterPw(cleanPass);
+        try {
+          await supabase.from('g3d_user_roles').upsert({
+            email: 'system_master_password',
+            role: cleanPass
+          });
+        } catch (e) {
+          console.warn('Sync master err:', e);
+        }
+      }
+
+      setCloudNewPassword('');
+      setConfirmCloudNewPassword('');
+      setCloudPwSuccess(true);
+      setTimeout(() => setCloudPwSuccess(false), 4000);
+    } catch (err: any) {
+      setCloudPwError(err.message || 'Erro ao alterar senha do administrador na nuvem.');
+    } finally {
+      setCloudPwLoading(false);
+    }
+  };
+
+  const handleSendResetEmail = async (userEmail: string) => {
+    const supabase = getSupabaseClient();
+    if (!supabase) return;
+    try {
+      const redirectUrl = window.location.origin + window.location.pathname;
+      const { error } = await supabase.auth.resetPasswordForEmail(userEmail, {
+        redirectTo: redirectUrl
+      });
+      if (error) throw error;
+      setCollabSuccess(`E-mail de redefinição de senha enviado para ${userEmail}!`);
+      setTimeout(() => setCollabSuccess(null), 3500);
+    } catch (err: any) {
+      setCollabError(err.message || 'Erro ao enviar e-mail de redefinição.');
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -508,24 +399,6 @@ export default function SettingsView({
 
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 3000);
-  };
-
-  const handleSaveVisualSettings = (e: React.FormEvent) => {
-    e.preventDefault();
-    setVisualSuccess(false);
-
-    localStorage.setItem('g3d_admin_logo', adminLogo.trim());
-    localStorage.setItem('g3d_admin_name', adminName.trim());
-    localStorage.setItem('g3d_admin_sub', adminSub.trim());
-
-    localStorage.setItem('g3d_colab_logo', colabLogo.trim());
-    localStorage.setItem('g3d_colab_name', colabName.trim());
-    localStorage.setItem('g3d_colab_sub', colabSub.trim());
-
-    setVisualSuccess(true);
-    // Dispatch a custom storage event to update Sidebar/App immediately
-    window.dispatchEvent(new Event('g3d_visual_settings_updated'));
-    setTimeout(() => setVisualSuccess(false), 3000);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -884,188 +757,196 @@ export default function SettingsView({
             </div>
           </div>
 
-          {/* CARD DE PERSONALIZAÇÃO VISUAL (LOGOS E PERFIS) */}
-          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
-            <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-              <Palette className="w-5 h-5 text-indigo-600" />
-              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800">
-                Personalização de Logos &amp; Perfis
-              </h3>
-            </div>
-
-            <p className="text-xs text-slate-500 leading-relaxed">
-              Edite as imagens do logo (inserindo URL externa) e o nome do perfil exibidos na barra lateral e cabeçalhos para os perfis administrador e colaborador.
-            </p>
-
-            {visualSuccess && (
-              <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2 animate-[fadeIn_0.2s_ease-out]">
-                <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                <span>Configurações visuais salvas e aplicadas em tempo real!</span>
-              </div>
-            )}
-
-            <form onSubmit={handleSaveVisualSettings} className="space-y-4 pt-1">
-              {/* ADMIN SETTINGS */}
-              <div className="p-3 bg-slate-50/50 dark:bg-slate-900/40 rounded-lg border border-slate-150 dark:border-slate-800 space-y-2.5">
-                <span className="block text-[11px] font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">
-                  Perfil Administrador
-                </span>
-                
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase">
-                    Nome do Perfil
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={adminName}
-                    onChange={(e) => setAdminName(e.target.value)}
-                    className="w-full px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
-                    placeholder="Ex: GeorgeFctech-3D"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase">
-                    Subtítulo do Perfil
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={adminSub}
-                    onChange={(e) => setAdminSub(e.target.value)}
-                    className="w-full px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
-                    placeholder="Ex: Modelagem • Impressão 3D"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase">
-                    URL do Logo Administrador
-                  </label>
-                  <input
-                    type="url"
-                    required
-                    value={adminLogo}
-                    onChange={(e) => setAdminLogo(e.target.value)}
-                    className="w-full px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 text-xs font-mono focus:outline-none focus:border-indigo-500"
-                    placeholder="https://exemplo.com/logo-admin.png"
-                  />
-                </div>
-              </div>
-
-              {/* COLABORADOR SETTINGS */}
-              <div className="p-3 bg-slate-50/50 dark:bg-slate-900/40 rounded-lg border border-slate-150 dark:border-slate-800 space-y-2.5">
-                <span className="block text-[11px] font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-450">
-                  Perfil Colaborador
-                </span>
-
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase">
-                    Nome do Perfil
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={colabName}
-                    onChange={(e) => setColabName(e.target.value)}
-                    className="w-full px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
-                    placeholder="Ex: GeorgeFctech Comercial"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase">
-                    Subtítulo do Perfil
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={colabSub}
-                    onChange={(e) => setColabSub(e.target.value)}
-                    className="w-full px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
-                    placeholder="Ex: Pedidos • Compras"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase">
-                    URL do Logo Colaborador
-                  </label>
-                  <input
-                    type="url"
-                    required
-                    value={colabLogo}
-                    onChange={(e) => setColabLogo(e.target.value)}
-                    className="w-full px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 text-xs font-mono focus:outline-none focus:border-indigo-500"
-                    placeholder="https://exemplo.com/logo-colab.png"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition shadow-sm"
-              >
-                <Save className="w-4 h-4" />
-                Salvar Configurações Visuais
-              </button>
-            </form>
-          </div>
-
           {/* CARD DE SEGURANÇA & ACESSO */}
-          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-5">
             <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
               <Lock className="w-5 h-5 text-indigo-600" />
               <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800">
-                Segurança &amp; Acesso Externo
+                Segurança &amp; Redefinição de Senhas
               </h3>
             </div>
 
             <p className="text-xs text-slate-500 leading-relaxed">
-              Configure sua senha de acesso para proteger o GeorgeFctech-3D de navegações externas indesejadas via Cloudflare Tunnel ou rede local.
+              Gerencie a Senha Mestra de Administrador do sistema local e atualize sua senha da conta na nuvem (Supabase) com facilidade.
             </p>
 
-            {pwError && (
-              <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
-                <ShieldAlert className="w-4 h-4 text-rose-600 flex-shrink-0" />
-                <span>{pwError}</span>
+            {/* SEÇÃO 1: SENHA MESTRA LOCAL/OFFLINE */}
+            <div className="p-4 bg-slate-50/70 border border-slate-200 rounded-xl space-y-3.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                  <Shield className="w-4 h-4 text-indigo-600" />
+                  Senha Mestra do Sistema (Admin)
+                </span>
+                <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                  {currentMasterPw ? 'Ativa' : 'Não definida'}
+                </span>
               </div>
-            )}
 
-            {pwSuccess && (
-              <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                <span>Senha mestra atualizada com sucesso!</span>
-              </div>
-            )}
+              {currentMasterPw ? (
+                <div className="flex items-center justify-between p-2.5 bg-white border border-slate-200 rounded-lg text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-slate-500 font-medium">Senha Atual:</span>
+                    <span className="font-mono font-bold text-slate-900 tracking-wider">
+                      {showCurrentMasterPw ? currentMasterPw : '••••••••'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentMasterPw(!showCurrentMasterPw)}
+                    className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold cursor-pointer"
+                  >
+                    {showCurrentMasterPw ? 'Ocultar' : 'Ver Senha'}
+                  </button>
+                </div>
+              ) : null}
 
-            <form onSubmit={handleChangePassword} className="space-y-3 pt-1">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">
-                  Nova Senha Mestra
-                </label>
-                <div className="relative">
+              {pwError && (
+                <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4 text-rose-600 flex-shrink-0" />
+                  <span>{pwError}</span>
+                </div>
+              )}
+
+              {pwSuccess && (
+                <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                  <span>Senha mestra atualizada com sucesso!</span>
+                </div>
+              )}
+
+              <form onSubmit={handleChangePassword} className="space-y-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">
+                    Nova Senha Mestra
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showMasterPw ? 'text' : 'password'}
+                      placeholder="Mínimo 4 caracteres"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full pl-3 pr-9 py-2 border border-slate-200 rounded-lg bg-white text-slate-800 text-xs focus:outline-none focus:border-indigo-500 font-mono transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowMasterPw(!showMasterPw)}
+                      className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                    >
+                      {showMasterPw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">
+                    Confirmar Nova Senha Mestra
+                  </label>
                   <input
-                    type="password"
-                    placeholder="Mínimo 4 caracteres"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-800 text-xs focus:outline-none focus:border-indigo-500 focus:bg-white font-mono transition-all"
+                    type={showMasterPw ? 'text' : 'password'}
+                    placeholder="Repita a nova senha"
+                    value={confirmMasterPassword}
+                    onChange={(e) => setConfirmMasterPassword(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-white text-slate-800 text-xs focus:outline-none focus:border-indigo-500 font-mono transition-all"
                   />
                 </div>
+
+                <button
+                  type="submit"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg transition cursor-pointer"
+                >
+                  <Key className="w-3.5 h-3.5" />
+                  Salvar Nova Senha Mestra
+                </button>
+              </form>
+            </div>
+
+            {/* SEÇÃO 2: SENHA DA CONTA NA NUVEM (SUPABASE AUTH) */}
+            {hasSupabaseConfigured() && (
+              <div className="p-4 bg-indigo-50/40 border border-indigo-150 rounded-xl space-y-3.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-indigo-950 uppercase tracking-wide flex items-center gap-1.5">
+                    <CloudLightning className="w-4 h-4 text-indigo-650" />
+                    Conta Administrador na Nuvem (Supabase)
+                  </span>
+                </div>
+
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Redefina a senha da sua conta de login em nuvem ({sessionStorage.getItem('g3d_user_email') || 'georgefctech@gmail.com'}) para sincronização remota.
+                </p>
+
+                {cloudPwError && (
+                  <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+                    <ShieldAlert className="w-4 h-4 text-rose-600 flex-shrink-0" />
+                    <span>{cloudPwError}</span>
+                  </div>
+                )}
+
+                {cloudPwSuccess && (
+                  <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                    <span>Senha na nuvem atualizada com sucesso!</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleUpdateCloudPassword} className="space-y-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">
+                      Nova Senha da Nuvem
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showCloudPw ? 'text' : 'password'}
+                        placeholder="Mínimo 6 caracteres"
+                        value={cloudNewPassword}
+                        onChange={(e) => setCloudNewPassword(e.target.value)}
+                        className="w-full pl-3 pr-9 py-2 border border-slate-200 rounded-lg bg-white text-slate-800 text-xs focus:outline-none focus:border-indigo-500 font-mono transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowCloudPw(!showCloudPw)}
+                        className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                      >
+                        {showCloudPw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">
+                      Confirmar Nova Senha da Nuvem
+                    </label>
+                    <input
+                      type={showCloudPw ? 'text' : 'password'}
+                      placeholder="Repita a senha da nuvem"
+                      value={confirmCloudNewPassword}
+                      onChange={(e) => setConfirmCloudNewPassword(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-white text-slate-800 text-xs focus:outline-none focus:border-indigo-500 font-mono transition-all"
+                    />
+                  </div>
+
+                  <label className="flex items-center gap-2 text-[11px] text-slate-600 cursor-pointer pt-0.5">
+                    <input
+                      type="checkbox"
+                      checked={syncCloudWithMaster}
+                      onChange={(e) => setSyncCloudWithMaster(e.target.checked)}
+                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span>Sincronizar também com a Senha Mestra local</span>
+                  </label>
+
+                  <button
+                    type="submit"
+                    disabled={cloudPwLoading}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition disabled:opacity-50 cursor-pointer shadow-xs"
+                  >
+                    <KeyRound className="w-3.5 h-3.5" />
+                    {cloudPwLoading ? 'Atualizando...' : 'Gravar Nova Senha na Nuvem'}
+                  </button>
+                </form>
               </div>
+            )}
 
-              <button
-                type="submit"
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg transition"
-              >
-                <Key className="w-4 h-4" />
-                Ativar Nova Senha Mestra
-              </button>
-            </form>
-
-            <div className="border-t border-slate-100 pt-4 mt-2">
+            <div className="border-t border-slate-100 pt-3">
               <button
                 type="button"
                 onClick={handleLogout}
@@ -1095,15 +976,17 @@ export default function SettingsView({
               </p>
             </div>
           </div>
-          <button
-            onClick={fetchCollaborators}
-            disabled={collabLoading}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-950 text-xs font-semibold rounded-lg border border-slate-200 transition disabled:opacity-50 cursor-pointer"
-            title="Recarregar lista"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${collabLoading ? 'animate-spin' : ''}`} />
-            Atualizar Lista
-          </button>
+          {hasSupabaseConfigured() && (
+            <button
+              onClick={fetchCollaborators}
+              disabled={collabLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-950 text-xs font-semibold rounded-lg border border-slate-200 transition disabled:opacity-50 cursor-pointer"
+              title="Recarregar lista"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${collabLoading ? 'animate-spin' : ''}`} />
+              Atualizar Lista
+            </button>
+          )}
         </div>
 
         {collabError && (
@@ -1120,16 +1003,16 @@ export default function SettingsView({
           </div>
         )}
 
-        {!hasSupabaseConfigured() && (
-          <div className="p-3 mb-4 bg-indigo-50 border border-indigo-200 text-indigo-800 text-[11px] rounded-lg flex items-center gap-2">
-            <Database className="w-3.5 h-3.5 text-indigo-600 flex-shrink-0" />
-            <span>
-              <strong>Armazenamento Local Ativo:</strong> Seus colaboradores e aprovações estão salvos neste navegador. Ative a Sincronização Cloud acima se quiser usar banco na nuvem.
-            </span>
+        {!hasSupabaseConfigured() ? (
+          <div className="p-8 text-center bg-slate-50 border border-dashed border-slate-200 rounded-lg">
+            <Database className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+            <h4 className="text-sm font-bold text-slate-700 mb-1">Módulo Cloud Desconectado</h4>
+            <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+              O controle de liberação de colaboradores só pode ser utilizado quando o banco de dados nuvem (Supabase) estiver configurado. Ative a sincronização na seção acima.
+            </p>
           </div>
-        )}
-
-        <div className="space-y-6">
+        ) : (
+          <div className="space-y-6">
             {/* FORMULÁRIO DE PRÉ-CADASTRO / REGISTRO DIRETO CO-LAB */}
             <form onSubmit={handleAddCollaboratorDirectly} className="bg-slate-50/50 p-4 border border-slate-200 rounded-lg">
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-705 mb-3 flex items-center gap-1.5">
@@ -1189,9 +1072,9 @@ export default function SettingsView({
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {collaborators.map((collab) => {
-                        const isPending = isPendingRole(collab.role);
-                        const isAdmin = collab.role === 'admin' || collab.role === 'admin_pendente';
-                        const isActive = !isPending && !isAdmin && collab.role === 'colaborador';
+                        const isPending = collab.role === 'colaborador_pendente' || collab.role === 'pendente';
+                        const isAdmin = collab.role === 'admin';
+                        const isActive = collab.role === 'colaborador';
                         const isSelf = collab.email?.trim().toLowerCase() === sessionStorage.getItem('g3d_user_email')?.trim().toLowerCase();
 
                         return (
@@ -1278,6 +1161,17 @@ export default function SettingsView({
 
                                 {!isSelf && (
                                   <button
+                                    type="button"
+                                    onClick={() => handleSendResetEmail(collab.email)}
+                                    className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition cursor-pointer"
+                                    title="Enviar link de redefinição de senha para este usuário"
+                                  >
+                                    <KeyRound className="w-4 h-4" />
+                                  </button>
+                                )}
+
+                                {!isSelf && (
+                                  <button
                                     onClick={() => handleDeleteCollaborator(collab.email)}
                                     className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
                                     title="Excluir Colaborador"
@@ -1296,6 +1190,7 @@ export default function SettingsView({
               </div>
             )}
           </div>
+        )}
       </div>
     </div>
   );

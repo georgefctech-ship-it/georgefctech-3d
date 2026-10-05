@@ -42,6 +42,7 @@ export default function RegistrationForm({
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [client, setClient] = useState('');
   const [name, setName] = useState('');
+  const [barcode, setBarcode] = useState('');
   const [hours, setHours] = useState('6.4');
   const [weight, setWeight] = useState('61.17');
   const [materialType, setMaterialType] = useState('PETG CF10');
@@ -129,7 +130,8 @@ export default function RegistrationForm({
       profitMargin: marginNum,
       description: description.trim() || 'Serviço sob demanda técnica concluído sem observações.',
       status: 'concluido',
-      image: uploadedBase64 || image || 'https://images.unsplash.com/photo-1581092334247-44dfa8c569ca?w=400&q=80'
+      image: uploadedBase64 || image || 'https://images.unsplash.com/photo-1581092334247-44dfa8c569ca?w=400&q=80',
+      barcode: barcode.trim() || undefined
     });
 
     setSuccess(true);
@@ -138,6 +140,7 @@ export default function RegistrationForm({
     // Clear major form entries
     setName('');
     setDescription('');
+    setBarcode('');
     
     // Smooth scroll and redirect after delay
     setTimeout(() => {
@@ -218,24 +221,40 @@ export default function RegistrationForm({
               </div>
             </div>
 
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                Nome do Projeto / Modelo 3D
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Ex: Adaptador de Conector Rápido Mecânico"
-                className="px-4 py-3 border border-slate-200 rounded-lg bg-slate-50 text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all placeholder-slate-400"
-              />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              <div className="flex flex-col gap-2 md:col-span-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Nome do Projeto / Modelo 3D *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Ex: Adaptador de Conector Rápido Mecânico"
+                  className="px-4 py-3 border border-slate-200 rounded-lg bg-slate-50 text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all placeholder-slate-400"
+                />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Código de Barras / Modelo
+                </label>
+                <input
+                  type="text"
+                  value={barcode}
+                  onChange={(e) => setBarcode(e.target.value)}
+                  placeholder="Ex: 7891000311500 ou PECA-MEC"
+                  className="px-4 py-3 border border-slate-200 rounded-lg bg-slate-50 text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all placeholder-slate-400 font-mono"
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               <div className="flex flex-col gap-2">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
                   Tempo Slicer (h)
-                  <span title="Tempo total impresso fornecido pelo fatiador"><HelpCircle className="w-3.5 h-3.5 text-slate-400" /></span>
+                  <HelpCircle className="w-3.5 h-3.5 text-slate-400" title="Tempo total impresso fornecido pelo fatiador" />
                 </label>
                 <input
                   type="number"
@@ -249,7 +268,7 @@ export default function RegistrationForm({
               <div className="flex flex-col gap-2">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
                   Peso Final (g)
-                  <span title="Consumo estimado ou peso final pesado em balança"><HelpCircle className="w-3.5 h-3.5 text-slate-400" /></span>
+                  <HelpCircle className="w-3.5 h-3.5 text-slate-400" title="Consumo estimado ou peso final pesado em balança" />
                 </label>
                 <input
                   type="number"

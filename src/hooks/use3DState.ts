@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ProjectOrder, InventoryItem, ShoppingItem, SettingsConfig } from '../types';
 import { getSupabaseClient, hasSupabaseConfigured } from '../lib/supabase';
 
@@ -70,12 +70,8 @@ const DEFAULT_INVENTORY: InventoryItem[] = [
     unitCost: 210.00,
     gramCost: 0.21,
     status: 'Em Estoque',
-    category: 'Filamento',
     image: 'https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?w=300&q=80',
-    purchaseLink: 'https://www.mercadolivre.com.br/filamento-creality-petg-1-kg-175-mm-para-impresso-3d-em-cor-preta/p/MLB51382966',
-    createdByRole: 'admin',
-    createdByUser: 'Administrador George',
-    createdAt: '2026-06-01T10:00:00.000Z'
+    purchaseLink: 'https://www.mercadolivre.com.br/filamento-creality-petg-1-kg-175-mm-para-impresso-3d-em-cor-preta/p/MLB51382966'
   },
   {
     id: 'INV-002',
@@ -84,96 +80,28 @@ const DEFAULT_INVENTORY: InventoryItem[] = [
     unitCost: 140.00,
     gramCost: 0.14,
     status: 'Em Estoque',
-    category: 'Filamento',
     image: 'https://images.unsplash.com/photo-1615840287214-7fe58a8b668f?w=300&q=80',
-    purchaseLink: 'https://www.mercadolivre.com.br/filamento-creality-petg-1-kg-175-mm-para-impresso-3d-em-cor-preta/p/MLB51382966',
-    createdByRole: 'admin',
-    createdByUser: 'Administrador George',
-    createdAt: '2026-06-01T10:00:00.000Z'
+    purchaseLink: 'https://www.mercadolivre.com.br/filamento-creality-petg-1-kg-175-mm-para-impresso-3d-em-cor-preta/p/MLB51382966'
   },
   {
     id: 'INV-003',
-    material: 'Placa Controladora Silenciosa 32-Bits Creality V4.2.7',
-    qty: 2,
-    unitCost: 280.00,
-    gramCost: 280.00,
-    status: 'Em Estoque',
-    category: 'Placas & Fontes',
-    image: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=300&q=80',
-    purchaseLink: 'https://www.mercadolivre.com.br/',
-    createdByRole: 'admin',
-    createdByUser: 'Administrador George',
-    createdAt: '2026-06-01T10:00:00.000Z'
+    material: 'ABS Alta Performance 1kg',
+    qty: 1,
+    unitCost: 180.00,
+    gramCost: 0.18,
+    status: 'Poucas Unidades',
+    image: 'https://images.unsplash.com/photo-1535813547-99c456a41d4a?w=300&q=80',
+    purchaseLink: 'https://www.mercadolivre.com.br/filamento-creality-petg-1-kg-175-mm-para-impresso-3d-em-cor-preta/p/MLB51382966'
   },
   {
     id: 'INV-004',
-    material: 'Fonte Chaveada 24V 350W MeanWell LRS-350-24',
-    qty: 2,
-    unitCost: 240.00,
-    gramCost: 240.00,
-    status: 'Em Estoque',
-    category: 'Placas & Fontes',
-    image: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=300&q=80',
-    purchaseLink: 'https://www.mercadolivre.com.br/',
-    createdByRole: 'admin',
-    createdByUser: 'Administrador George',
-    createdAt: '2026-06-01T10:00:00.000Z'
-  },
-  {
-    id: 'INV-005',
-    material: 'Sensor de Nivelamento Automático BLTouch V3.1',
-    qty: 3,
-    unitCost: 195.00,
-    gramCost: 195.00,
-    status: 'Em Estoque',
-    category: 'Componentes Eletrônicos',
-    image: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=300&q=80',
-    purchaseLink: 'https://www.mercadolivre.com.br/',
-    createdByRole: 'admin',
-    createdByUser: 'Administrador George',
-    createdAt: '2026-06-01T10:00:00.000Z'
-  },
-  {
-    id: 'INV-006',
-    material: 'Jogo de Bicos de Latão 0.4mm Creality (Lote 10un)',
-    qty: 4,
-    unitCost: 45.00,
-    gramCost: 4.50,
-    status: 'Em Estoque',
-    category: 'Peças Geral',
-    image: 'https://images.unsplash.com/photo-1581092334247-44dfa8c569ca?w=300&q=80',
-    purchaseLink: 'https://www.mercadolivre.com.br/',
-    createdByRole: 'admin',
-    createdByUser: 'Administrador George',
-    createdAt: '2026-06-01T10:00:00.000Z'
-  },
-  {
-    id: 'INV-007',
-    material: 'Cooler Ventoinha 4010 24V Axial Duplo Rolamento (Hotend)',
-    qty: 6,
-    unitCost: 28.50,
-    gramCost: 28.50,
-    status: 'Em Estoque',
-    category: 'Refrigeração',
-    image: 'https://images.unsplash.com/photo-1581092334247-44dfa8c569ca?w=300&q=80',
-    purchaseLink: 'https://www.mercadolivre.com.br/',
-    createdByRole: 'admin',
-    createdByUser: 'Administrador George',
-    createdAt: '2026-06-01T10:00:00.000Z'
-  },
-  {
-    id: 'INV-008',
-    material: 'Fita Kapton Térmica de Isolamento 30mm x 33m',
-    qty: 5,
-    unitCost: 38.00,
-    gramCost: 38.00,
-    status: 'Em Estoque',
-    category: 'Acessórios/Insumos',
-    image: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=300&q=80',
-    purchaseLink: 'https://www.mercadolivre.com.br/',
-    createdByRole: 'admin',
-    createdByUser: 'Administrador George',
-    createdAt: '2026-06-01T10:00:00.000Z'
+    material: 'PETG Standard 1kg',
+    qty: 0,
+    unitCost: 130.00,
+    gramCost: 0.13,
+    status: 'Esgotado',
+    image: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=300&q=80',
+    purchaseLink: 'https://www.mercadolivre.com.br/filamento-creality-petg-1-kg-175-mm-para-impresso-3d-em-cor-preta/p/MLB51382966'
   }
 ];
 
@@ -186,62 +114,27 @@ const DEFAULT_SHOPPING: ShoppingItem[] = [
     purchaseLink: 'https://www.mercadolivre.com.br/filamento-creality-petg-1-kg-175-mm-para-impresso-3d-em-cor-preta/p/MLB51382966?product_trigger_id=MLB50257710&picker=true&quantity=1',
     category: 'Filamento',
     notes: 'Insumo de reposição rápida para prototipagem de adaptadores mecânicos',
-    checked: false,
-    requestedBy: 'Administrador',
-    company: 'GeorgeFctech-3D',
-    department: 'Oficina'
+    checked: false
   },
   {
     id: 'SHOP-002',
-    materialName: 'Placa Controladora Silenciosa 32-Bits Creality V4.2.7',
-    qtyNeeded: 1,
-    estUnitCost: 280.00,
-    purchaseLink: 'https://www.mercadolivre.com.br/',
-    category: 'Placas & Fontes',
-    notes: 'Upgrade e reposição para impressora Ender-3 da bancada 2',
-    checked: false,
-    requestedBy: 'Administrador',
-    company: 'GeorgeFctech-3D',
-    department: 'Oficina'
-  },
-  {
-    id: 'SHOP-003',
     materialName: 'Jogo de Bicos de Latão Extrusor Premium 0.4mm (M6)',
     qtyNeeded: 1,
     estUnitCost: 45.00,
     purchaseLink: 'https://www.mercadolivre.com.br/',
     category: 'Peças de Reposição',
     notes: 'Manutenção preventiva nas cabeças de extrusão Creality',
-    checked: false,
-    requestedBy: 'Administrador',
-    company: 'GeorgeFctech-3D',
-    department: 'Oficina'
+    checked: false
   },
   {
-    id: 'SHOP-004',
+    id: 'SHOP-003',
     materialName: 'Álcool Isopropílico 99.8% 1 Litro',
     qtyNeeded: 1,
     estUnitCost: 35.00,
     purchaseLink: 'https://www.mercadolivre.com.br/',
     category: 'Acessórios/Insumos',
     notes: 'Limpeza e desengorduramento técnico das mesas de PEI texturizadas',
-    checked: true,
-    requestedBy: 'Administrador',
-    company: 'GeorgeFctech-3D',
-    department: 'Oficina'
-  },
-  {
-    id: 'SHOP-005',
-    materialName: 'Ventoinha Radial 5015 24V Cooler de Refrigeração da Peça',
-    qtyNeeded: 3,
-    estUnitCost: 32.00,
-    purchaseLink: 'https://www.mercadolivre.com.br/',
-    category: 'Refrigeração',
-    notes: 'Refrigeração de camadas e pontes rápidas no cabeçote de impressão',
-    checked: false,
-    requestedBy: 'Administrador',
-    company: 'GeorgeFctech-3D',
-    department: 'Oficina'
+    checked: true
   }
 ];
 
@@ -251,172 +144,7 @@ const DEFAULT_SETTINGS: SettingsConfig = {
   defaultProfitMargin: 15.00
 };
 
-// Helper to save category in local storage cache
-export const saveCategoryToLocalCache = (id: string, category: string) => {
-  try {
-    const map = JSON.parse(localStorage.getItem('g3d_item_categories_map') || '{}');
-    map[id] = category;
-    localStorage.setItem('g3d_item_categories_map', JSON.stringify(map));
-  } catch (e) {
-    // ignore
-  }
-};
-
-// Helper to save creator in local storage cache
-export const saveCreatorToLocalCache = (id: string, role?: string, user?: string, createdAt?: string) => {
-  try {
-    const map = JSON.parse(localStorage.getItem('g3d_item_creator_map') || '{}');
-    map[id] = { role, user, createdAt };
-    localStorage.setItem('g3d_item_creator_map', JSON.stringify(map));
-  } catch (e) {
-    // ignore
-  }
-};
-
-// Helper to save shopping creator in local storage cache
-export const saveShoppingCreatorToLocalCache = (id: string, role?: string, user?: string, createdAt?: string) => {
-  try {
-    const map = JSON.parse(localStorage.getItem('g3d_shopping_creator_map') || '{}');
-    if (role || user || createdAt) {
-      map[id] = { role, user, createdAt };
-    } else {
-      delete map[id];
-    }
-    localStorage.setItem('g3d_shopping_creator_map', JSON.stringify(map));
-  } catch (e) {
-    // ignore
-  }
-};
-
-export interface ShoppingMetaCache {
-  company?: string;
-  department?: string;
-  requestedBy?: string;
-  barcode?: string;
-  role?: string;
-  user?: string;
-  createdAt?: string;
-}
-
-// Helper to save all shopping metadata (company, department, requestedBy, barcode, creator) in local storage cache
-export const saveShoppingMetaToLocalCache = (id: string, meta?: ShoppingMetaCache) => {
-  try {
-    const map = JSON.parse(localStorage.getItem('g3d_shopping_meta_map') || '{}');
-    if (meta) {
-      map[id] = {
-        ...(map[id] || {}),
-        ...Object.fromEntries(Object.entries(meta).filter(([_, v]) => v !== undefined))
-      };
-    } else {
-      delete map[id];
-    }
-    localStorage.setItem('g3d_shopping_meta_map', JSON.stringify(map));
-  } catch (e) {
-    // ignore
-  }
-};
-
-// Helper to save purchase link in local storage cache for shopping items
-export const saveShoppingLinkToLocalCache = (id: string, link?: string) => {
-  try {
-    const map = JSON.parse(localStorage.getItem('g3d_shopping_links_map') || '{}');
-    if (link && link.trim()) {
-      map[id] = link.trim();
-    } else {
-      delete map[id];
-    }
-    localStorage.setItem('g3d_shopping_links_map', JSON.stringify(map));
-  } catch (e) {
-    // ignore
-  }
-};
-
-// Helper to save purchase link in local storage cache for inventory items
-export const saveInventoryLinkToLocalCache = (id: string, link?: string) => {
-  try {
-    const map = JSON.parse(localStorage.getItem('g3d_inventory_links_map') || '{}');
-    if (link && link.trim()) {
-      map[id] = link.trim();
-    } else {
-      delete map[id];
-    }
-    localStorage.setItem('g3d_inventory_links_map', JSON.stringify(map));
-  } catch (e) {
-    // ignore
-  }
-};
-
-export const sanitizeInventoryCategory = (material: string, currentCategory?: string): string => {
-  const cleanCat = (currentCategory || '').trim();
-  const name = (material || '').toLowerCase();
-
-  // If a non-default category was explicitly stored, respect and preserve it!
-  if (cleanCat && cleanCat !== '') {
-    if (cleanCat === 'Placas') return 'Placas & Fontes';
-    if (cleanCat === 'Peças de Reposição') return 'Peças Geral';
-    // If it's explicitly Refrigeração, Placas & Fontes, Componentes Eletrônicos, Peças Geral, Acessórios/Insumos, Outros, keep it!
-    if (cleanCat !== 'Filamento') {
-      return cleanCat;
-    }
-  }
-
-  // Check refrigeration terms: "manifold", "monifold", "cooler", "fan", "ventoinha", "duto", "dissipador", "5015", "4010", "4020", "refrigera"
-  if (name.includes('manifold') || name.includes('monifold') || name.includes('cooler') || name.includes('fan') || name.includes('ventoinha') || name.includes('ventilador') || name.includes('duto') || name.includes('coifa') || name.includes('dissipador') || name.includes('heatsink') || name.includes('5015') || name.includes('4010') || name.includes('4020') || name.includes('refrigera')) {
-    return 'Refrigeração';
-  }
-  if (name.includes('placa') || name.includes('fonte') || name.includes('motherboard') || name.includes('controladora') || name.includes('meanwell') || name.includes('lrs-') || name.includes('v4.2.7') || name.includes('skr') || name.includes('mks') || name.includes('silent board')) {
-    return 'Placas & Fontes';
-  }
-  if (name.includes('sensor') || name.includes('bltouch') || name.includes('3dtouch') || name.includes('termistor') || name.includes('aquecedor') || name.includes('driver') || name.includes('cabo') || name.includes('tmc') || name.includes('mosfet') || name.includes('motor de passo') || name.includes('display') || name.includes('lcd')) {
-    return 'Componentes Eletrônicos';
-  }
-  if (name.includes('bico') || name.includes('nozzle') || name.includes('correia') || name.includes('polia') || name.includes('extrusor') || name.includes('ptfe') || name.includes('mesa') || name.includes('pei') || name.includes('vidro') || name.includes('heatbreak') || name.includes('bloco') || name.includes('garganta') || name.includes('rolamento') || name.includes('fuso') || name.includes('acoplador') || name.includes('mola')) {
-    return 'Peças Geral';
-  }
-  if (name.includes('kapton') || name.includes('isopropílico') || name.includes('álcool') || name.includes('fita') || name.includes('cola') || name.includes('graxa') || name.includes('spray') || name.includes('espátula') || name.includes('adesivo') || name.includes('lubrificante') || name.includes('silicone') || name.includes('alicate')) {
-    return 'Acessórios/Insumos';
-  }
-
-  if (cleanCat === 'Filamento') {
-    return 'Filamento';
-  }
-
-  return cleanCat || 'Filamento';
-};
-
-export const sanitizeShoppingCategory = (materialName: string, currentCategory?: string): string => {
-  const cleanCat = (currentCategory || '').trim();
-  const name = (materialName || '').toLowerCase();
-
-  if (cleanCat && cleanCat !== '' && cleanCat !== 'Outros') {
-    if (cleanCat === 'Placas') return 'Placas & Fontes';
-    if (cleanCat === 'Peças Geral') return 'Peças de Reposição';
-    if (cleanCat !== 'Filamento') {
-      return cleanCat;
-    }
-  }
-
-  if (name.includes('manifold') || name.includes('monifold') || name.includes('cooler') || name.includes('fan') || name.includes('ventoinha') || name.includes('ventilador') || name.includes('duto') || name.includes('coifa') || name.includes('dissipador') || name.includes('heatsink') || name.includes('5015') || name.includes('4010') || name.includes('4020') || name.includes('refrigera')) {
-    return 'Refrigeração';
-  }
-  if (name.includes('placa') || name.includes('fonte') || name.includes('motherboard') || name.includes('controladora') || name.includes('meanwell') || name.includes('lrs-') || name.includes('v4.2.7') || name.includes('skr') || name.includes('mks') || name.includes('silent board')) {
-    return 'Placas & Fontes';
-  }
-  if (name.includes('sensor') || name.includes('bltouch') || name.includes('3dtouch') || name.includes('termistor') || name.includes('aquecedor') || name.includes('driver') || name.includes('cabo') || name.includes('tmc') || name.includes('mosfet')) {
-    return 'Componentes Eletrônicos';
-  }
-  if (name.includes('bico') || name.includes('nozzle') || name.includes('correia') || name.includes('polia') || name.includes('extrusor') || name.includes('ptfe') || name.includes('heatbreak') || name.includes('bloco') || name.includes('garganta')) {
-    return 'Peças de Reposição';
-  }
-  if (name.includes('kapton') || name.includes('isopropílico') || name.includes('álcool') || name.includes('fita') || name.includes('cola') || name.includes('graxa') || name.includes('spray') || name.includes('espátula') || name.includes('adesivo') || name.includes('lubrificante') || name.includes('silicone')) {
-    return 'Acessórios/Insumos';
-  }
-
-  return cleanCat || 'Filamento';
-};
-
 export function use3DState() {
-  const isMutating = useRef(false);
   const [projects, setProjects] = useState<ProjectOrder[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [shopping, setShopping] = useState<ShoppingItem[]>([]);
@@ -426,73 +154,59 @@ export function use3DState() {
   const [supabaseErrorMsg, setSupabaseErrorMsg] = useState<string | null>(null);
 
   // Helper functions to map snake_case to camelCase
-  const mapDbProject = (db: any): ProjectOrder => ({
-    id: db.id,
-    date: db.date,
-    client: db.client,
-    name: db.name,
-    hours: Number(db.hours),
-    weight: Number(db.weight),
-    materialType: db.material_type,
-    hourlyRate: Number(db.hourly_rate),
-    materialRate: Number(db.material_rate),
-    profitMargin: Number(db.profit_margin),
-    description: db.description || '',
-    status: db.status,
-    image: db.image || undefined
-  });
-
-  const mapProjectToDb = (app: ProjectOrder) => ({
-    id: app.id,
-    date: app.date,
-    client: app.client,
-    name: app.name,
-    hours: app.hours,
-    weight: app.weight,
-    material_type: app.materialType,
-    hourly_rate: app.hourlyRate,
-    material_rate: app.materialRate,
-    profit_margin: app.profitMargin,
-    description: app.description,
-    status: app.status,
-    image: app.image || null
-  });
-
-  const mapDbInventory = (db: any): InventoryItem => {
-    let localCategoriesMap: Record<string, string> = {};
-    let localCreatorMap: Record<string, { role?: string; user?: string; createdAt?: string }> = {};
-    let localInventoryLinksMap: Record<string, string> = {};
-    try {
-      localCategoriesMap = JSON.parse(localStorage.getItem('g3d_item_categories_map') || '{}');
-      localCreatorMap = JSON.parse(localStorage.getItem('g3d_item_creator_map') || '{}');
-      localInventoryLinksMap = JSON.parse(localStorage.getItem('g3d_inventory_links_map') || '{}');
-    } catch (e) {
-      // ignore
-    }
-
-    const resolvedCat = db.category || localCategoriesMap[db.id];
-    const resolvedRole = db.created_by_role || localCreatorMap[db.id]?.role || (db.created_by_user ? 'colaborador' : undefined);
-    const resolvedUser = db.created_by_user || localCreatorMap[db.id]?.user;
-    const resolvedCreatedAt = db.created_at || localCreatorMap[db.id]?.createdAt;
-    const resolvedLink = db.purchase_link || localInventoryLinksMap[db.id] || undefined;
-
-    const finalCategory = sanitizeInventoryCategory(db.material, resolvedCat);
+  const mapDbProject = (db: any): ProjectOrder => {
+    const rawDesc = db.description || '';
+    const barcodeMatch = rawDesc.match(/^\[Cód\/Modelo: ([^\]]+)\] /);
+    const barcode = barcodeMatch ? barcodeMatch[1] : undefined;
+    const description = barcodeMatch ? rawDesc.replace(barcodeMatch[0], '') : rawDesc;
 
     return {
       id: db.id,
-      material: db.material,
-      qty: Number(db.qty),
-      unitCost: Number(db.unit_cost),
-      gramCost: Number(db.gram_cost),
+      date: db.date,
+      client: db.client,
+      name: db.name,
+      hours: Number(db.hours),
+      weight: Number(db.weight),
+      materialType: db.material_type,
+      hourlyRate: Number(db.hourly_rate),
+      materialRate: Number(db.material_rate),
+      profitMargin: Number(db.profit_margin),
+      description,
       status: db.status,
       image: db.image || undefined,
-      purchaseLink: resolvedLink,
-      category: finalCategory,
-      createdByRole: resolvedRole,
-      createdByUser: resolvedUser,
-      createdAt: resolvedCreatedAt
+      barcode
     };
   };
+
+  const mapProjectToDb = (app: ProjectOrder) => {
+    const barcodeHeader = app.barcode ? `[Cód/Modelo: ${app.barcode}] ` : '';
+    return {
+      id: app.id,
+      date: app.date,
+      client: app.client,
+      name: app.name,
+      hours: app.hours,
+      weight: app.weight,
+      material_type: app.materialType,
+      hourly_rate: app.hourlyRate,
+      material_rate: app.materialRate,
+      profit_margin: app.profitMargin,
+      description: `${barcodeHeader}${app.description || ''}`,
+      status: app.status,
+      image: app.image || null
+    };
+  };
+
+  const mapDbInventory = (db: any): InventoryItem => ({
+    id: db.id,
+    material: db.material,
+    qty: Number(db.qty),
+    unitCost: Number(db.unit_cost),
+    gramCost: Number(db.gram_cost),
+    status: db.status,
+    image: db.image || undefined,
+    purchaseLink: db.purchase_link || undefined
+  });
 
   const mapInventoryToDb = (app: InventoryItem) => ({
     id: app.id,
@@ -502,280 +216,58 @@ export function use3DState() {
     gram_cost: app.gramCost,
     status: app.status,
     image: app.image || null,
-    purchase_link: app.purchaseLink || null,
-    category: app.category || 'Filamento',
-    created_by_role: app.createdByRole || null,
-    created_by_user: app.createdByUser || null,
-    created_at: app.createdAt || null
+    purchase_link: app.purchaseLink || null
   });
 
-  const mapDbShopping = (db: any): ShoppingItem => {
-    let localShoppingLinksMap: Record<string, string> = {};
-    let localShoppingCreatorMap: Record<string, { role?: string; user?: string; createdAt?: string }> = {};
-    let localShoppingMetaMap: Record<string, ShoppingMetaCache> = {};
-    try {
-      localShoppingLinksMap = JSON.parse(localStorage.getItem('g3d_shopping_links_map') || '{}');
-      localShoppingCreatorMap = JSON.parse(localStorage.getItem('g3d_shopping_creator_map') || '{}');
-      localShoppingMetaMap = JSON.parse(localStorage.getItem('g3d_shopping_meta_map') || '{}');
-    } catch (e) {
-      // ignore
-    }
-
-    const localMeta = localShoppingMetaMap[db.id] || {};
-    const resolvedLink = db.purchase_link || localShoppingLinksMap[db.id] || '';
-    const resolvedRole = db.created_by_role || localMeta.role || localShoppingCreatorMap[db.id]?.role;
-    const resolvedUser = db.created_by_user || localMeta.user || localShoppingCreatorMap[db.id]?.user;
-    const resolvedCreatedAt = db.created_at || localMeta.createdAt || localShoppingCreatorMap[db.id]?.createdAt;
-    const resolvedRequestedBy = db.requested_by || localMeta.requestedBy || undefined;
-    const resolvedDepartment = db.department || localMeta.department || undefined;
-    const resolvedCompany = db.company || localMeta.company || undefined;
-    const resolvedBarcode = db.barcode || localMeta.barcode || undefined;
-
-    return {
-      id: db.id,
-      materialName: db.material_name,
-      qtyNeeded: Number(db.qty_needed),
-      estUnitCost: Number(db.est_unit_cost),
-      purchaseLink: resolvedLink,
-      category: sanitizeShoppingCategory(db.material_name, db.category),
-      notes: db.notes || undefined,
-      checked: !!db.checked,
-      requestedBy: resolvedRequestedBy,
-      department: resolvedDepartment,
-      company: resolvedCompany,
-      barcode: resolvedBarcode,
-      createdByRole: resolvedRole,
-      createdByUser: resolvedUser,
-      createdAt: resolvedCreatedAt
-    };
-  };
+  const mapDbShopping = (db: any): ShoppingItem => ({
+    id: db.id,
+    materialName: db.material_name,
+    qtyNeeded: Number(db.qty_needed),
+    estUnitCost: Number(db.est_unit_cost),
+    purchaseLink: db.purchase_link,
+    category: db.category,
+    notes: db.notes || undefined,
+    checked: !!db.checked,
+    requestedBy: db.requested_by || undefined,
+    department: db.department || undefined,
+    company: db.company || undefined
+  });
 
   const mapShoppingToDb = (app: ShoppingItem) => ({
     id: app.id,
     material_name: app.materialName,
     qty_needed: app.qtyNeeded,
     est_unit_cost: app.estUnitCost,
-    purchase_link: app.purchaseLink || '',
-    category: app.category || 'Outros',
+    purchase_link: app.purchaseLink,
+    category: app.category,
     notes: app.notes || null,
-    checked: !!app.checked,
+    checked: app.checked,
     requested_by: app.requestedBy || null,
     department: app.department || null,
-    company: app.company || null,
-    barcode: app.barcode || null,
-    created_by_role: app.createdByRole || null,
-    created_by_user: app.createdByUser || null,
-    created_at: app.createdAt || null
+    company: app.company || null
   });
 
-  // Helper to track columns not present in the current Supabase schema to avoid retry delays and sync errors
-  const getUnsupportedDbColumns = (): Set<string> => {
-    try {
-      const raw = localStorage.getItem('g3d_unsupported_columns');
-      if (raw) {
-        const arr = JSON.parse(raw);
-        if (Array.isArray(arr)) return new Set(arr);
-      }
-    } catch (e) {}
-    return new Set<string>();
-  };
-
-  const markDbColumnUnsupported = (table: string, column: string) => {
-    try {
-      const current = getUnsupportedDbColumns();
-      current.add(`${table}:${column}`);
-      localStorage.setItem('g3d_unsupported_columns', JSON.stringify(Array.from(current)));
-    } catch (e) {}
-  };
-
-  const safeSupabaseOperation = async (
-    table: string,
-    action: 'insert' | 'update' | 'delete',
-    payload: any,
-    id: string
-  ) => {
-    const supabase = getSupabaseClient();
-    if (!supabase) throw new Error('Supabase client not initialized');
-
-    if (action === 'delete') {
-      const res = await supabase.from(table).delete().eq('id', id);
-      if (res && res.error) {
-        console.warn(`Erro ao deletar de ${table} (${id}):`, res.error);
-      }
-      return res;
-    }
-
-    let activePayload = payload ? { ...payload } : {};
-    const unsupportedCols = getUnsupportedDbColumns();
-
-    // Strip known unsupported columns upfront
-    Object.keys(activePayload).forEach(k => {
-      if (unsupportedCols.has(`${table}:${k}`)) {
-        delete activePayload[k];
-      }
-    });
-
-    const maxAttempts = 15;
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      let res;
-      if (action === 'insert') {
-        res = await supabase.from(table).upsert(activePayload, { onConflict: 'id' });
-      } else if (action === 'update') {
-        res = await supabase.from(table).upsert({ ...activePayload, id }, { onConflict: 'id' });
-      }
-
-      if (res && res.error) {
-        const errMsg = res.error.message || '';
-        console.warn(`Aviso na tabela ${table} (${action}) [tentativa ${attempt + 1}/${maxAttempts}]:`, res.error);
-
-        // Check if the error indicates a missing column (code 42703 or specific message)
-        const isColumnError =
-          errMsg.includes('column') ||
-          errMsg.includes('Could not find') ||
-          errMsg.includes('cache') ||
-          errMsg.includes('PGRST204') ||
-          res.error.code === '42703';
-
-        if (isColumnError && activePayload) {
-          let removedAny = false;
-
-          // 1. Regex extraction of column name
-          const colMatches = [
-            errMsg.match(/Could not find the '([^']+)' column/i),
-            errMsg.match(/column "([^"]+)"/i),
-            errMsg.match(/column '([^']+)'/i),
-            errMsg.match(/column ([a-zA-Z0-9_]+) does not exist/i),
-            errMsg.match(/'([^']+)' column of/i)
-          ];
-
-          for (const m of colMatches) {
-            if (m && m[1]) {
-              const matchedCol = m[1].trim();
-              if (activePayload[matchedCol] !== undefined) {
-                console.warn(`[SafeSync] Removendo coluna ausente '${matchedCol}' do payload de ${table}`);
-                delete activePayload[matchedCol];
-                markDbColumnUnsupported(table, matchedCol);
-                removedAny = true;
-              }
-            }
-          }
-
-          // 2. Exact or normalized matching against payload keys
-          const keys = Object.keys(activePayload);
-          for (const key of keys) {
-            if (
-              errMsg.toLowerCase().includes(`'${key.toLowerCase()}'`) ||
-              errMsg.toLowerCase().includes(`"${key.toLowerCase()}"`) ||
-              errMsg.toLowerCase().includes(` ${key.toLowerCase()} `) ||
-              errMsg.replace(/_/g, '').toLowerCase().includes(key.replace(/_/g, '').toLowerCase())
-            ) {
-              console.warn(`[SafeSync] Removendo coluna ausente '${key}' do payload de ${table}`);
-              delete activePayload[key];
-              markDbColumnUnsupported(table, key);
-              removedAny = true;
-            }
-          }
-
-          // 3. If no specific key could be identified, remove non-base optional columns
-          if (!removedAny) {
-            const optionalShoppingKeys = ['department', 'company', 'barcode', 'created_by_role', 'created_by_user', 'created_at', 'requested_by'];
-            const optionalInventoryKeys = ['created_by_role', 'created_by_user', 'created_at', 'category', 'purchase_link'];
-            
-            const candidateKeys = table === 'g3d_shopping' ? optionalShoppingKeys : table === 'g3d_inventory' ? optionalInventoryKeys : [];
-            for (const ck of candidateKeys) {
-              if (activePayload[ck] !== undefined) {
-                delete activePayload[ck];
-                markDbColumnUnsupported(table, ck);
-                removedAny = true;
-              }
-            }
-          }
-
-          if (removedAny && attempt < maxAttempts - 1) {
-            continue; // retry with pruned payload
-          }
-        }
-
-        // If it still fails after pruning, log warning but don't crash app execution
-        console.warn(`Supabase sync notice on ${table}:`, res.error);
-        return res;
-      }
-
-      return res;
-    }
-  };
-
-  const syncLocalBackupToSupabase = useCallback(async (projectsToSync: ProjectOrder[], inventoryToSync: InventoryItem[], shoppingToSync: ShoppingItem[]) => {
-    if (!hasSupabaseConfigured()) return false;
-
-    try {
-      for (const project of projectsToSync) {
-        await safeSupabaseOperation('g3d_projects', 'insert', mapProjectToDb(project), project.id);
-      }
-      for (const item of inventoryToSync) {
-        await safeSupabaseOperation('g3d_inventory', 'insert', mapInventoryToDb(item), item.id);
-      }
-      for (const shoppingItem of shoppingToSync) {
-        await safeSupabaseOperation('g3d_shopping', 'insert', mapShoppingToDb(shoppingItem), shoppingItem.id);
-      }
-      return true;
-    } catch (err) {
-      console.error('Falha ao sincronizar dados locais com o Supabase:', err);
-      return false;
-    }
-  }, []);
   // Load state (either from Supabase or LocalStorage)
-  const loadData = useCallback(async (isBackground = false, force = false) => {
-    if (isMutating.current && !force) {
-      console.log('Sync de dados omitido porque uma alteração local está em andamento');
-      return;
-    }
-
-    if (!isBackground) {
-      setLoading(true);
-    }
+  const loadData = useCallback(async () => {
+    setLoading(true);
     setSupabaseErrorMsg(null);
 
-    // Sincroniza configuração de nuvem com o servidor para acesso multi-dispositivo unificado
-    try {
-      const configRes = await fetch('/api/config');
-      if (configRes.ok) {
-        const configData = await configRes.json();
-        const localUrl = localStorage.getItem('g3d_supabase_url')?.trim();
-        const localKey = localStorage.getItem('g3d_supabase_key')?.trim();
-
-        if (configData.isCustom && configData.url && configData.key) {
-          // O servidor tem credenciais personalizadas salvas. Sincroniza para o cliente.
-          localStorage.setItem('g3d_supabase_url', configData.url);
-          localStorage.setItem('g3d_supabase_key', configData.key);
-        } else if (!configData.isCustom && localUrl && localKey) {
-          // O cliente tem credenciais personalizadas, mas o servidor não. Faz o upload para o servidor!
-          await fetch('/api/config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: localUrl, key: localKey })
-          });
-        }
-      }
-    } catch (err) {
-      console.warn('Falha ao sincronizar configuração global do banco:', err);
-    }
-
     const supabase = getSupabaseClient();
-    const storedSettings = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-
     if (supabase && hasSupabaseConfigured()) {
       try {
+        // Fetch projects
         const { data: dbProjects, error: pError } = await supabase
           .from('g3d_projects')
           .select('*')
           .order('date', { ascending: false });
 
+        // Fetch inventory
         const { data: dbInventory, error: iError } = await supabase
           .from('g3d_inventory')
           .select('*')
           .order('material', { ascending: true });
 
+        // Fetch shopping
         const { data: dbShopping, error: sError } = await supabase
           .from('g3d_shopping')
           .select('*');
@@ -784,27 +276,13 @@ export function use3DState() {
           throw new Error('As tabelas do Supabase podem não estar prontas ou o acesso foi negado.');
         }
 
-        const remoteProjects = (dbProjects || []).map(mapDbProject);
-        const remoteInventory = (dbInventory || []).map(mapDbInventory);
-        const remoteShopping = (dbShopping || []).map(mapDbShopping);
+        if (dbProjects) setProjects(dbProjects.map(mapDbProject));
+        if (dbInventory) setInventory(dbInventory.map(mapDbInventory));
+        if (dbShopping) setShopping(dbShopping.map(mapDbShopping));
 
-        // Se uma mutação iniciou durante o fetch assíncrono, aborta a escrita local para não causar sobrescritas indesejadas
-        if (isMutating.current) {
-          console.log('Ignorando atualização do estado local do banco porque uma mutação paralela foi detectada');
-          return;
-        }
-
-        // Confia 100% no Banco de Dados e mantém backup local sempre atualizado
-        setProjects(remoteProjects);
-        setInventory(remoteInventory);
-        setShopping(remoteShopping);
-
-        // Mantém backup local no navegador sempre em sincronia com os dados recebidos
-        backupToLocal(remoteProjects, remoteInventory, remoteShopping);
-
-        if (storedSettings) {
-          setSettings(JSON.parse(storedSettings));
-        }
+        // Settings remains LocalStorage configuration
+        const storedSettings = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+        if (storedSettings) setSettings(JSON.parse(storedSettings));
 
         setSupabaseConnected(true);
       } catch (err: any) {
@@ -813,16 +291,12 @@ export function use3DState() {
         setSupabaseConnected(false);
         loadLocalBackup();
       } finally {
-        if (!isBackground) {
-          setLoading(false);
-        }
+        setLoading(false);
       }
     } else {
       setSupabaseConnected(false);
       loadLocalBackup();
-      if (!isBackground) {
-        setLoading(false);
-      }
+      setLoading(false);
     }
   }, []);
 
@@ -839,78 +313,14 @@ export function use3DState() {
         localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(DEFAULT_PROJECTS));
       }
 
-      if (storedInventory) {
-        let localCategoriesMap: Record<string, string> = {};
-        let localCreatorMap: Record<string, { role?: string; user?: string; createdAt?: string }> = {};
-        let localInventoryLinksMap: Record<string, string> = {};
-        try {
-          localCategoriesMap = JSON.parse(localStorage.getItem('g3d_item_categories_map') || '{}');
-          localCreatorMap = JSON.parse(localStorage.getItem('g3d_item_creator_map') || '{}');
-          localInventoryLinksMap = JSON.parse(localStorage.getItem('g3d_inventory_links_map') || '{}');
-        } catch (e) {
-          // ignore
-        }
-
-        const parsedInv = JSON.parse(storedInventory).map((item: InventoryItem) => {
-          const resolvedCat = item.category || localCategoriesMap[item.id];
-          const resolvedRole = item.createdByRole || localCreatorMap[item.id]?.role;
-          const resolvedUser = item.createdByUser || localCreatorMap[item.id]?.user;
-          const resolvedCreatedAt = item.createdAt || localCreatorMap[item.id]?.createdAt;
-          const resolvedLink = item.purchaseLink || localInventoryLinksMap[item.id] || undefined;
-
-          return {
-            ...item,
-            purchaseLink: resolvedLink,
-            category: sanitizeInventoryCategory(item.material, resolvedCat),
-            createdByRole: resolvedRole,
-            createdByUser: resolvedUser,
-            createdAt: resolvedCreatedAt
-          };
-        });
-        setInventory(parsedInv);
-      } else {
+      if (storedInventory) setInventory(JSON.parse(storedInventory));
+      else {
         setInventory(DEFAULT_INVENTORY);
         localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify(DEFAULT_INVENTORY));
       }
 
-      if (storedShopping) {
-        let localShoppingLinksMap: Record<string, string> = {};
-        let localShoppingCreatorMap: Record<string, { role?: string; user?: string; createdAt?: string }> = {};
-        let localShoppingMetaMap: Record<string, ShoppingMetaCache> = {};
-        try {
-          localShoppingLinksMap = JSON.parse(localStorage.getItem('g3d_shopping_links_map') || '{}');
-          localShoppingCreatorMap = JSON.parse(localStorage.getItem('g3d_shopping_creator_map') || '{}');
-          localShoppingMetaMap = JSON.parse(localStorage.getItem('g3d_shopping_meta_map') || '{}');
-        } catch (e) {
-          // ignore
-        }
-
-        const parsedShop = JSON.parse(storedShopping).map((item: ShoppingItem) => {
-          const localMeta = localShoppingMetaMap[item.id] || {};
-          const resolvedLink = item.purchaseLink || localShoppingLinksMap[item.id] || '';
-          const resolvedRole = item.createdByRole || localMeta.role || localShoppingCreatorMap[item.id]?.role;
-          const resolvedUser = item.createdByUser || localMeta.user || localShoppingCreatorMap[item.id]?.user;
-          const resolvedCreatedAt = item.createdAt || localMeta.createdAt || localShoppingCreatorMap[item.id]?.createdAt;
-          const resolvedRequestedBy = item.requestedBy || localMeta.requestedBy || undefined;
-          const resolvedDepartment = item.department || localMeta.department || undefined;
-          const resolvedCompany = item.company || localMeta.company || undefined;
-          const resolvedBarcode = item.barcode || localMeta.barcode || undefined;
-
-          return {
-            ...item,
-            purchaseLink: resolvedLink,
-            category: sanitizeShoppingCategory(item.materialName, item.category),
-            createdByRole: resolvedRole,
-            createdByUser: resolvedUser,
-            createdAt: resolvedCreatedAt,
-            requestedBy: resolvedRequestedBy,
-            department: resolvedDepartment,
-            company: resolvedCompany,
-            barcode: resolvedBarcode
-          };
-        });
-        setShopping(parsedShop);
-      } else {
+      if (storedShopping) setShopping(JSON.parse(storedShopping));
+      else {
         setShopping(DEFAULT_SHOPPING);
         localStorage.setItem(STORAGE_KEYS.SHOPPING, JSON.stringify(DEFAULT_SHOPPING));
       }
@@ -927,33 +337,28 @@ export function use3DState() {
 
   useEffect(() => {
     loadData();
-
-    // Sincronização automática em tempo real ao voltar o foco para a janela/guia do navegador (fundo silencioso, sem spinner disruptivo)
-    const handleFocus = () => {
-      loadData(true);
-    };
-    window.addEventListener('focus', handleFocus);
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-    };
   }, [loadData]);
 
   // Save changes to localStorage (Backup/Fallback always ready)
   const backupToLocal = (projs: ProjectOrder[], inv: InventoryItem[], shop: ShoppingItem[]) => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projs));
-      localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify(inv));
-      localStorage.setItem(STORAGE_KEYS.SHOPPING, JSON.stringify(shop));
-    } catch (e) {
-      // ignore
-    }
+    localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projs));
+    localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify(inv));
+    localStorage.setItem(STORAGE_KEYS.SHOPPING, JSON.stringify(shop));
   };
 
   // Sync state mutation helper
   const syncOperation = async (table: string, action: 'insert' | 'update' | 'delete', payload: any, id: string) => {
-    if (!hasSupabaseConfigured()) return;
+    const supabase = getSupabaseClient();
+    if (!supabase || !hasSupabaseConfigured()) return;
+
     try {
-      await safeSupabaseOperation(table, action, payload, id);
+      if (action === 'insert') {
+        await supabase.from(table).insert(payload);
+      } else if (action === 'update') {
+        await supabase.from(table).update(payload).eq('id', id);
+      } else if (action === 'delete') {
+        await supabase.from(table).delete().eq('id', id);
+      }
     } catch (err) {
       console.error(`Falha ao sincronizar operação em ${table}:`, err);
     }
@@ -961,325 +366,141 @@ export function use3DState() {
 
   // Project managers
   const addProject = async (project: Omit<ProjectOrder, 'id'>) => {
-    isMutating.current = true;
-    const nextId = `PRJ-2026-${Date.now()}-${Math.floor(Math.random() * 100)}`;
+    const nextId = `PRJ-2026-${String(projects.length + 1).padStart(3, '0')}`;
     const fullProject: ProjectOrder = { ...project, id: nextId };
     
-    try {
-      // Optimistic Update
-      const updated = [fullProject, ...projects];
-      setProjects(updated);
-      backupToLocal(updated, inventory, shopping);
+    // Optimistic Update
+    const updated = [fullProject, ...projects];
+    setProjects(updated);
+    backupToLocal(updated, inventory, shopping);
 
-      // Sync
-      await syncOperation('g3d_projects', 'insert', mapProjectToDb(fullProject), nextId);
-      await loadData(true, true);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      isMutating.current = false;
-    }
+    // Sync
+    await syncOperation('g3d_projects', 'insert', mapProjectToDb(fullProject), nextId);
   };
 
   const deleteProject = async (id: string) => {
-    isMutating.current = true;
-    try {
-      const updated = projects.filter(p => p.id !== id);
-      setProjects(updated);
-      backupToLocal(updated, inventory, shopping);
+    const updated = projects.filter(p => p.id !== id);
+    setProjects(updated);
+    backupToLocal(updated, inventory, shopping);
 
-      await syncOperation('g3d_projects', 'delete', null, id);
-      await loadData(true, true);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      isMutating.current = false;
-    }
+    await syncOperation('g3d_projects', 'delete', null, id);
   };
 
   // Inventory managers
-  const addInventoryItem = async (item: Omit<InventoryItem, 'id' | 'gramCost' | 'status'> & { id?: string; category?: string; createdByRole?: string; createdByUser?: string; createdAt?: string }) => {
-    isMutating.current = true;
-    const nextId = item.id || `INV-${Date.now()}-${Math.floor(Math.random() * 100)}`;
+  const addInventoryItem = async (item: Omit<InventoryItem, 'id' | 'gramCost' | 'status'> & { id?: string }) => {
+    const nextId = item.id || `INV-${String(inventory.length + 1).padStart(3, '0')}`;
     const gramCost = item.unitCost / 1000;
     const status = item.qty === 0 ? 'Esgotado' : item.qty <= 1 ? 'Poucas Unidades' : 'Em Estoque';
-    
-    // Determine creator role and username
-    const currentRole = sessionStorage.getItem('g3d_user_role') || 'colaborador';
-    const currentUsername = sessionStorage.getItem('g3d_username') || (currentRole === 'admin' ? 'Administrador George' : 'Colaborador Ftéx');
+    const fullItem: InventoryItem = { ...item, id: nextId, gramCost, status };
 
-    const createdByRole = item.createdByRole || (currentRole === 'admin' ? 'admin' : 'colaborador');
-    const createdByUser = item.createdByUser || currentUsername;
-    const createdAt = item.createdAt || new Date().toISOString();
+    const updated = [...inventory, fullItem];
+    setInventory(updated);
+    backupToLocal(projects, updated, shopping);
 
-    const category = item.category ? sanitizeInventoryCategory(item.material, item.category) : sanitizeInventoryCategory(item.material);
-
-    const fullItem: InventoryItem = {
-      ...item,
-      category,
-      id: nextId,
-      gramCost,
-      status,
-      createdByRole,
-      createdByUser,
-      createdAt
-    };
-
-    // Cache locally for instantaneous persistence
-    saveCategoryToLocalCache(nextId, category);
-    saveCreatorToLocalCache(nextId, createdByRole, createdByUser, createdAt);
-    if (item.purchaseLink) {
-      saveInventoryLinkToLocalCache(nextId, item.purchaseLink);
-    }
-
-    try {
-      const updated = [...inventory, fullItem];
-      setInventory(updated);
-      backupToLocal(projects, updated, shopping);
-
-      await syncOperation('g3d_inventory', 'insert', mapInventoryToDb(fullItem), nextId);
-      await loadData(true, true);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      isMutating.current = false;
-    }
+    await syncOperation('g3d_inventory', 'insert', mapInventoryToDb(fullItem), nextId);
   };
 
   const editInventoryItem = async (id: string, updatedFields: Partial<InventoryItem>) => {
-    isMutating.current = true;
-    try {
-      if (updatedFields.category) {
-        saveCategoryToLocalCache(id, updatedFields.category);
-      }
-      if (updatedFields.createdByRole || updatedFields.createdByUser) {
-        saveCreatorToLocalCache(id, updatedFields.createdByRole, updatedFields.createdByUser, updatedFields.createdAt);
-      }
-      if (updatedFields.purchaseLink !== undefined) {
-        saveInventoryLinkToLocalCache(id, updatedFields.purchaseLink);
-      }
-
-      const updated = inventory.map(item => {
-        if (item.id === id) {
-          const nextCategory = updatedFields.category ? sanitizeInventoryCategory(updatedFields.material || item.material, updatedFields.category) : item.category;
-          const nextItem = { ...item, ...updatedFields, category: nextCategory };
-          if (updatedFields.unitCost !== undefined) {
-            nextItem.gramCost = updatedFields.unitCost / 1000;
-          }
-          if (updatedFields.qty !== undefined) {
-            nextItem.status = updatedFields.qty === 0 ? 'Esgotado' : updatedFields.qty <= 1 ? 'Poucas Unidades' : 'Em Estoque';
-          }
-          return nextItem;
+    const updated = inventory.map(item => {
+      if (item.id === id) {
+        const nextItem = { ...item, ...updatedFields };
+        if (updatedFields.unitCost !== undefined) {
+          nextItem.gramCost = updatedFields.unitCost / 1000;
         }
-        return item;
-      });
-
-      setInventory(updated);
-      backupToLocal(projects, updated, shopping);
-
-      const editedItem = updated.find(i => i.id === id);
-      if (editedItem) {
-        await syncOperation('g3d_inventory', 'update', mapInventoryToDb(editedItem), id);
+        if (updatedFields.qty !== undefined) {
+          nextItem.status = updatedFields.qty === 0 ? 'Esgotado' : updatedFields.qty <= 1 ? 'Poucas Unidades' : 'Em Estoque';
+        }
+        return nextItem;
       }
-      await loadData(true, true);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      isMutating.current = false;
+      return item;
+    });
+
+    setInventory(updated);
+    backupToLocal(projects, updated, shopping);
+
+    const editedItem = updated.find(i => i.id === id);
+    if (editedItem) {
+      await syncOperation('g3d_inventory', 'update', mapInventoryToDb(editedItem), id);
     }
   };
 
   const deleteInventoryItem = async (id: string) => {
-    isMutating.current = true;
-    try {
-      const updated = inventory.filter(i => i.id !== id);
-      setInventory(updated);
-      backupToLocal(projects, updated, shopping);
+    const updated = inventory.filter(i => i.id !== id);
+    setInventory(updated);
+    backupToLocal(projects, updated, shopping);
 
-      // Clean local cache maps
-      try {
-        const catMap = JSON.parse(localStorage.getItem('g3d_item_categories_map') || '{}');
-        delete catMap[id];
-        localStorage.setItem('g3d_item_categories_map', JSON.stringify(catMap));
-        const creatorMap = JSON.parse(localStorage.getItem('g3d_item_creator_map') || '{}');
-        delete creatorMap[id];
-        localStorage.setItem('g3d_item_creator_map', JSON.stringify(creatorMap));
-        saveInventoryLinkToLocalCache(id, undefined);
-      } catch (e) {}
-
-      await syncOperation('g3d_inventory', 'delete', null, id);
-      await loadData(true, true);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      isMutating.current = false;
-    }
+    await syncOperation('g3d_inventory', 'delete', null, id);
   };
 
   const updateInventoryQty = async (id: string, newQty: number) => {
-    isMutating.current = true;
-    try {
-      const updated = inventory.map(item => {
-        if (item.id === id) {
-          const status: 'Em Estoque' | 'Poucas Unidades' | 'Esgotado' = newQty === 0 ? 'Esgotado' : newQty <= 1 ? 'Poucas Unidades' : 'Em Estoque';
-          return { ...item, qty: newQty, status };
-        }
-        return item;
-      });
-
-      setInventory(updated);
-      backupToLocal(projects, updated, shopping);
-
-      const targetItem = updated.find(i => i.id === id);
-      if (targetItem) {
-        await syncOperation('g3d_inventory', 'update', mapInventoryToDb(targetItem), id);
+    const updated = inventory.map(item => {
+      if (item.id === id) {
+        const status = newQty === 0 ? 'Esgotado' : newQty <= 1 ? 'Poucas Unidades' : 'Em Estoque';
+        return { ...item, qty: newQty, status };
       }
-      await loadData(true, true);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      isMutating.current = false;
+      return item;
+    });
+
+    setInventory(updated);
+    backupToLocal(projects, updated, shopping);
+
+    const targetItem = updated.find(i => i.id === id);
+    if (targetItem) {
+      await syncOperation('g3d_inventory', 'update', mapInventoryToDb(targetItem), id);
     }
   };
 
   // Shopping List managers
   const addShoppingItem = async (item: Omit<ShoppingItem, 'id' | 'checked'>) => {
-    isMutating.current = true;
-    const nextId = `SHOP-${Date.now()}-${Math.floor(Math.random() * 100)}`;
-    const currentRole = sessionStorage.getItem('g3d_user_role') || 'colaborador';
-    const currentUsername = sessionStorage.getItem('g3d_username') || (currentRole === 'admin' ? 'Administrador George' : 'Colaborador Ftéx');
+    const nextId = `SHOP-${String(shopping.length + 1).padStart(3, '0')}`;
+    const newItem: ShoppingItem = { ...item, id: nextId, checked: false };
 
-    const createdByRole = item.createdByRole || (currentRole === 'admin' ? 'admin' : 'colaborador');
-    const createdByUser = item.createdByUser || currentUsername;
-    const createdAt = item.createdAt || new Date().toISOString();
+    const updated = [...shopping, newItem];
+    setShopping(updated);
+    backupToLocal(projects, inventory, updated);
 
-    const newItem: ShoppingItem = { 
-      ...item, 
-      id: nextId, 
-      checked: false,
-      createdByRole,
-      createdByUser,
-      createdAt
-    };
-
-    saveShoppingMetaToLocalCache(nextId, {
-      company: item.company,
-      department: item.department,
-      requestedBy: item.requestedBy,
-      barcode: item.barcode,
-      role: createdByRole,
-      user: createdByUser,
-      createdAt
-    });
-    saveShoppingCreatorToLocalCache(nextId, createdByRole, createdByUser, createdAt);
-
-    if (item.purchaseLink) {
-      saveShoppingLinkToLocalCache(nextId, item.purchaseLink);
-    }
-
-    try {
-      const updated = [...shopping, newItem];
-      setShopping(updated);
-      backupToLocal(projects, inventory, updated);
-
-      await syncOperation('g3d_shopping', 'insert', mapShoppingToDb(newItem), nextId);
-      await loadData(true, true);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      isMutating.current = false;
-    }
+    await syncOperation('g3d_shopping', 'insert', mapShoppingToDb(newItem), nextId);
   };
 
   const deleteShoppingItem = async (id: string) => {
-    isMutating.current = true;
-    try {
-      const updated = shopping.filter(s => s.id !== id);
-      setShopping(updated);
-      backupToLocal(projects, inventory, updated);
-      saveShoppingLinkToLocalCache(id, undefined);
-      saveShoppingCreatorToLocalCache(id, undefined, undefined, undefined);
-      saveShoppingMetaToLocalCache(id, undefined);
+    const updated = shopping.filter(s => s.id !== id);
+    setShopping(updated);
+    backupToLocal(projects, inventory, updated);
 
-      await syncOperation('g3d_shopping', 'delete', null, id);
-      await loadData(true, true);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      isMutating.current = false;
-    }
+    await syncOperation('g3d_shopping', 'delete', null, id);
   };
 
   const updateShoppingItem = async (id: string, updatedFields: Partial<ShoppingItem>) => {
-    isMutating.current = true;
-    try {
-      if (updatedFields.purchaseLink !== undefined) {
-        saveShoppingLinkToLocalCache(id, updatedFields.purchaseLink);
+    const updated = shopping.map(item => {
+      if (item.id === id) {
+        return { ...item, ...updatedFields };
       }
+      return item;
+    });
 
-      saveShoppingMetaToLocalCache(id, {
-        company: updatedFields.company,
-        department: updatedFields.department,
-        requestedBy: updatedFields.requestedBy,
-        barcode: updatedFields.barcode,
-        role: updatedFields.createdByRole,
-        user: updatedFields.createdByUser,
-        createdAt: updatedFields.createdAt
-      });
+    setShopping(updated);
+    backupToLocal(projects, inventory, updated);
 
-      const updated = shopping.map(item => {
-        if (item.id === id) {
-          return { ...item, ...updatedFields };
-        }
-        return item;
-      });
-
-      setShopping(updated);
-      backupToLocal(projects, inventory, updated);
-
-      const targetItem = updated.find(i => i.id === id);
-      if (targetItem) {
-        await syncOperation('g3d_shopping', 'update', mapShoppingToDb(targetItem), id);
-      }
-      await loadData(true, true);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      isMutating.current = false;
+    const targetItem = updated.find(i => i.id === id);
+    if (targetItem) {
+      await syncOperation('g3d_shopping', 'update', mapShoppingToDb(targetItem), id);
     }
   };
 
   const toggleShoppingItemChecked = async (id: string) => {
-    isMutating.current = true;
-    try {
-      const updated = shopping.map(item => {
-        if (item.id === id) {
-          const isChecking = !item.checked;
-          let notes = item.notes || '';
-          // Se estiver marcando como comprado/recebido (checked) e não tiver uma data no notes, adicionamos automaticamente
-          if (isChecking) {
-            const dateStr = new Date().toLocaleDateString('pt-BR');
-            if (!notes.includes('/') || !/\d{2}\/\d{2}\/\d{4}/.test(notes)) {
-              notes = notes ? `${notes} (Baixa: ${dateStr})` : `Baixa: ${dateStr}`;
-            }
-          }
-          return { ...item, checked: isChecking, notes: notes || undefined };
-        }
-        return item;
-      });
-
-      setShopping(updated);
-      backupToLocal(projects, inventory, updated);
-
-      const targetItem = updated.find(i => i.id === id);
-      if (targetItem) {
-        await syncOperation('g3d_shopping', 'update', mapShoppingToDb(targetItem), id);
+    const updated = shopping.map(item => {
+      if (item.id === id) {
+        return { ...item, checked: !item.checked };
       }
-      await loadData(true, true);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      isMutating.current = false;
+      return item;
+    });
+
+    setShopping(updated);
+    backupToLocal(projects, inventory, updated);
+
+    const targetItem = updated.find(i => i.id === id);
+    if (targetItem) {
+      await syncOperation('g3d_shopping', 'update', mapShoppingToDb(targetItem), id);
     }
   };
 
@@ -1311,16 +532,17 @@ export function use3DState() {
         backupToLocal(parsed.projects, parsed.inventory, parsed.shopping || []);
 
         // Mass insert/merge into supabase if configured
-        if (hasSupabaseConfigured()) {
+        const supabase = getSupabaseClient();
+        if (supabase && hasSupabaseConfigured()) {
           for (const proj of parsed.projects) {
-            await safeSupabaseOperation('g3d_projects', 'insert', mapProjectToDb(proj), proj.id);
+            await supabase.from('g3d_projects').upsert(mapProjectToDb(proj));
           }
           for (const item of parsed.inventory) {
-            await safeSupabaseOperation('g3d_inventory', 'insert', mapInventoryToDb(item), item.id);
+            await supabase.from('g3d_inventory').upsert(mapInventoryToDb(item));
           }
           if (parsed.shopping) {
             for (const s of parsed.shopping) {
-              await safeSupabaseOperation('g3d_shopping', 'insert', mapShoppingToDb(s), s.id);
+              await supabase.from('g3d_shopping').upsert(mapShoppingToDb(s));
             }
           }
         }
