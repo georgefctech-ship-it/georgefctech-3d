@@ -33,7 +33,10 @@ import {
   Eye,
   EyeOff,
   Mail,
-  KeyRound
+  KeyRound,
+  Edit,
+  Copy,
+  Sparkles
 } from 'lucide-react';
 import { SettingsConfig } from '../types';
 import { SUPABASE_SQL_BOOTSTRAP, getSupabaseClient, hasSupabaseConfigured } from '../lib/supabase';
@@ -90,6 +93,15 @@ export default function SettingsView({
   const [newCollabEmail, setNewCollabEmail] = useState('');
   const [newCollabRole, setNewCollabRole] = useState('colaborador_pendente');
 
+  // Modal / States for Administrator editing collaborator password directly
+  const [editingCollabPw, setEditingCollabPw] = useState<{ email: string; username?: string; role?: string } | null>(null);
+  const [collabNewPw, setCollabNewPw] = useState('');
+  const [collabConfirmPw, setCollabConfirmPw] = useState('');
+  const [collabShowPw, setCollabShowPw] = useState(false);
+  const [collabPwSaveLoading, setCollabPwSaveLoading] = useState(false);
+  const [savedCredentialsInfo, setSavedCredentialsInfo] = useState<{ email: string; username?: string; pass: string } | null>(null);
+  const [copiedFeedback, setCopiedFeedback] = useState(false);
+
   const fetchCollaborators = async () => {
     const supabase = getSupabaseClient();
     if (!supabase) return;
@@ -101,7 +113,11 @@ export default function SettingsView({
         .select('*')
         .order('email', { ascending: true });
       if (error) throw error;
-      setCollaborators(data || []);
+      // Filter out internal system rows (master password and companion password rows)
+      const filtered = (data || []).filter(
+        (c: any) => c.email !== 'system_master_password' && !c.email.startsWith('pwd:')
+      );
+      setCollaborators(filtered);
     } catch (err: any) {
       setCollabError(err.message || 'Erro ao carregar lista de colaboradores.');
     } finally {
@@ -370,17 +386,117 @@ export default function SettingsView({
   const handleSendResetEmail = async (userEmail: string) => {
     const supabase = getSupabaseClient();
     if (!supabase) return;
+    setCollabError(null);
     try {
       const redirectUrl = window.location.origin + window.location.pathname;
       const { error } = await supabase.auth.resetPasswordForEmail(userEmail, {
         redirectTo: redirectUrl
       });
       if (error) throw error;
-      setCollabSuccess(`E-mail de redefinição de senha enviado para ${userEmail}!`);
-      setTimeout(() => setCollabSuccess(null), 3500);
+      setCollabSuccess(`Opção 1: Link de redefinição enviado para ${userEmail}! Caso o colaborador não receba devido a atrasos ou bloqueios do e-mail, utilize a Opção 2 "Editar Senha" ao lado para definir diretamente.`);
+      setTimeout(() => setCollabSuccess(null), 8000);
     } catch (err: any) {
-      setCollabError(err.message || 'Erro ao enviar e-mail de redefinição.');
+      setCollabError(`Aviso no envio de e-mail (${err.message || 'Falha de entrega'}). Recomendado: Utilize o botão "Editar Senha" para definir a nova senha diretamente.`);
     }
+  };
+
+  const handleOpenEditPasswordModal = (collab: any) => {
+    setCollabError(null);
+    setEditingCollabPw({
+      email: collab.email,
+      username: collab.username,
+      role: collab.role
+    });
+    setCollabNewPw('');
+    setCollabConfirmPw('');
+    setCollabShowPw(false);
+  };
+
+  const generateRandomCollabPw = () => {
+    const randomDigits = Math.floor(1000 + Math.random() * 9000);
+    const generated = `Colab#${randomDigits}`;
+    setCollabNewPw(generated);
+    setCollabConfirmPw(generated);
+    setCollabShowPw(true);
+  };
+
+  const handleSaveCollaboratorPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCollabPw) return;
+    setCollabError(null);
+
+    const cleanPass = collabNewPw.trim();
+    if (cleanPass.length < 4) {
+      setCollabError('A nova senha do colaborador deve possuir no mínimo 4 caracteres.');
+      return;
+    }
+
+    if (cleanPass !== collabConfirmPw.trim()) {
+      setCollabError('A confirmação da nova senha não confere com a senha digitada.');
+      return;
+    }
+
+    setCollabPwSaveLoading(true);
+    const targetEmail = editingCollabPw.email.trim().toLowerCase();
+    const targetUser = editingCollabPw.username;
+
+    try {
+      const supabase = getSupabaseClient();
+      if (supabase && hasSupabaseConfigured()) {
+        // 1. Tentar salvar diretamente na coluna custom_password de g3d_user_roles
+        try {
+          await supabase
+            .from('g3d_user_roles')
+            .update({ custom_password: cleanPass } as any)
+            .eq('email', targetEmail);
+        } catch (colErr) {
+          console.warn('Atualização direta em custom_password falhou:', colErr);
+        }
+
+        // 2. Gravar registro companheiro `pwd:${targetEmail}` garantindo persistência em qualquer versão da tabela
+        const { error: upsertErr } = await supabase
+          .from('g3d_user_roles')
+          .upsert({
+            email: `pwd:${targetEmail}`,
+            role: cleanPass
+          });
+
+        if (upsertErr) {
+          console.warn('Upsert pwd: email falhou:', upsertErr);
+        }
+      }
+
+      // 3. Salvar em cache local no navegador
+      try {
+        const curMap = JSON.parse(localStorage.getItem('g3d_collab_passwords') || '{}');
+        curMap[targetEmail] = cleanPass;
+        localStorage.setItem('g3d_collab_passwords', JSON.stringify(curMap));
+      } catch (err) {}
+
+      setSavedCredentialsInfo({
+        email: targetEmail,
+        username: targetUser,
+        pass: cleanPass
+      });
+
+      setCollabSuccess(`Sucesso! Senha definida para o colaborador ${targetEmail}. O colaborador já pode fazer login imediatamente com essa nova senha.`);
+      setEditingCollabPw(null);
+      setCollabNewPw('');
+      setCollabConfirmPw('');
+      await fetchCollaborators();
+      setTimeout(() => setCollabSuccess(null), 8000);
+    } catch (err: any) {
+      setCollabError(err.message || 'Erro ao gravar a nova senha do colaborador.');
+    } finally {
+      setCollabPwSaveLoading(false);
+    }
+  };
+
+  const handleCopyCredentials = (email: string, pass: string, username?: string) => {
+    const textToCopy = `*Acesso GeorgeFctech-3D*\nUsuário: ${username || email}\nE-mail: ${email}\nNova Senha: ${pass}\nLink de Acesso: ${window.location.origin}`;
+    navigator.clipboard.writeText(textToCopy);
+    setCopiedFeedback(true);
+    setTimeout(() => setCopiedFeedback(false), 3000);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -1160,14 +1276,29 @@ export default function SettingsView({
                                 )}
 
                                 {!isSelf && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSendResetEmail(collab.email)}
-                                    className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition cursor-pointer"
-                                    title="Enviar link de redefinição de senha para este usuário"
-                                  >
-                                    <KeyRound className="w-4 h-4" />
-                                  </button>
+                                  <div className="flex items-center gap-1.5">
+                                    {/* OPÇÃO 1: REDEFINIR SENHA POR E-MAIL */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSendResetEmail(collab.email)}
+                                      className="inline-flex items-center gap-1 px-2 py-1 text-slate-600 bg-slate-100 hover:bg-slate-200 hover:text-slate-900 rounded text-[11px] font-medium border border-slate-200 transition cursor-pointer"
+                                      title="Opção 1: Enviar link de redefinição por e-mail"
+                                    >
+                                      <Mail className="w-3 h-3 text-slate-500" />
+                                      <span className="hidden sm:inline">Enviar E-mail</span>
+                                    </button>
+
+                                    {/* OPÇÃO 2: ADMINISTRADOR EDITAR A SENHA DIRETAMENTE */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenEditPasswordModal(collab)}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 hover:border-indigo-300 rounded text-[11px] font-bold transition cursor-pointer shadow-2xs"
+                                      title="Opção 2: O Administrador define a nova senha diretamente (Sem precisar de e-mail)"
+                                    >
+                                      <Key className="w-3 h-3 text-indigo-600" />
+                                      <span>Editar Senha</span>
+                                    </button>
+                                  </div>
                                 )}
 
                                 {!isSelf && (
@@ -1189,6 +1320,151 @@ export default function SettingsView({
                 </div>
               </div>
             )}
+
+            {/* BANNER DE CREDENCIAIS DEFINIDAS COM BOTÃO DE COPIAR */}
+            {savedCredentialsInfo && (
+              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl space-y-2.5 animate-[fadeIn_0.2s_ease-out]">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-emerald-800 font-bold text-xs">
+                    <CheckCircle className="w-4 h-4 text-emerald-600" />
+                    <span>Nova Senha Cadastrada com Sucesso!</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSavedCredentialsInfo(null)}
+                    className="text-emerald-700 hover:text-emerald-900 text-xs font-semibold cursor-pointer"
+                  >
+                    Fechar
+                  </button>
+                </div>
+                <p className="text-xs text-emerald-700 leading-relaxed">
+                  O colaborador já pode fazer login imediatamente com essas credenciais, sem depender de e-mails. Você pode copiar os dados abaixo e enviar para ele via WhatsApp ou mensagem direta:
+                </p>
+                <div className="bg-white p-3 rounded-lg border border-emerald-200 font-mono text-xs text-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <div><span className="text-slate-400 font-sans text-[10px] uppercase font-bold">Colaborador:</span> {savedCredentialsInfo.username || savedCredentialsInfo.email} ({savedCredentialsInfo.email})</div>
+                    <div><span className="text-slate-400 font-sans text-[10px] uppercase font-bold">Nova Senha:</span> <span className="font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">{savedCredentialsInfo.pass}</span></div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyCredentials(savedCredentialsInfo.email, savedCredentialsInfo.pass, savedCredentialsInfo.username)}
+                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-sans font-bold text-xs shadow-xs transition cursor-pointer"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    {copiedFeedback ? 'Copiado para Área de Transferência!' : 'Copiar Acesso para Enviar'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* MODAL PARA O ADMINISTRADOR EDITAR A SENHA DO COLABORADOR DIRETAMENTE */}
+        {editingCollabPw && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-[fadeIn_0.15s_ease-out]">
+            <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-5">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center flex-shrink-0">
+                    <Key className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-sm">Editar Senha do Colaborador</h3>
+                    <p className="text-xs text-slate-500">Definição direta de senha pelo Administrador</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingCollabPw(null)}
+                  className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Informações do Colaborador */}
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 text-xs space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Colaborador:</span>
+                  <span className="font-bold text-slate-800">{editingCollabPw.username || 'Sem apelido'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">E-mail:</span>
+                  <span className="font-mono text-slate-700">{editingCollabPw.email}</span>
+                </div>
+              </div>
+
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-xs leading-relaxed">
+                💡 <strong>Acesso Imediato:</strong> Ao definir a senha aqui, o colaborador poderá efetuar login instantaneamente usando o e-mail ou usuário acima com a nova senha, sem necessidade de aguardar ou receber link de redefinição por e-mail.
+              </div>
+
+              <form onSubmit={handleSaveCollaboratorPassword} className="space-y-4">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold text-slate-600 uppercase">Nova Senha</label>
+                    <button
+                      type="button"
+                      onClick={generateRandomCollabPw}
+                      className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      Gerar Senha Automática
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <Key className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                    <input
+                      type={collabShowPw ? 'text' : 'password'}
+                      required
+                      placeholder="Mínimo 4 caracteres (ex: Colab#2026)"
+                      value={collabNewPw}
+                      onChange={(e) => setCollabNewPw(e.target.value)}
+                      className="w-full pl-9 pr-10 py-2 bg-white border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:border-indigo-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setCollabShowPw(!collabShowPw)}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      {collabShowPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-600 uppercase">Confirmar Nova Senha</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                    <input
+                      type={collabShowPw ? 'text' : 'password'}
+                      required
+                      placeholder="Digite a mesma senha novamente"
+                      value={collabConfirmPw}
+                      onChange={(e) => setCollabConfirmPw(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setEditingCollabPw(null)}
+                    disabled={collabPwSaveLoading}
+                    className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={collabPwSaveLoading}
+                    className="flex items-center gap-1.5 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold uppercase tracking-wider rounded-lg shadow-sm transition disabled:opacity-50 cursor-pointer"
+                  >
+                    {collabPwSaveLoading ? 'Gravando Senha...' : 'Salvar Nova Senha'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
       </div>

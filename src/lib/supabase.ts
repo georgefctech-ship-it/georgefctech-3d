@@ -96,8 +96,17 @@ CREATE TABLE IF NOT EXISTS g3d_shopping (
 CREATE TABLE IF NOT EXISTS g3d_user_roles (
   email TEXT PRIMARY KEY,
   role TEXT NOT NULL DEFAULT 'colaborador', -- 'admin' ou 'colaborador'
-  username TEXT UNIQUE
+  username TEXT UNIQUE,
+  custom_password TEXT
 );
+
+-- Garantir coluna custom_password em tabelas já existentes
+DO $$ 
+BEGIN 
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='g3d_user_roles' AND column_name='custom_password') THEN
+    ALTER TABLE g3d_user_roles ADD COLUMN custom_password TEXT;
+  END IF;
+END $$;
 
 -- Habilitar leitura pública ou autenticada de todos os registros
 -- (Para simplificar a integração profissional interna, ou sinta-se livre para customizar o RLS)

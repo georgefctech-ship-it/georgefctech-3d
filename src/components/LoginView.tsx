@@ -372,7 +372,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       // Check role and approval status FIRST before authenticating
       const { data: roleData, error: roleErr } = await supabase
         .from('g3d_user_roles')
-        .select('role, username')
+        .select('*')
         .eq('email', targetEmail)
         .maybeSingle();
 
@@ -405,6 +405,49 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
         }
       }
 
+      // 1. Checar se o Administrador definiu uma senha personalizada/direta para este colaborador
+      let adminAssignedPassword = (roleData as any)?.custom_password || null;
+
+      if (!adminAssignedPassword) {
+        try {
+          const { data: pwdRow } = await supabase
+            .from('g3d_user_roles')
+            .select('role')
+            .eq('email', `pwd:${targetEmail}`)
+            .maybeSingle();
+          if (pwdRow?.role) {
+            adminAssignedPassword = pwdRow.role;
+          }
+        } catch (e) {
+          console.warn('Checagem de senha companheira no banco:', e);
+        }
+      }
+
+      if (!adminAssignedPassword) {
+        try {
+          const localMap = JSON.parse(localStorage.getItem('g3d_collab_passwords') || '{}');
+          if (localMap[targetEmail]) {
+            adminAssignedPassword = localMap[targetEmail];
+          }
+        } catch (e) {}
+      }
+
+      // Check system administrator permission (pending approval)
+      if (assignedRole === 'colaborador_pendente' || assignedRole === 'pendente') {
+        throw new Error('Cadastro pendente! Seu acesso necessita de liberação por um Administrador do sistema. Por favor, aguarde a aprovação.');
+      }
+
+      // 2. Se a senha digitada corresponder à senha definida pelo Administrador, autenticar imediatamente!
+      if (adminAssignedPassword && password === adminAssignedPassword) {
+        sessionStorage.setItem('g3d_authenticated', 'true');
+        sessionStorage.setItem('g3d_user_role', assignedRole || 'colaborador');
+        sessionStorage.setItem('g3d_user_email', targetEmail);
+        sessionStorage.setItem('g3d_username', targetUsername || targetEmail.split('@')[0]);
+        setLoading(false);
+        onLoginSuccess();
+        return;
+      }
+
       // Fallback: If administrator typed their Master Password into cloud login, let them in!
       if (isSystemAdminEmail(targetEmail) && savedMaster && password === savedMaster) {
         sessionStorage.setItem('g3d_authenticated', 'true');
@@ -416,11 +459,6 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
         return;
       }
 
-      // Check system administrator permission (pending approval)
-      if (assignedRole === 'colaborador_pendente' || assignedRole === 'pendente') {
-        throw new Error('Cadastro pendente! Seu acesso necessita de liberação por um Administrador do sistema. Por favor, aguarde a aprovação.');
-      }
-
       // If approved, sign in with Supabase Auth using the correct email
       const { data, error: authErr } = await supabase.auth.signInWithPassword({
         email: targetEmail,
@@ -429,7 +467,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
 
       if (authErr) {
         throw new Error(authErr.message === 'Invalid login credentials' 
-          ? 'Senha de acesso incorreta para este usuário. Por favor, tente novamente ou redefina sua senha.' 
+          ? 'Senha de acesso incorreta. Caso não tenha recebido o e-mail de redefinição, solicite ao Administrador para definir sua senha diretamente no painel.' 
           : authErr.message);
       }
 
@@ -588,10 +626,10 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
 
       if (resetErr) throw resetErr;
 
-      setSuccessMsg('E-mail enviado! Verifique sua caixa de entrada e spam para redefinir sua senha. Caso não receba o e-mail, utilize a Redefinição Direta para Administrador.');
+      setSuccessMsg('Link de redefinição solicitado! Verifique sua caixa de entrada e a pasta de Spam/Lixo Eletrônico. 💡 Importante: Se o e-mail não chegar em instantes devido a limites de envio ou filtros do provedor, o Administrador pode cadastrar sua nova senha diretamente pelo painel administrativo (Opção 2 abaixo).');
       setEmail('');
     } catch (err: any) {
-      setError(err.message || 'Erro ao enviar e-mail de recuperação.');
+      setError((err.message || 'Erro ao enviar e-mail de recuperação.') + ' Caso o e-mail não seja entregue, o Administrador pode redefinir sua senha diretamente no painel sem depender de e-mail.');
     } finally {
       setLoading(false);
     }
@@ -983,15 +1021,15 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
               </div>
             </form>
           ) : isForgotPassword ? (
-            // FORGOT PASSWORD EMAIL REQUEST VIEW
-            <form onSubmit={handleForgotPassword} className="space-y-4">
+            // FORGOT PASSWORD DUAL OPTION VIEW (EMAIL OR ADMINISTRATOR DIRECT)
+            <div className="space-y-4">
               <div className="space-y-1">
-                <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-650 dark:text-indigo-400 text-[10px] font-bold uppercase tracking-wider font-sans">
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-650 dark:text-indigo-400 text-[10px] font-bold uppercase tracking-wider font-sans">
                   Recuperação de Acesso
                 </span>
-                <h3 className="text-slate-900 dark:text-white font-bold text-sm">Recuperar minha Senha</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Insira o seu e-mail cadastrado e enviaremos um link de acesso seguro para você definir uma nova senha no GeorgeFctech-3D.
+                <h3 className="text-slate-900 dark:text-white font-bold text-sm">Opções para Redefinir sua Senha</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Você pode redefinir sua senha recebendo um link por e-mail ou solicitando ao Administrador para cadastrar sua nova senha diretamente.
                 </p>
               </div>
 
@@ -1009,49 +1047,87 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
                 </div>
               )}
 
-              <div className="space-y-3.5">
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">E-mail Cadastrado</label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-3.5 w-4 h-4 text-slate-400 dark:text-slate-500" />
-                    <input
-                      type="email"
-                      required
-                      placeholder="seu-email@provedor.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 rounded-lg text-sm text-slate-900 dark:text-white focus:outline-none"
-                    />
+              {/* OPÇÃO 1: REDEFINIÇÃO PELO E-MAIL */}
+              <div className="bg-slate-50 dark:bg-slate-900/60 p-4 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-md bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xs font-bold">
+                    1
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white">Opção 1: Redefinir pelo E-mail</h4>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">Receba um link na sua caixa de entrada</p>
                   </div>
                 </div>
+
+                <form onSubmit={handleForgotPassword} className="space-y-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">E-mail Cadastrado</label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-3 w-4 h-4 text-slate-400 dark:text-slate-500" />
+                      <input
+                        type="email"
+                        required
+                        placeholder="seu-email@provedor.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 rounded-lg text-xs text-slate-900 dark:text-white focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs uppercase tracking-wider rounded-lg disabled:opacity-50 transition cursor-pointer"
+                  >
+                    {loading ? 'Enviando...' : 'Enviar Link de Redefinição por E-mail'}
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                  <p className="text-[10px] text-slate-400 leading-tight">
+                    * Verifique a Caixa de Entrada e o Spam. Se o e-mail não chegar em alguns minutos, utilize a Opção 2 abaixo.
+                  </p>
+                </form>
               </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full flex items-center justify-center gap-2 mt-4 px-5 py-3 bg-indigo-600 hover:bg-indigo-505 text-white font-bold text-xs uppercase tracking-wider rounded-lg disabled:opacity-50 cursor-pointer"
-              >
-                {loading ? 'Enviando...' : 'Solicitar Link de Alteração'}
-                <ArrowRight className="w-4 h-4" />
-              </button>
+              {/* OPÇÃO 2: DEFINIÇÃO DIRETA PELO ADMINISTRADOR */}
+              <div className="bg-indigo-50/60 dark:bg-indigo-950/20 p-4 border border-indigo-200 dark:border-indigo-800/60 rounded-xl space-y-2.5">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-md bg-indigo-600 text-white flex items-center justify-center text-xs font-bold">
+                    2
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-indigo-950 dark:text-indigo-200">Opção 2: Redefinição pelo Administrador</h4>
+                    <p className="text-[11px] text-indigo-700/80 dark:text-indigo-300/80">Sem precisar esperar nem receber e-mail</p>
+                  </div>
+                </div>
 
-              <button
-                type="button"
-                onClick={() => { setIsForgotPassword(false); setError(null); setSuccessMsg(null); }}
-                className="w-full text-center mt-2 text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-semibold transition cursor-pointer"
-              >
-                Voltar para o Login
-              </button>
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                  Não recebeu o link ou está com problemas na entrega de e-mails? O <strong>Administrador do sistema</strong> pode editar e cadastrar uma nova senha para você na hora no painel <em>(Configurações &gt; Gestão de Colaboradores &gt; Editar Senha)</em>.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsForgotPassword(false);
+                    setError(null);
+                    setSuccessMsg(null);
+                  }}
+                  className="w-full py-2 px-3 bg-white dark:bg-slate-900 hover:bg-indigo-50 dark:hover:bg-slate-850 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-2xs"
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                  Já Tenho a Senha Fornecida pelo Administrador -&gt; Fazer Login
+                </button>
+              </div>
 
               {/* Direct Administrator Reset Assistance */}
-              <div className="pt-3 border-t border-slate-200 dark:border-slate-800">
+              <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
                 <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-xs">
                   <div className="flex items-center gap-1.5 font-bold text-amber-700 dark:text-amber-400 mb-1">
                     <ShieldAlert className="w-4 h-4" />
-                    É o Administrador e não recebeu o e-mail?
+                    É o Administrador Principal e não recebeu o e-mail?
                   </div>
                   <p className="text-[11px] text-slate-600 dark:text-slate-400 mb-2 leading-relaxed">
-                    Você pode redefinir o acesso e definir uma nova senha diretamente usando a Senha Mestra de Administrador sem esperar e-mails.
+                    Você pode redefinir o acesso e definir uma nova senha diretamente usando a Senha Mestra de Administrador.
                   </p>
                   <button
                     type="button"
@@ -1068,7 +1144,15 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
                   </button>
                 </div>
               </div>
-            </form>
+
+              <button
+                type="button"
+                onClick={() => { setIsForgotPassword(false); setError(null); setSuccessMsg(null); }}
+                className="w-full text-center mt-2 text-xs text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 font-semibold transition cursor-pointer"
+              >
+                Voltar para a Tela Inicial de Login
+              </button>
+            </div>
           ) : (
             // STANDARD SYSTEM LOGIN / TABBED MODE
             <div className="space-y-5">
